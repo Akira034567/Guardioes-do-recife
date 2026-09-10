@@ -61,10 +61,10 @@ describe("Recife 1 content contracts", () => {
 
   it("aligns platforms and the active current to the painted landmarks", () => {
     expect(RECIFE_ONE.placements).toEqual([
-      { id: "anemona-norte", x: 350, y: 255 },
-      { id: "estrela-sul", x: 490, y: 510 },
-      { id: "concha-norte", x: 750, y: 145 },
-      { id: "coral-cerebro-sul", x: 925, y: 510 },
+      { id: "anemona-norte", x: 375, y: 245 },
+      { id: "estrela-sul", x: 500, y: 500 },
+      { id: "concha-norte", x: 750, y: 135 },
+      { id: "coral-cerebro-sul", x: 925, y: 500 },
     ]);
     const current = RECIFE_ONE.currents[0];
     RECIFE_ONE.waypoints

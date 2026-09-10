@@ -852,27 +852,9 @@ export class GameScene extends Phaser.Scene {
         this.placementGuideGraphic.strokeCircle(placement.definition.x, placement.definition.y, 38);
       });
     } else if (placementMode === "water") {
-      this.placementGuideGraphic.fillStyle(0x55dff2, 0.055);
-      this.placementGuideGraphic.fillRect(0, HUD_TOP, GAME_WIDTH, GAME_HEIGHT - HUD_TOP - HUD_BOTTOM);
-      this.placementGuideGraphic.lineStyle(164, 0xff6377, 0.11);
-      this.strokeRoute(this.placementGuideGraphic);
-      this.placements.forEach((placement) => {
-        this.placementGuideGraphic.fillStyle(0xff6377, 0.1);
-        this.placementGuideGraphic.fillCircle(placement.definition.x, placement.definition.y, 78);
-      });
-      this.guardians.forEach((guardian) => {
-        this.placementGuideGraphic.fillStyle(0xff6377, 0.1);
-        this.placementGuideGraphic.fillCircle(guardian.x, guardian.y, 78);
-      });
+      // A validação aparece apenas no marcador sob o cursor; corredores técnicos ficam no debug.
     } else if (placementMode === "route") {
-      this.placementGuideGraphic.lineStyle(ROUTE_PLACEMENT_CLEARANCE * 2, 0x8aff98, 0.13);
-      this.strokeRoute(this.placementGuideGraphic);
-      this.routePlacements.forEach((placement) => {
-        this.placementGuideGraphic.fillStyle(0xff6f79, 0.2);
-        this.placementGuideGraphic.lineStyle(3, 0xff6f79, 0.9);
-        this.placementGuideGraphic.fillCircle(placement.x, placement.y, ROUTE_BLOCKER_SEPARATION / 2);
-        this.placementGuideGraphic.strokeCircle(placement.x, placement.y, ROUTE_BLOCKER_SEPARATION / 2);
-      });
+      // O encaixe na corrente é comunicado pelo marcador sob o cursor, sem pintar a rota normal.
     } else {
       this.placementPreviewGraphic.clear();
       this.placementPreviewText.setVisible(false);
@@ -897,15 +879,6 @@ export class GameScene extends Phaser.Scene {
         padding: { x: 12, y: 7 },
       })
       .setDepth(DEPTH.effects);
-  }
-
-  private strokeRoute(graphics: Phaser.GameObjects.Graphics): void {
-    graphics.beginPath();
-    this.route.points.forEach((point, index) => {
-      if (index === 0) graphics.moveTo(point.x, point.y);
-      else graphics.lineTo(point.x, point.y);
-    });
-    graphics.strokePath();
   }
 
   private createPlacements(): void {

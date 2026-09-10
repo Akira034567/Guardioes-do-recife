@@ -39,7 +39,13 @@ export class UIScene extends Phaser.Scene {
   private debugToggle!: Phaser.GameObjects.Rectangle;
   private debugToggleText!: Phaser.GameObjects.Text;
   private debugPanel!: Phaser.GameObjects.Rectangle;
+  private debugCollapseButton!: Phaser.GameObjects.Rectangle;
+  private debugCollapseText!: Phaser.GameObjects.Text;
+  private debugOpenButton!: Phaser.GameObjects.Rectangle;
+  private debugOpenText!: Phaser.GameObjects.Text;
   private debugButtons: DebugButton[] = [];
+  private debugPanelCollapsed = false;
+  private debugEnabled = false;
   private resultShade!: Phaser.GameObjects.Rectangle;
   private resultTitle!: Phaser.GameObjects.Text;
   private resultSubtitle!: Phaser.GameObjects.Text;
@@ -225,6 +231,22 @@ export class UIScene extends Phaser.Scene {
       .setOrigin(0.5)
       .setVisible(false);
     this.debugPanel.setData("hint", hint);
+
+    this.debugCollapseButton = this.button(1238, 105, 30, 26, "−", () => {
+      this.debugPanelCollapsed = true;
+      this.updateDebugPanelVisibility();
+    });
+    this.debugCollapseText = this.debugCollapseButton.getData("label") as Phaser.GameObjects.Text;
+    this.debugCollapseButton.setVisible(false);
+    this.debugCollapseText.setVisible(false);
+
+    this.debugOpenButton = this.button(1190, 92, 138, 34, "ABRIR DEBUG", () => {
+      this.debugPanelCollapsed = false;
+      this.updateDebugPanelVisibility();
+    });
+    this.debugOpenText = this.debugOpenButton.getData("label") as Phaser.GameObjects.Text;
+    this.debugOpenButton.setVisible(false);
+    this.debugOpenText.setVisible(false);
   }
 
   private createResultOverlay(): void {
@@ -299,19 +321,33 @@ export class UIScene extends Phaser.Scene {
   }
 
   private renderDebugState(debug: DebugFlags): void {
+    this.debugEnabled = debug.enabled;
     const showToggle = this.debugFromQuery || debug.enabled;
     this.debugToggle.setVisible(showToggle);
     this.debugToggleText.setVisible(showToggle);
     this.debugToggle.setStrokeStyle(2, debug.enabled ? 0xff4df3 : 0x348ba0, debug.enabled ? 1 : 0.7);
-    this.debugPanel.setVisible(debug.enabled);
-    (this.debugPanel.getData("title") as Phaser.GameObjects.Text).setVisible(debug.enabled);
-    (this.debugPanel.getData("hint") as Phaser.GameObjects.Text).setVisible(debug.enabled);
     this.debugButtons.forEach((button) => {
       const enabled = debug[button.flag];
-      button.background.setVisible(debug.enabled);
-      button.label.setVisible(debug.enabled);
       button.background.setFillStyle(enabled ? 0x4a1e55 : 0x102f3a, 1);
       button.background.setStrokeStyle(2, enabled ? 0xff65ee : 0x476b75, enabled ? 1 : 0.65);
+    });
+    this.updateDebugPanelVisibility();
+  }
+
+  private updateDebugPanelVisibility(): void {
+    const expanded = this.debugEnabled && !this.debugPanelCollapsed;
+    const collapsed = this.debugEnabled && this.debugPanelCollapsed;
+    this.game.canvas.dataset.debugPanel = expanded ? "expanded" : collapsed ? "collapsed" : "hidden";
+    this.debugPanel.setVisible(expanded);
+    (this.debugPanel.getData("title") as Phaser.GameObjects.Text).setVisible(expanded);
+    (this.debugPanel.getData("hint") as Phaser.GameObjects.Text).setVisible(expanded);
+    this.debugCollapseButton.setVisible(expanded);
+    this.debugCollapseText.setVisible(expanded);
+    this.debugOpenButton.setVisible(collapsed);
+    this.debugOpenText.setVisible(collapsed);
+    this.debugButtons.forEach((button) => {
+      button.background.setVisible(expanded);
+      button.label.setVisible(expanded);
     });
   }
 
