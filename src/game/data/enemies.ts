@@ -4,8 +4,8 @@ export const ENEMIES: Record<EnemyId, EnemyDefinition> = {
   swimmer: {
     id: "swimmer",
     name: "Peixe Invasor",
-    color: 0x4dd7d0,
-    accent: 0xc9fff4,
+    color: 0xf1b65c,
+    accent: 0xfff0b5,
     maxHealth: 58,
     speed: 58,
     reward: 8,

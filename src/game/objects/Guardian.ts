@@ -1,5 +1,5 @@
 import Phaser from "phaser";
-import { SHRIMP_TEXTURES } from "../assets/recifeOneAssets";
+import { shrimpTextureForLevel, type ShrimpVisualState } from "../assets/recifeOneAssets";
 import { DEPTH } from "../constants";
 import { selectLeadingTarget } from "../core/Combat";
 import { GuardianStateMachine, type GuardianFsmEvent } from "../core/GuardianStateMachine";
@@ -20,7 +20,7 @@ export class Guardian extends Phaser.GameObjects.Container {
   readonly routeDistance: number | null;
 
   private readonly bodyGraphic: Phaser.GameObjects.Graphics;
-  private readonly artSprite: Phaser.GameObjects.Sprite | null;
+  private readonly artSprite: Phaser.GameObjects.Image | null;
   private visualState: GuardianState = "idle";
   private readonly artBaselineY = 34;
 
@@ -43,8 +43,9 @@ export class Guardian extends Phaser.GameObjects.Container {
     });
     this.bodyGraphic = scene.add.graphics();
     this.add(this.bodyGraphic);
-    if (definition.id === "pistol-shrimp" && scene.textures.exists(SHRIMP_TEXTURES.idle[0])) {
-      this.artSprite = new Phaser.GameObjects.Sprite(scene, 0, this.artBaselineY, SHRIMP_TEXTURES.idle[0]);
+    const shrimpIdleTexture = shrimpTextureForLevel(0, "idle");
+    if (definition.id === "pistol-shrimp" && scene.textures.exists(shrimpIdleTexture)) {
+      this.artSprite = new Phaser.GameObjects.Image(scene, 0, this.artBaselineY, shrimpIdleTexture);
       this.artSprite.setOrigin(0.5, 1).setScale(0.88);
       this.add(this.artSprite);
       this.bodyGraphic.setVisible(false);
@@ -69,8 +70,8 @@ export class Guardian extends Phaser.GameObjects.Container {
     return this.artSprite !== null;
   }
 
-  get currentAnimationKey(): string {
-    return this.artSprite?.anims.currentAnim?.key ?? this.definition.animation.states[this.visualState].key;
+  get currentVisualKey(): string {
+    return this.artSprite ? `shrimp-level-${this.upgradeLevel}-${this.shrimpVisualState}` : this.visualState;
   }
 
   get currentTextureKey(): string | null {
@@ -130,6 +131,7 @@ export class Guardian extends Phaser.GameObjects.Container {
     if (!this.canUpgrade) return false;
     this.upgradeLevel += 1;
     this.drawBody();
+    this.syncArtTexture();
     return true;
   }
 
@@ -174,8 +176,7 @@ export class Guardian extends Phaser.GameObjects.Container {
 
     if (this.artSprite) {
       this.setScale(1);
-      const animationKey = this.definition.animation.states[this.visualState].key;
-      if (this.scene.anims.exists(animationKey)) this.artSprite.play(animationKey, true);
+      this.syncArtTexture();
       return;
     }
 
@@ -199,10 +200,24 @@ export class Guardian extends Phaser.GameObjects.Container {
   }
 
   private animatePassiveVisual(now: number): void {
-    if (this.visualState !== "idle") return;
-    const bob = Math.sin(now / 420 + this.x) * 1.8;
-    if (this.artSprite) this.artSprite.y = this.artBaselineY + bob;
-    else this.bodyGraphic.y = bob;
+    const bob = Math.sin(now / 420 + this.x) * (this.visualState === "idle" ? 1.8 : 0.8);
+    if (this.artSprite) {
+      this.artSprite.y = this.artBaselineY + bob;
+      this.artSprite.x = this.visualState === "attack" ? -4 : this.visualState === "recovery" ? -2 : 0;
+      this.artSprite.setAngle(this.visualState === "attack" ? -2 : 0);
+    } else if (this.visualState === "idle") {
+      this.bodyGraphic.y = bob;
+    }
+  }
+
+  private get shrimpVisualState(): ShrimpVisualState {
+    return this.visualState === "idle" || this.visualState === "disabled" ? "idle" : "attack";
+  }
+
+  private syncArtTexture(): void {
+    if (!this.artSprite) return;
+    const texture = shrimpTextureForLevel(this.upgradeLevel, this.shrimpVisualState);
+    if (this.artSprite.texture.key !== texture) this.artSprite.setTexture(texture);
   }
 
   private drawBody(): void {

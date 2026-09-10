@@ -1,5 +1,5 @@
 import Phaser from "phaser";
-import { RECIFE_ONE_BACKGROUND_KEY, SHRIMP_TEXTURES } from "../assets/recifeOneAssets";
+import { RECIFE_ONE_BACKGROUND_KEY, SHRIMP_LEVEL_TEXTURES } from "../assets/recifeOneAssets";
 import { DEPTH, GAME_HEIGHT, GAME_WIDTH, HUD_BOTTOM, HUD_TOP } from "../constants";
 import { AbilityCooldown } from "../core/AbilityCooldown";
 import { hasReachedBlockerContact } from "../core/Combat";
@@ -23,7 +23,6 @@ const ROUTE_BLOCKER_SEPARATION = 78;
 interface PlacementView {
   definition: PlacementDefinition;
   guardian: Guardian | null;
-  graphic: Phaser.GameObjects.Graphics;
   zone: Phaser.GameObjects.Zone;
 }
 
@@ -793,9 +792,9 @@ export class GameScene extends Phaser.Scene {
     this.game.canvas.dataset.debug = String(this.debugFlags.enabled);
     this.game.canvas.dataset.paused = String(this.paused);
     const shrimp = this.guardians.find((guardian) => guardian.definition.id === "pistol-shrimp");
-    this.game.canvas.dataset.shrimpAssets = String(this.textures.exists(SHRIMP_TEXTURES.idle[0]));
+    this.game.canvas.dataset.shrimpAssets = String(this.textures.exists(SHRIMP_LEVEL_TEXTURES[0].idle));
     this.game.canvas.dataset.shrimpArt = String(shrimp?.usesSpriteArt ?? false);
-    this.game.canvas.dataset.shrimpAnimation = shrimp?.currentAnimationKey ?? "";
+    this.game.canvas.dataset.shrimpVisual = shrimp?.currentVisualKey ?? "";
     this.game.canvas.dataset.shrimpTexture = shrimp?.currentTextureKey ?? "";
     this.game.canvas.dataset.projectileTexture = this.projectiles.at(-1)?.textureKey ?? "";
     EventBus.emit(Events.hudUpdate, snapshot);
@@ -849,10 +848,8 @@ export class GameScene extends Phaser.Scene {
       : null;
     if (placementMode === "platform") {
       this.placements.forEach((placement) => {
-        this.placementGuideGraphic.fillStyle(placement.guardian ? 0xff6f79 : 0x67f2ac, 0.12);
-        this.placementGuideGraphic.lineStyle(3, placement.guardian ? 0xff6f79 : 0x67f2ac, 0.92);
-        this.placementGuideGraphic.fillCircle(placement.definition.x, placement.definition.y, 51);
-        this.placementGuideGraphic.strokeCircle(placement.definition.x, placement.definition.y, 51);
+        this.placementGuideGraphic.lineStyle(2, placement.guardian ? 0xff8290 : 0xa5f6d2, placement.guardian ? 0.42 : 0.72);
+        this.placementGuideGraphic.strokeCircle(placement.definition.x, placement.definition.y, 38);
       });
     } else if (placementMode === "water") {
       this.placementGuideGraphic.fillStyle(0x55dff2, 0.055);
@@ -890,19 +887,6 @@ export class GameScene extends Phaser.Scene {
       .setDepth(DEPTH.background);
     levelBackground.setScale(GAME_WIDTH / levelBackground.width);
 
-    const pathGraphic = this.add.graphics().setDepth(DEPTH.path);
-    pathGraphic.lineStyle(82, 0x9cf7ff, 0.075);
-    this.strokeRoute(pathGraphic);
-    pathGraphic.lineStyle(3, 0xc9fbff, 0.22);
-    this.strokeRoute(pathGraphic);
-
-    const current = this.level.currents[0];
-    const currentGraphic = this.add.graphics().setDepth(DEPTH.current);
-    currentGraphic.fillStyle(0x36dff2, 0.09);
-    currentGraphic.fillRoundedRect(current.x, current.y, current.width, current.height, 22);
-    currentGraphic.lineStyle(2, 0x8bf4ff, 0.25);
-    currentGraphic.strokeRoundedRect(current.x, current.y, current.width, current.height, 22);
-
     this.add
       .text(26, 88, "RECIFE 1  ·  RECIFE COSTEIRO", {
         fontFamily: "Arial, sans-serif",
@@ -926,24 +910,9 @@ export class GameScene extends Phaser.Scene {
 
   private createPlacements(): void {
     this.level.placements.forEach((definition) => {
-      const graphic = this.add.graphics().setDepth(DEPTH.pads);
-      graphic.fillStyle(0x082f3f, 0.45);
-      graphic.fillCircle(definition.x + 3, definition.y + 7, 48);
-      graphic.fillStyle(0xe4bd78, 1);
-      graphic.fillCircle(definition.x, definition.y, 44);
-      graphic.lineStyle(3, 0xffe4ad, 0.8);
-      graphic.strokeCircle(definition.x, definition.y, 37);
-      for (let angle = -1.1; angle <= 1.1; angle += 0.36) {
-        graphic.lineBetween(
-          definition.x,
-          definition.y + 17,
-          definition.x + Math.sin(angle) * 31,
-          definition.y - Math.cos(angle) * 28,
-        );
-      }
       const zone = this.add.zone(definition.x, definition.y, 94, 94).setDepth(DEPTH.pads + 1);
       zone.setInteractive({ useHandCursor: true });
-      const view: PlacementView = { definition, guardian: null, graphic, zone };
+      const view: PlacementView = { definition, guardian: null, zone };
       zone.on(
         "pointerdown",
         (
@@ -956,8 +925,6 @@ export class GameScene extends Phaser.Scene {
           this.handlePlacement(view);
         },
       );
-      zone.on("pointerover", () => graphic.setAlpha(0.82));
-      zone.on("pointerout", () => graphic.setAlpha(1));
       this.placements.push(view);
     });
   }

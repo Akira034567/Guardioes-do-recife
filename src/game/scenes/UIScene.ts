@@ -1,4 +1,5 @@
 import Phaser from "phaser";
+import { SHRIMP_LEVEL_TEXTURES } from "../assets/recifeOneAssets";
 import { GAME_HEIGHT, GAME_WIDTH, HUD_BOTTOM, HUD_TOP } from "../constants";
 import { GUARDIANS, GUARDIAN_ORDER } from "../data/guardians";
 import { EventBus, Events } from "../EventBus";
@@ -7,6 +8,7 @@ import type { DebugFlags, GuardianId, HudSnapshot } from "../types";
 interface GuardianCard {
   id: GuardianId;
   background: Phaser.GameObjects.Rectangle;
+  icon: Phaser.GameObjects.Arc | Phaser.GameObjects.Image;
   name: Phaser.GameObjects.Text;
   cost: Phaser.GameObjects.Text;
 }
@@ -124,7 +126,9 @@ export class UIScene extends Phaser.Scene {
         .setStrokeStyle(2, definition.color, 0.78)
         .setInteractive({ useHandCursor: true });
       background.on("pointerdown", () => EventBus.emit(Events.selectGuardian, id));
-      const icon = this.add.circle(x - 45, centerY + 5, 17, definition.color, 1).setStrokeStyle(3, definition.accent, 1);
+      const icon = id === "pistol-shrimp"
+        ? this.add.image(x - 45, centerY + 5, SHRIMP_LEVEL_TEXTURES[0].idle).setScale(0.5)
+        : this.add.circle(x - 45, centerY + 5, 17, definition.color, 1).setStrokeStyle(3, definition.accent, 1);
       icon.setData("guardian", id);
       const name = this.add.text(x - 20, centerY - 17, definition.shortName, {
         fontFamily: "Arial, sans-serif",
@@ -137,7 +141,7 @@ export class UIScene extends Phaser.Scene {
         fontSize: "13px",
         color: "#ffe69a",
       });
-      return { id, background, name, cost };
+      return { id, background, icon, name, cost };
     });
 
     this.add
@@ -265,6 +269,7 @@ export class UIScene extends Phaser.Scene {
       const affordable = snapshot.pearls >= GUARDIANS[card.id].cost;
       card.background.setFillStyle(selected ? 0x17617a : 0x0a3c53, affordable ? 1 : 0.55);
       card.background.setStrokeStyle(selected ? 4 : 2, selected ? 0xffe580 : GUARDIANS[card.id].color, selected ? 1 : 0.72);
+      card.icon.setAlpha(affordable ? 1 : 0.55);
       card.name.setAlpha(affordable ? 1 : 0.55);
       card.cost.setColor(affordable ? "#ffe69a" : "#ff8585");
     });

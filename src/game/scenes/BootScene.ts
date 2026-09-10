@@ -1,5 +1,5 @@
 import Phaser from "phaser";
-import { createShrimpAnimations, preloadRecifeOneAssets } from "../assets/recifeOneAssets";
+import { preloadRecifeOneAssets } from "../assets/recifeOneAssets";
 import { GAME_HEIGHT, GAME_WIDTH } from "../constants";
 
 export class BootScene extends Phaser.Scene {
@@ -12,7 +12,6 @@ export class BootScene extends Phaser.Scene {
   }
 
   create(): void {
-    createShrimpAnimations(this);
     this.cameras.main.setBackgroundColor("#052f49");
     this.add
       .text(GAME_WIDTH / 2, GAME_HEIGHT / 2 - 18, "GUARDIÕES DO RECIFE", {
