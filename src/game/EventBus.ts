@@ -9,6 +9,7 @@ export const Events = {
   togglePause: "ui:toggle-pause",
   toggleMute: "ui:toggle-mute",
   restart: "ui:restart",
+  skipCountdown: "ui:skip-countdown",
   toggleDebug: "ui:toggle-debug",
   toggleDebugFlag: "ui:toggle-debug-flag",
 } as const;

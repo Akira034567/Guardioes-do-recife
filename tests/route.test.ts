@@ -21,6 +21,15 @@ describe("RoutePath", () => {
     expect(route.getProgress(999)).toBe(1);
   });
 
+  it("finds the nearest point and distance from the route", () => {
+    expect(route.getClosestPoint({ x: 40, y: 30 })).toMatchObject({
+      point: { x: 40, y: 0 },
+      distance: 30,
+      routeDistance: 40,
+      progress: 0.2,
+    });
+  });
+
   it("rejects invalid routes", () => {
     expect(() => new RoutePath([{ x: 0, y: 0 }])).toThrow();
     expect(() => new RoutePath([{ x: 1, y: 1 }, { x: 1, y: 1 }])).toThrow();

@@ -8,6 +8,13 @@ interface RouteSegment {
   tangent: Vec2;
 }
 
+export interface ClosestRoutePoint {
+  point: Vec2;
+  distance: number;
+  routeDistance: number;
+  progress: number;
+}
+
 export class RoutePath {
   readonly points: readonly Vec2[];
   readonly totalLength: number;
@@ -66,6 +73,33 @@ export class RoutePath {
 
   getProgress(distance: number): number {
     return Math.max(0, Math.min(1, distance / this.totalLength));
+  }
+
+  getClosestPoint(point: Vec2): ClosestRoutePoint {
+    let closest: ClosestRoutePoint | null = null;
+    for (const segment of this.segments) {
+      const dx = segment.end.x - segment.start.x;
+      const dy = segment.end.y - segment.start.y;
+      const lengthSquared = dx * dx + dy * dy;
+      const projection = lengthSquared === 0
+        ? 0
+        : Math.max(0, Math.min(1, ((point.x - segment.start.x) * dx + (point.y - segment.start.y) * dy) / lengthSquared));
+      const projected = {
+        x: segment.start.x + dx * projection,
+        y: segment.start.y + dy * projection,
+      };
+      const distance = Math.hypot(point.x - projected.x, point.y - projected.y);
+      if (!closest || distance < closest.distance) {
+        const routeDistance = segment.startDistance + segment.length * projection;
+        closest = {
+          point: projected,
+          distance,
+          routeDistance,
+          progress: this.getProgress(routeDistance),
+        };
+      }
+    }
+    return closest as ClosestRoutePoint;
   }
 
   private findSegment(distance: number): RouteSegment {

@@ -7,6 +7,7 @@ export type GuardianId = "pistol-shrimp" | "jellyfish" | "pufferfish";
 export type EnemyId = "swimmer" | "dartfish" | "shellback" | "tidebreaker";
 export type GuardianState = "idle" | "windup" | "attack" | "recovery" | "disabled";
 export type AttackKind = "projectile" | "chain" | "area";
+export type PlacementMode = "platform" | "water" | "route";
 
 export interface GuardianStateTimings {
   windupMs: number;
@@ -33,6 +34,21 @@ export interface GuardianUpgrade {
   rangeMultiplier?: number;
   slowMultiplier?: number;
   extraTargets?: number;
+  projectileSpeedMultiplier?: number;
+  predictiveAim?: boolean;
+  secondaryDamageMultiplier?: number;
+  chainDamageMultiplier?: number;
+  blockCapacity?: number;
+  contactDamagePerSecond?: number;
+  electricField?: {
+    radius: number;
+    durationMs: number;
+    cooldownMs: number;
+    pulseIntervalMs: number;
+    damage: number;
+    slowFactor: number;
+    slowDurationMs: number;
+  };
 }
 
 export interface GuardianDefinition {
@@ -47,12 +63,13 @@ export interface GuardianDefinition {
   damage: number;
   cooldownMs: number;
   attackKind: AttackKind;
+  placementMode: PlacementMode;
   projectileSpeed?: number;
   slowFactor?: number;
   slowDurationMs?: number;
   timings: GuardianStateTimings;
   animation: GuardianAnimationProfile;
-  upgrade: GuardianUpgrade;
+  upgrades: [GuardianUpgrade, GuardianUpgrade];
 }
 
 export interface EnemyDefinition {
@@ -118,6 +135,7 @@ export interface DebugFlags {
   current: boolean;
   states: boolean;
   targets: boolean;
+  placements: boolean;
 }
 
 export type WaveState = "countdown" | "spawning" | "active" | "victory";
@@ -125,10 +143,11 @@ export type WaveState = "countdown" | "spawning" | "active" | "victory";
 export interface SelectedGuardianInfo {
   instanceId: string;
   name: string;
-  upgraded: boolean;
-  upgradeName: string;
-  upgradeDescription: string;
-  upgradeCost: number;
+  upgradeLevel: number;
+  maxUpgradeLevel: number;
+  nextUpgradeName: string | null;
+  nextUpgradeDescription: string | null;
+  nextUpgradeCost: number | null;
 }
 
 export interface HudSnapshot {
@@ -139,6 +158,7 @@ export interface HudSnapshot {
   totalWaves: number;
   waveState: WaveState;
   countdownSeconds: number;
+  canSkipCountdown: boolean;
   selectedGuardianId: GuardianId | null;
   selectedPlacedGuardian: SelectedGuardianInfo | null;
   paused: boolean;

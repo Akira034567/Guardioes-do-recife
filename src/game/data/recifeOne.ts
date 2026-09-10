@@ -21,7 +21,7 @@ export const RECIFE_ONE: LevelDefinition = {
     { x: 1325, y: 324 },
   ],
   placements: [
-    { id: "coral-norte", x: 330, y: 205 },
+    { id: "coral-norte", x: 350, y: 310 },
     { id: "enseada-sul", x: 490, y: 535 },
     { id: "ruina-norte", x: 785, y: 155 },
     { id: "farol-sul", x: 1010, y: 535 },

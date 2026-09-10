@@ -32,6 +32,8 @@ export class UIScene extends Phaser.Scene {
   private pauseText!: Phaser.GameObjects.Text;
   private muteButton!: Phaser.GameObjects.Rectangle;
   private muteText!: Phaser.GameObjects.Text;
+  private skipButton!: Phaser.GameObjects.Rectangle;
+  private skipButtonText!: Phaser.GameObjects.Text;
   private debugToggle!: Phaser.GameObjects.Rectangle;
   private debugToggleText!: Phaser.GameObjects.Text;
   private debugPanel!: Phaser.GameObjects.Rectangle;
@@ -63,6 +65,10 @@ export class UIScene extends Phaser.Scene {
     });
 
     this.input.keyboard?.on("keydown-F2", () => EventBus.emit(Events.toggleDebug));
+    this.input.keyboard?.on("keydown-SPACE", (event: KeyboardEvent) => {
+      event.preventDefault();
+      EventBus.emit(Events.skipCountdown);
+    });
   }
 
   private createTopHud(): void {
@@ -137,13 +143,13 @@ export class UIScene extends Phaser.Scene {
     this.add
       .rectangle(695, centerY + 10, 355, 78, 0x092f43, 1)
       .setStrokeStyle(2, 0x3da7bd, 0.6);
-    this.upgradeTitle = this.add.text(530, centerY - 22, "Selecione uma unidade posicionada", {
+    this.upgradeTitle = this.add.text(530, centerY - 22, "Selecione um Guardião posicionado", {
       fontFamily: "Arial, sans-serif",
       fontSize: "14px",
       fontStyle: "bold",
       color: "#d9f8ff",
     });
-    this.upgradeDescription = this.add.text(530, centerY + 1, "Toque numa plataforma ocupada para ver o upgrade.", {
+    this.upgradeDescription = this.add.text(530, centerY + 1, "Toque em um Guardião no mapa para ver o upgrade.", {
       fontFamily: "Arial, sans-serif",
       fontSize: "11px",
       color: "#8dcbd8",
@@ -153,6 +159,9 @@ export class UIScene extends Phaser.Scene {
     this.upgradeButtonText = this.upgradeButton.getData("label") as Phaser.GameObjects.Text;
     this.upgradeButton.setVisible(false);
     this.upgradeButtonText.setVisible(false);
+
+    this.skipButton = this.button(928, centerY + 11, 92, 48, "PULAR  ␣", () => EventBus.emit(Events.skipCountdown));
+    this.skipButtonText = this.skipButton.getData("label") as Phaser.GameObjects.Text;
 
     this.button(1138, centerY + 11, 96, 48, "REINICIAR", () => EventBus.emit(Events.restart));
     this.add
@@ -171,7 +180,7 @@ export class UIScene extends Phaser.Scene {
     this.debugToggleText.setVisible(this.debugFromQuery);
 
     this.debugPanel = this.add
-      .rectangle(1120, 214, 282, 248, 0x001723, 0.94)
+      .rectangle(1120, 240, 282, 300, 0x001723, 0.94)
       .setStrokeStyle(2, 0xff4df3, 0.8)
       .setVisible(false);
     const title = this.add
@@ -192,6 +201,7 @@ export class UIScene extends Phaser.Scene {
       ["current", "CORRENTE"],
       ["states", "ESTADOS"],
       ["targets", "ALVOS"],
+      ["placements", "POSIÇÕES"],
     ];
     this.debugButtons = definitions.map(([flag, text], index) => {
       const column = index % 2;
@@ -203,7 +213,7 @@ export class UIScene extends Phaser.Scene {
       return { flag, background, label };
     });
     const hint = this.add
-      .text(1120, 303, "F2 fecha · overlays não recebem input", {
+      .text(1120, 371, "F2 fecha · overlays não recebem input", {
         fontFamily: "monospace",
         fontSize: "10px",
         color: "#8cbac4",
@@ -247,6 +257,8 @@ export class UIScene extends Phaser.Scene {
     this.messageText.setText(snapshot.message);
     this.pauseText.setText(snapshot.paused ? "▶" : "Ⅱ");
     this.muteText.setText(snapshot.muted ? "×♪" : "♪");
+    this.skipButton.setVisible(snapshot.canSkipCountdown && !snapshot.gameOver);
+    this.skipButtonText.setVisible(snapshot.canSkipCountdown && !snapshot.gameOver);
 
     this.cards.forEach((card) => {
       const selected = snapshot.selectedGuardianId === card.id;
@@ -259,15 +271,20 @@ export class UIScene extends Phaser.Scene {
 
     const selected = snapshot.selectedPlacedGuardian;
     if (selected) {
-      this.upgradeTitle.setText(`${selected.name} · ${selected.upgradeName}`);
-      this.upgradeDescription.setText(selected.upgraded ? "Upgrade já instalado." : selected.upgradeDescription);
-      this.upgradeButtonText.setText(selected.upgraded ? "FEITO" : `◉ ${selected.upgradeCost}`);
-      this.upgradeButton.setVisible(!selected.upgraded);
-      this.upgradeButtonText.setVisible(!selected.upgraded);
-      this.upgradeButton.setFillStyle(snapshot.pearls >= selected.upgradeCost ? 0x13728a : 0x563947, 1);
+      const hasNext = selected.nextUpgradeCost !== null;
+      this.upgradeTitle.setText(
+        `${selected.name} · nível ${selected.upgradeLevel}/${selected.maxUpgradeLevel}${selected.nextUpgradeName ? ` · ${selected.nextUpgradeName}` : ""}`,
+      );
+      this.upgradeDescription.setText(selected.nextUpgradeDescription ?? "Todos os upgrades instalados.");
+      this.upgradeButtonText.setText(hasNext ? `◉ ${selected.nextUpgradeCost}` : "MÁXIMO");
+      this.upgradeButton.setVisible(hasNext);
+      this.upgradeButtonText.setVisible(hasNext);
+      if (hasNext) {
+        this.upgradeButton.setFillStyle(snapshot.pearls >= selected.nextUpgradeCost! ? 0x13728a : 0x563947, 1);
+      }
     } else {
-      this.upgradeTitle.setText("Selecione uma unidade posicionada");
-      this.upgradeDescription.setText("Toque numa plataforma ocupada para ver o upgrade.");
+      this.upgradeTitle.setText("Selecione um Guardião posicionado");
+      this.upgradeDescription.setText("Toque em um Guardião no mapa para ver o upgrade.");
       this.upgradeButton.setVisible(false);
       this.upgradeButtonText.setVisible(false);
     }

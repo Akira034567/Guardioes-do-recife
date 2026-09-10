@@ -43,6 +43,12 @@ export class WaveScheduler {
     return this.currentState === "countdown" ? Math.max(0, Math.ceil(this.countdownRemainingMs / 1000)) : 0;
   }
 
+  skipCountdown(): boolean {
+    if (this.currentState !== "countdown" || this.countdownRemainingMs <= 0) return false;
+    this.countdownRemainingMs = 0;
+    return true;
+  }
+
   tick(deltaMs: number, aliveEnemyCount: number): WaveSchedulerEvent[] {
     const events: WaveSchedulerEvent[] = [];
     if (this.currentState === "victory") return events;

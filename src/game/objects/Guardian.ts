@@ -1,32 +1,60 @@
 import Phaser from "phaser";
+import { SHRIMP_TEXTURES } from "../assets/recifeOneAssets";
 import { DEPTH } from "../constants";
 import { selectLeadingTarget } from "../core/Combat";
 import { GuardianStateMachine, type GuardianFsmEvent } from "../core/GuardianStateMachine";
-import type { GuardianDefinition, GuardianState } from "../types";
+import type { GuardianDefinition, GuardianState, GuardianUpgrade } from "../types";
 import type { Enemy } from "./Enemy";
+
+export interface GuardianPlacementContext {
+  routePlacementId?: string;
+  routeDistance?: number;
+}
 
 export class Guardian extends Phaser.GameObjects.Container {
   readonly fsm: GuardianStateMachine;
   readonly instanceId: string;
   readonly definition: GuardianDefinition;
-  upgraded = false;
+  upgradeLevel = 0;
+  readonly routePlacementId: string | null;
+  readonly routeDistance: number | null;
 
   private readonly bodyGraphic: Phaser.GameObjects.Graphics;
+  private readonly artSprite: Phaser.GameObjects.Sprite | null;
   private visualState: GuardianState = "idle";
+  private readonly artBaselineY = 34;
 
-  constructor(scene: Phaser.Scene, instanceId: string, definition: GuardianDefinition, x: number, y: number) {
+  constructor(
+    scene: Phaser.Scene,
+    instanceId: string,
+    definition: GuardianDefinition,
+    x: number,
+    y: number,
+    placement: GuardianPlacementContext = {},
+  ) {
     super(scene, x, y);
     this.instanceId = instanceId;
     this.definition = definition;
+    this.routePlacementId = placement.routePlacementId ?? null;
+    this.routeDistance = placement.routeDistance ?? null;
     this.fsm = new GuardianStateMachine({
       ...definition.timings,
       impactAtMs: definition.animation.impactAtMs,
     });
     this.bodyGraphic = scene.add.graphics();
     this.add(this.bodyGraphic);
+    if (definition.id === "pistol-shrimp" && scene.textures.exists(SHRIMP_TEXTURES.idle[0])) {
+      this.artSprite = new Phaser.GameObjects.Sprite(scene, 0, this.artBaselineY, SHRIMP_TEXTURES.idle[0]);
+      this.artSprite.setOrigin(0.5, 1).setScale(0.88);
+      this.add(this.artSprite);
+      this.bodyGraphic.setVisible(false);
+    } else {
+      this.artSprite = null;
+    }
     this.drawBody();
     this.setDepth(DEPTH.guardians);
     scene.add.existing(this);
+    this.applyStateVisual();
   }
 
   get guardianState(): GuardianState {
@@ -37,21 +65,70 @@ export class Guardian extends Phaser.GameObjects.Container {
     return this.fsm.targetId;
   }
 
+  get usesSpriteArt(): boolean {
+    return this.artSprite !== null;
+  }
+
+  get currentAnimationKey(): string {
+    return this.artSprite?.anims.currentAnim?.key ?? this.definition.animation.states[this.visualState].key;
+  }
+
+  get currentTextureKey(): string | null {
+    return this.artSprite?.texture.key ?? null;
+  }
+
   get range(): number {
-    return this.definition.range * (this.upgraded ? (this.definition.upgrade.rangeMultiplier ?? 1) : 1);
+    return this.definition.range * this.productOf("rangeMultiplier");
   }
 
   get damage(): number {
-    return this.definition.damage * (this.upgraded ? (this.definition.upgrade.damageMultiplier ?? 1) : 1);
+    return this.definition.damage * this.productOf("damageMultiplier");
   }
 
   get extraTargets(): number {
-    return this.upgraded ? (this.definition.upgrade.extraTargets ?? 0) : 0;
+    return this.appliedUpgrades.reduce((total, upgrade) => total + (upgrade.extraTargets ?? 0), 0);
+  }
+
+  get projectileSpeed(): number {
+    return (this.definition.projectileSpeed ?? 400) * this.productOf("projectileSpeedMultiplier");
+  }
+
+  get predictiveAim(): boolean {
+    return this.appliedUpgrades.some((upgrade) => upgrade.predictiveAim);
+  }
+
+  get secondaryDamageMultiplier(): number {
+    return this.lastValue("secondaryDamageMultiplier") ?? 1;
+  }
+
+  get chainDamageMultiplier(): number {
+    return this.lastValue("chainDamageMultiplier") ?? 1;
+  }
+
+  get blockCapacity(): number {
+    if (this.definition.placementMode !== "route") return 0;
+    return this.lastValue("blockCapacity") ?? 1;
+  }
+
+  get contactDamagePerSecond(): number {
+    return this.lastValue("contactDamagePerSecond") ?? 0;
+  }
+
+  get electricField(): GuardianUpgrade["electricField"] | null {
+    return [...this.appliedUpgrades].reverse().find((upgrade) => upgrade.electricField)?.electricField ?? null;
+  }
+
+  get nextUpgrade(): GuardianUpgrade | null {
+    return this.definition.upgrades[this.upgradeLevel] ?? null;
+  }
+
+  get canUpgrade(): boolean {
+    return this.upgradeLevel < this.definition.upgrades.length;
   }
 
   upgrade(): boolean {
-    if (this.upgraded) return false;
-    this.upgraded = true;
+    if (!this.canUpgrade) return false;
+    this.upgradeLevel += 1;
     this.drawBody();
     return true;
   }
@@ -65,7 +142,7 @@ export class Guardian extends Phaser.GameObjects.Container {
     const target = enemies.find((enemy) => enemy.instanceId === this.fsm.targetId);
     const valid = Boolean(target && !target.dead && !target.reachedGoal && target.distanceTo(this.x, this.y) <= this.range);
     this.processEvents(this.fsm.update(now, valid), enemies, onImpact);
-    this.animatePlaceholder(now);
+    this.animatePassiveVisual(now);
   }
 
   private findTarget(enemies: readonly Enemy[]): Enemy | undefined {
@@ -89,7 +166,19 @@ export class Guardian extends Phaser.GameObjects.Container {
   }
 
   private applyStateVisual(): void {
-    if (this.visualState !== "idle") this.bodyGraphic.y = 0;
+    if (this.visualState !== "idle") {
+      this.bodyGraphic.y = 0;
+      if (this.artSprite) this.artSprite.y = this.artBaselineY;
+    }
+    this.setAlpha(this.visualState === "disabled" ? 0.45 : 1);
+
+    if (this.artSprite) {
+      this.setScale(1);
+      const animationKey = this.definition.animation.states[this.visualState].key;
+      if (this.scene.anims.exists(animationKey)) this.artSprite.play(animationKey, true);
+      return;
+    }
+
     switch (this.visualState) {
       case "windup":
         this.setScale(0.94, 1.07);
@@ -101,20 +190,19 @@ export class Guardian extends Phaser.GameObjects.Container {
         this.setScale(0.96, 1);
         break;
       case "disabled":
-        this.setAlpha(0.45);
         this.setScale(1);
         break;
       case "idle":
-        this.setAlpha(1);
         this.setScale(1);
         break;
     }
   }
 
-  private animatePlaceholder(now: number): void {
+  private animatePassiveVisual(now: number): void {
     if (this.visualState !== "idle") return;
     const bob = Math.sin(now / 420 + this.x) * 1.8;
-    this.bodyGraphic.y = bob;
+    if (this.artSprite) this.artSprite.y = this.artBaselineY + bob;
+    else this.bodyGraphic.y = bob;
   }
 
   private drawBody(): void {
@@ -164,11 +252,19 @@ export class Guardian extends Phaser.GameObjects.Container {
       this.bodyGraphic.fillCircle(9, -6, 2);
     }
 
-    if (this.upgraded) {
-      this.bodyGraphic.lineStyle(3, 0xffdf72, 1);
-      this.bodyGraphic.strokeCircle(0, 0, 36);
-      this.bodyGraphic.fillStyle(0xffdf72, 1);
-      this.bodyGraphic.fillCircle(0, -39, 4);
-    }
+  }
+
+  private get appliedUpgrades(): readonly GuardianUpgrade[] {
+    return this.definition.upgrades.slice(0, this.upgradeLevel);
+  }
+
+  private productOf(key: "damageMultiplier" | "rangeMultiplier" | "projectileSpeedMultiplier"): number {
+    return this.appliedUpgrades.reduce((product, upgrade) => product * (upgrade[key] ?? 1), 1);
+  }
+
+  private lastValue<K extends "secondaryDamageMultiplier" | "chainDamageMultiplier" | "blockCapacity" | "contactDamagePerSecond">(
+    key: K,
+  ): GuardianUpgrade[K] | undefined {
+    return [...this.appliedUpgrades].reverse().find((upgrade) => upgrade[key] !== undefined)?.[key];
   }
 }

@@ -3,7 +3,7 @@ import { DEPTH } from "../constants";
 import { mitigatedDamage } from "../core/Combat";
 import { containsPoint, enemySpeedMultiplier } from "../core/CurrentField";
 import type { RoutePath } from "../core/RoutePath";
-import type { CurrentZoneDefinition, EnemyDefinition } from "../types";
+import type { CurrentZoneDefinition, EnemyDefinition, Vec2 } from "../types";
 
 export interface EnemyTickResult {
   reachedGoal: boolean;
@@ -17,6 +17,7 @@ export class Enemy extends Phaser.GameObjects.Container {
   effectiveSpeed: number;
   dead = false;
   reachedGoal = false;
+  blockedById: string | null = null;
 
   private slowFactor = 1;
   private slowUntil = 0;
@@ -48,6 +49,24 @@ export class Enemy extends Phaser.GameObjects.Container {
     return this.route.getProgress(this.pathDistance);
   }
 
+  get velocity(): Vec2 {
+    if (this.blockedById) return { x: 0, y: 0 };
+    const tangent = this.route.getTangentAtDistance(this.pathDistance);
+    return { x: tangent.x * this.effectiveSpeed, y: tangent.y * this.effectiveSpeed };
+  }
+
+  setBlocked(blockerId: string, stopDistance: number): void {
+    this.blockedById = blockerId;
+    this.pathDistance = Math.max(0, stopDistance);
+    const point = this.route.getPointAtDistance(this.pathDistance);
+    this.setPosition(point.x, point.y);
+    this.effectiveSpeed = 0;
+  }
+
+  clearBlocked(): void {
+    this.blockedById = null;
+  }
+
   tick(
     now: number,
     deltaMs: number,
@@ -58,6 +77,13 @@ export class Enemy extends Phaser.GameObjects.Container {
     if (now >= this.slowUntil) this.slowFactor = 1;
 
     const tangent = this.route.getTangentAtDistance(this.pathDistance);
+    if (this.blockedById) {
+      this.effectiveSpeed = 0;
+      const blockedPoint = this.route.getPointAtDistance(this.pathDistance);
+      this.setPosition(blockedPoint.x, blockedPoint.y);
+      this.bodyGraphic.setRotation(Math.atan2(tangent.y, tangent.x));
+      return { reachedGoal: false };
+    }
     const zone = currents.find((candidate) => containsPoint(candidate, this));
     const currentMultiplier = zone ? enemySpeedMultiplier(zone, tangent, currentReversed) : 1;
     this.effectiveSpeed = this.definition.speed * this.slowFactor * currentMultiplier;
@@ -78,6 +104,14 @@ export class Enemy extends Phaser.GameObjects.Container {
     if (this.dead || this.reachedGoal) return false;
     const damage = mitigatedDamage(rawDamage, this.definition.armor);
     this.health = Math.max(0, this.health - damage);
+    this.drawHealth();
+    if (this.health <= 0) this.dead = true;
+    return this.dead;
+  }
+
+  takeContinuousDamage(amount: number): boolean {
+    if (this.dead || this.reachedGoal) return false;
+    this.health = Math.max(0, this.health - Math.max(0, amount));
     this.drawHealth();
     if (this.health <= 0) this.dead = true;
     return this.dead;

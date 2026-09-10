@@ -27,4 +27,13 @@ describe("WaveScheduler", () => {
     expect(events).toContainEqual({ type: "victory" });
     expect(scheduler.state).toBe("victory");
   });
+
+  it("allows countdowns to be skipped without duplicating wave starts", () => {
+    const scheduler = new WaveScheduler(waves, 10_000, 8_000);
+    expect(scheduler.skipCountdown()).toBe(true);
+    expect(scheduler.countdownSeconds).toBe(0);
+    expect(scheduler.tick(1, 0)).toEqual([{ type: "waveStarted", waveIndex: 0 }]);
+    expect(scheduler.skipCountdown()).toBe(false);
+    expect(scheduler.tick(1, 0).filter((event) => event.type === "waveStarted")).toHaveLength(0);
+  });
 });

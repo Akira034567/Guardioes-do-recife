@@ -1,5 +1,8 @@
 import Phaser from "phaser";
+import { RECIFE_ONE_BACKGROUND_KEY, SHRIMP_TEXTURES } from "../assets/recifeOneAssets";
 import { DEPTH, GAME_HEIGHT, GAME_WIDTH, HUD_BOTTOM, HUD_TOP } from "../constants";
+import { AbilityCooldown } from "../core/AbilityCooldown";
+import { hasReachedBlockerContact } from "../core/Combat";
 import { Economy } from "../core/Economy";
 import { RoutePath } from "../core/RoutePath";
 import { WaveScheduler, type WaveSchedulerEvent } from "../core/WaveScheduler";
@@ -12,13 +15,38 @@ import { Guardian } from "../objects/Guardian";
 import { Projectile } from "../objects/Projectile";
 import { AudioManager } from "../systems/AudioManager";
 import { DebugOverlay } from "../systems/DebugOverlay";
-import type { DebugFlags, GuardianId, HudSnapshot, PlacementDefinition } from "../types";
+import type { DebugFlags, GuardianId, HudSnapshot, PlacementDefinition, Vec2 } from "../types";
+
+const ROUTE_PLACEMENT_CLEARANCE = 52;
+const ROUTE_BLOCKER_SEPARATION = 78;
 
 interface PlacementView {
   definition: PlacementDefinition;
   guardian: Guardian | null;
   graphic: Phaser.GameObjects.Graphics;
   zone: Phaser.GameObjects.Zone;
+}
+
+interface RoutePlacementView extends Vec2 {
+  id: string;
+  progress: number;
+  routeDistance: number;
+  guardian: Guardian | null;
+}
+
+interface ElectricFieldView {
+  ownerId: string;
+  x: number;
+  y: number;
+  radius: number;
+  durationMs: number;
+  expiresAt: number;
+  nextPulseAt: number;
+  pulseIntervalMs: number;
+  damage: number;
+  slowFactor: number;
+  slowDurationMs: number;
+  graphic: Phaser.GameObjects.Graphics;
 }
 
 export class GameScene extends Phaser.Scene {
@@ -29,7 +57,14 @@ export class GameScene extends Phaser.Scene {
   private audio!: AudioManager;
   private debugOverlay!: DebugOverlay;
   private selectionGraphic!: Phaser.GameObjects.Graphics;
+  private placementGuideGraphic!: Phaser.GameObjects.Graphics;
+  private placementPreviewGraphic!: Phaser.GameObjects.Graphics;
+  private placementPreviewText!: Phaser.GameObjects.Text;
   private debugFlags!: DebugFlags;
+  private placements: PlacementView[] = [];
+  private routePlacements: RoutePlacementView[] = [];
+  private electricFields: ElectricFieldView[] = [];
+  private electricFieldCooldowns = new Map<string, AbilityCooldown>();
   private enemies: Enemy[] = [];
   private guardians: Guardian[] = [];
   private projectiles: Projectile[] = [];
@@ -60,6 +95,10 @@ export class GameScene extends Phaser.Scene {
     this.guardians = [];
     this.projectiles = [];
     this.currentMotes = [];
+    this.placements = [];
+    this.routePlacements = [];
+    this.electricFields = [];
+    this.electricFieldCooldowns = new Map();
     this.selectedGuardianId = null;
     this.selectedPlacedGuardianId = null;
     this.reefHealth = this.level.reefHealth;
@@ -92,12 +131,27 @@ export class GameScene extends Phaser.Scene {
       current: true,
       states: true,
       targets: true,
+      placements: true,
     };
 
     this.drawEnvironment();
     this.createCurrentMotes();
     this.createPlacements();
     this.selectionGraphic = this.add.graphics().setDepth(DEPTH.effects);
+    this.placementGuideGraphic = this.add.graphics().setDepth(DEPTH.effects - 1);
+    this.placementPreviewGraphic = this.add.graphics().setDepth(DEPTH.effects + 1);
+    this.placementPreviewText = this.add
+      .text(0, 0, "", {
+        fontFamily: "Arial, sans-serif",
+        fontSize: "11px",
+        fontStyle: "bold",
+        color: "#ffffff",
+        backgroundColor: "rgba(0, 20, 31, .9)",
+        padding: { x: 5, y: 3 },
+      })
+      .setOrigin(0.5, 1)
+      .setDepth(DEPTH.effects + 2)
+      .setVisible(false);
     this.debugOverlay = new DebugOverlay(this, this.route);
     this.registerEvents();
     this.game.canvas.addEventListener("pointerdown", this.unlockAudio, { passive: true });
@@ -118,6 +172,8 @@ export class GameScene extends Phaser.Scene {
     const waveEvents = this.scheduler.tick(safeDelta, this.enemies.filter((enemy) => !enemy.dead && !enemy.reachedGoal).length);
     this.processWaveEvents(waveEvents);
 
+    this.updateBlockers(safeDelta);
+
     for (const enemy of this.enemies) {
       const result = enemy.tick(this.simulationTimeMs, safeDelta, this.level.currents, this.currentReversed);
       if (result.reachedGoal) {
@@ -132,9 +188,11 @@ export class GameScene extends Phaser.Scene {
       guardian.tick(this.simulationTimeMs, this.enemies, (attacker, target) => this.resolveGuardianAttack(attacker, target));
     }
 
+    this.updateElectricFields();
+
     for (const projectile of this.projectiles) {
       const result = projectile.tick(safeDelta, this.level.currents, this.currentReversed, this.enemies);
-      result.hits.forEach((enemy) => this.damageEnemy(enemy, projectile.damage));
+      result.hits.forEach((hit) => this.damageEnemy(hit.enemy, hit.damage));
       if (result.expired) projectile.destroy();
     }
 
@@ -158,8 +216,11 @@ export class GameScene extends Phaser.Scene {
     EventBus.on(Events.togglePause, this.togglePause, this);
     EventBus.on(Events.toggleMute, this.toggleMute, this);
     EventBus.on(Events.restart, this.restartGame, this);
+    EventBus.on(Events.skipCountdown, this.skipCountdown, this);
     EventBus.on(Events.toggleDebug, this.toggleDebug, this);
     EventBus.on(Events.toggleDebugFlag, this.toggleDebugFlag, this);
+    this.input.on("pointermove", this.handleWorldPointerMove, this);
+    this.input.on("pointerdown", this.handleWorldPointerDown, this);
 
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
       EventBus.off(Events.selectGuardian, this.selectGuardian, this);
@@ -167,8 +228,11 @@ export class GameScene extends Phaser.Scene {
       EventBus.off(Events.togglePause, this.togglePause, this);
       EventBus.off(Events.toggleMute, this.toggleMute, this);
       EventBus.off(Events.restart, this.restartGame, this);
+      EventBus.off(Events.skipCountdown, this.skipCountdown, this);
       EventBus.off(Events.toggleDebug, this.toggleDebug, this);
       EventBus.off(Events.toggleDebugFlag, this.toggleDebugFlag, this);
+      this.input.off("pointermove", this.handleWorldPointerMove, this);
+      this.input.off("pointerdown", this.handleWorldPointerDown, this);
       this.game.canvas.removeEventListener("pointerdown", this.unlockAudio);
       this.audio.destroy();
       this.debugOverlay.destroy();
@@ -179,56 +243,238 @@ export class GameScene extends Phaser.Scene {
     if (this.gameOver) return;
     this.selectedGuardianId = this.selectedGuardianId === id ? null : id;
     this.selectedPlacedGuardianId = null;
-    if (this.selectedGuardianId) this.showMessage(`Toque em uma plataforma para posicionar ${GUARDIANS[id].name}.`, 2200);
+    if (this.selectedGuardianId) {
+      const definition = GUARDIANS[id];
+      const hint = definition.placementMode === "platform"
+        ? "uma plataforma"
+        : definition.placementMode === "water"
+          ? "uma área livre da água"
+          : "qualquer ponto da correnteza";
+      this.showMessage(`Toque em ${hint} para posicionar ${definition.name}.`, 2200);
+    }
     this.emitHud();
-    this.renderSelection();
+    this.renderPlacementState();
   }
 
   private handlePlacement(placement: PlacementView): void {
     this.audio.unlock();
     if (this.gameOver) return;
     if (placement.guardian) {
-      this.selectedPlacedGuardianId = placement.guardian.instanceId;
-      this.selectedGuardianId = null;
-      this.showMessage(`${placement.guardian.definition.name} selecionado.`, 1400);
-      this.emitHud();
-      this.renderSelection();
+      this.selectPlacedGuardian(placement.guardian);
       return;
     }
 
     if (!this.selectedGuardianId) {
+      if (this.selectedPlacedGuardianId) {
+        this.selectedPlacedGuardianId = null;
+        this.emitHud();
+        this.renderPlacementState();
+        return;
+      }
       this.showMessage("Escolha primeiro um Guardião no painel inferior.", 1800);
       return;
     }
 
     const definition = GUARDIANS[this.selectedGuardianId];
+    if (definition.placementMode !== "platform") {
+      this.showMessage(
+        definition.placementMode === "water"
+          ? "A Água-viva deve flutuar livremente na água, longe da rota."
+          : "O Baiacu pode ocupar qualquer ponto livre da correnteza.",
+        1900,
+      );
+      return;
+    }
+
+    const guardian = this.placeGuardian(definition.id, placement.definition.x, placement.definition.y);
+    if (!guardian) return;
+    placement.guardian = guardian;
+    this.showMessage(`${definition.name} protege esta plataforma!`, 1600);
+  }
+
+  private placeGuardian(
+    guardianId: GuardianId,
+    x: number,
+    y: number,
+    routePlacement?: RoutePlacementView,
+  ): Guardian | null {
+    const definition = GUARDIANS[guardianId];
     if (!this.economy.spend(definition.cost)) {
       this.showMessage(`Faltam pérolas para ${definition.name}.`, 1800);
       this.audio.play("warning");
-      return;
+      return null;
     }
 
     const guardian = new Guardian(
       this,
       `G${++this.guardianSerial}`,
       definition,
-      placement.definition.x,
-      placement.definition.y,
+      x,
+      y,
+      routePlacement
+        ? { routePlacementId: routePlacement.id, routeDistance: routePlacement.routeDistance }
+        : {},
     );
-    placement.guardian = guardian;
+    guardian.setSize(80, 80);
+    guardian.setInteractive(new Phaser.Geom.Circle(40, 40, 40), Phaser.Geom.Circle.Contains);
+    guardian.on(
+      "pointerdown",
+      (
+        _pointer: Phaser.Input.Pointer,
+        _localX: number,
+        _localY: number,
+        event: Phaser.Types.Input.EventData,
+      ) => {
+        event.stopPropagation();
+        this.selectPlacedGuardian(guardian);
+      },
+    );
     this.guardians.push(guardian);
+    if (routePlacement) {
+      routePlacement.guardian = guardian;
+      this.routePlacements.push(routePlacement);
+    }
+    this.selectedGuardianId = null;
     this.selectedPlacedGuardianId = guardian.instanceId;
     this.audio.play("buy");
-    this.showMessage(`${definition.name} protege esta plataforma!`, 1600);
     this.emitHud();
-    this.renderSelection();
+    this.renderPlacementState();
+    return guardian;
+  }
+
+  private selectPlacedGuardian(guardian: Guardian): void {
+    this.selectedPlacedGuardianId = guardian.instanceId;
+    this.selectedGuardianId = null;
+    this.showMessage(`${guardian.definition.name} · nível ${guardian.upgradeLevel}/2`, 1400);
+    this.emitHud();
+    this.renderPlacementState();
+  }
+
+  private handleWorldPointerDown(pointer: Phaser.Input.Pointer): void {
+    if (this.gameOver || pointer.y <= HUD_TOP || pointer.y >= GAME_HEIGHT - HUD_BOTTOM) return;
+    if (!this.selectedGuardianId) {
+      if (this.selectedPlacedGuardianId) {
+        this.selectedPlacedGuardianId = null;
+        this.emitHud();
+        this.renderPlacementState();
+      }
+      return;
+    }
+    const definition = GUARDIANS[this.selectedGuardianId];
+    if (definition.placementMode === "water") {
+      const validation = this.validateWaterPlacement(pointer.worldX, pointer.worldY);
+      if (!validation.valid) {
+        this.showMessage(validation.reason, 1500);
+        this.audio.play("warning");
+        return;
+      }
+      const guardian = this.placeGuardian(definition.id, pointer.worldX, pointer.worldY);
+      if (guardian) this.showMessage("Água-viva posicionada na água.", 1500);
+    } else if (definition.placementMode === "route") {
+      const validation = this.validateRoutePlacement(pointer.worldX, pointer.worldY);
+      if (!validation.valid) {
+        this.showMessage(validation.reason, 1700);
+        this.audio.play("warning");
+        return;
+      }
+      const placement: RoutePlacementView = {
+        id: `bloqueio-livre-${this.routePlacements.length + 1}`,
+        x: validation.x,
+        y: validation.y,
+        routeDistance: validation.routeDistance,
+        progress: validation.progress,
+        guardian: null,
+      };
+      const guardian = this.placeGuardian(definition.id, placement.x, placement.y, placement);
+      if (guardian) this.showMessage("Baiacu bloqueando a correnteza!", 1500);
+    }
+  }
+
+  private handleWorldPointerMove(pointer: Phaser.Input.Pointer): void {
+    this.placementPreviewGraphic.clear();
+    this.placementPreviewText.setVisible(false);
+    if (!this.selectedGuardianId || pointer.y <= HUD_TOP || pointer.y >= GAME_HEIGHT - HUD_BOTTOM) return;
+    const definition = GUARDIANS[this.selectedGuardianId];
+    if (definition.placementMode === "platform") return;
+
+    let x = pointer.worldX;
+    let y = pointer.worldY;
+    let valid = false;
+    let label = "";
+    if (definition.placementMode === "water") {
+      const validation = this.validateWaterPlacement(x, y);
+      valid = validation.valid;
+      label = validation.valid ? "Posição válida" : validation.reason;
+    } else {
+      const validation = this.validateRoutePlacement(x, y);
+      x = validation.x;
+      y = validation.y;
+      valid = validation.valid;
+      label = validation.valid ? "Ponto livre da correnteza" : validation.reason;
+    }
+
+    this.placementPreviewGraphic.fillStyle(valid ? 0x67f2ac : 0xff6f79, 0.2);
+    this.placementPreviewGraphic.lineStyle(3, valid ? 0x67f2ac : 0xff6f79, 0.95);
+    this.placementPreviewGraphic.fillCircle(x, y, 34);
+    this.placementPreviewGraphic.strokeCircle(x, y, 34);
+    this.placementPreviewText.setPosition(x, y - 42).setText(label).setVisible(true);
+  }
+
+  private validateWaterPlacement(x: number, y: number): { valid: boolean; reason: string } {
+    if (x < 44 || x > GAME_WIDTH - 44 || y < HUD_TOP + 38 || y > GAME_HEIGHT - HUD_BOTTOM - 38) {
+      return { valid: false, reason: "Fora da área jogável" };
+    }
+    if (this.route.getClosestPoint({ x, y }).distance < 82) {
+      return { valid: false, reason: "Muito perto da rota" };
+    }
+    if (this.placements.some((placement) => Math.hypot(x - placement.definition.x, y - placement.definition.y) < 78)) {
+      return { valid: false, reason: "Plataforma ocupa este espaço" };
+    }
+    if (this.guardians.some((guardian) => Math.hypot(x - guardian.x, y - guardian.y) < 78)) {
+      return { valid: false, reason: "Muito perto de outro Guardião" };
+    }
+    return { valid: true, reason: "Posição válida" };
+  }
+
+  private validateRoutePlacement(x: number, y: number): {
+    valid: boolean;
+    reason: string;
+    x: number;
+    y: number;
+    routeDistance: number;
+    progress: number;
+  } {
+    const closest = this.route.getClosestPoint({ x, y });
+    const result = {
+      valid: true,
+      reason: "Posição válida",
+      x: closest.point.x,
+      y: closest.point.y,
+      routeDistance: closest.routeDistance,
+      progress: closest.progress,
+    };
+    if (closest.distance > ROUTE_PLACEMENT_CLEARANCE) {
+      return { ...result, valid: false, reason: "Toque dentro da correnteza" };
+    }
+    if (closest.routeDistance < 60 || closest.routeDistance > this.route.totalLength - 60) {
+      return { ...result, valid: false, reason: "Muito perto da entrada ou do Recife" };
+    }
+    if (
+      this.routePlacements.some(
+        (placement) => Math.hypot(result.x - placement.x, result.y - placement.y) < ROUTE_BLOCKER_SEPARATION,
+      )
+    ) {
+      return { ...result, valid: false, reason: "Muito perto de outro Baiacu" };
+    }
+    return result;
   }
 
   private upgradeSelectedGuardian(): void {
     if (!this.selectedPlacedGuardianId || this.gameOver) return;
     const guardian = this.guardians.find((candidate) => candidate.instanceId === this.selectedPlacedGuardianId);
-    if (!guardian || guardian.upgraded) return;
-    const cost = guardian.definition.upgrade.cost;
+    if (!guardian || !guardian.canUpgrade || !guardian.nextUpgrade) return;
+    const nextUpgrade = guardian.nextUpgrade;
+    const cost = nextUpgrade.cost;
     if (!this.economy.spend(cost)) {
       this.showMessage("Pérolas insuficientes para este upgrade.", 1700);
       this.audio.play("warning");
@@ -236,9 +482,9 @@ export class GameScene extends Phaser.Scene {
     }
     guardian.upgrade();
     this.audio.play("upgrade");
-    this.showMessage(`${guardian.definition.upgrade.name} adquirido!`, 1900);
+    this.showMessage(`${nextUpgrade.name} adquirido!`, 1900);
     this.emitHud();
-    this.renderSelection();
+    this.renderPlacementState();
   }
 
   private resolveGuardianAttack(guardian: Guardian, target: Enemy): void {
@@ -250,9 +496,12 @@ export class GameScene extends Phaser.Scene {
           guardian.x + 22,
           guardian.y,
           target,
-          definition.projectileSpeed ?? 400,
+          guardian.projectileSpeed,
           guardian.damage,
           guardian.extraTargets,
+          guardian.secondaryDamageMultiplier,
+          guardian.predictiveAim,
+          guardian.upgradeLevel,
         ),
       );
       this.audio.play("shot");
@@ -265,31 +514,28 @@ export class GameScene extends Phaser.Scene {
         .filter((enemy) => !enemy.dead && !enemy.reachedGoal && enemy.distanceTo(guardian.x, guardian.y) <= guardian.range)
         .sort((a, b) => b.progress - a.progress)
         .slice(0, 1 + guardian.extraTargets);
-      candidates.forEach((enemy) => {
-        this.damageEnemy(enemy, guardian.damage);
+      candidates.forEach((enemy, index) => {
+        this.damageEnemy(enemy, guardian.damage * (index === 0 ? 1 : guardian.chainDamageMultiplier));
         enemy.applySlow(definition.slowFactor ?? 1, definition.slowDurationMs ?? 0, this.simulationTimeMs);
       });
       this.lightningEffect(guardian, candidates);
+      if (guardian.electricField) this.createElectricField(guardian, target.x, target.y);
       this.audio.play("zap");
       return;
     }
 
-    const factor = guardian.upgraded
-      ? (definition.slowFactor ?? 1) * (definition.upgrade.slowMultiplier ?? 1)
-      : 1;
     this.enemies
       .filter((enemy) => !enemy.dead && !enemy.reachedGoal && enemy.distanceTo(guardian.x, guardian.y) <= guardian.range)
       .forEach((enemy) => {
         this.damageEnemy(enemy, guardian.damage);
-        if (guardian.upgraded) enemy.applySlow(factor, definition.slowDurationMs ?? 0, this.simulationTimeMs);
       });
     this.shockwave(guardian.x, guardian.y, definition.accent, guardian.range);
     this.audio.play("pulse");
   }
 
-  private damageEnemy(enemy: Enemy, damage: number): void {
-    const killed = enemy.takeDamage(damage);
-    this.audio.play("impact");
+  private damageEnemy(enemy: Enemy, damage: number, playSound = true, continuous = false): void {
+    const killed = continuous ? enemy.takeContinuousDamage(damage) : enemy.takeDamage(damage);
+    if (playSound) this.audio.play("impact");
     if (killed) {
       this.economy.earn(enemy.definition.reward);
       if (enemy.definition.isBoss) {
@@ -297,6 +543,110 @@ export class GameScene extends Phaser.Scene {
         this.showMessage("O Quebra-Marés caiu! A corrente se estabilizou.", 2400);
       }
     }
+  }
+
+  private updateBlockers(deltaMs: number): void {
+    const blockers = this.guardians.filter(
+      (guardian) => guardian.definition.placementMode === "route" && guardian.routeDistance !== null,
+    );
+    const blockerIds = new Set(blockers.map((guardian) => guardian.instanceId));
+    this.enemies.forEach((enemy) => {
+      if (enemy.blockedById && !blockerIds.has(enemy.blockedById)) enemy.clearBlocked();
+    });
+
+    for (const blocker of blockers) {
+      const anchor = blocker.routeDistance as number;
+      const alreadyBlocked = this.enemies
+        .filter((enemy) => enemy.blockedById === blocker.instanceId && !enemy.dead && !enemy.reachedGoal)
+        .slice(0, blocker.blockCapacity);
+      this.enemies
+        .filter((enemy) => enemy.blockedById === blocker.instanceId && !alreadyBlocked.includes(enemy))
+        .forEach((enemy) => enemy.clearBlocked());
+
+      const candidates = this.enemies
+        .filter(
+          (enemy) =>
+            !enemy.dead &&
+            !enemy.reachedGoal &&
+            !enemy.blockedById &&
+            hasReachedBlockerContact(
+              enemy.pathDistance,
+              anchor,
+              28 + enemy.definition.hitRadius,
+            ),
+        )
+        .sort((first, second) => second.pathDistance - first.pathDistance);
+      const blocked = [...alreadyBlocked, ...candidates.slice(0, blocker.blockCapacity - alreadyBlocked.length)];
+      blocked.forEach((enemy) => {
+        enemy.setBlocked(blocker.instanceId, enemy.pathDistance);
+        if (blocker.contactDamagePerSecond > 0) {
+          this.damageEnemy(enemy, blocker.contactDamagePerSecond * (deltaMs / 1000), false, true);
+        }
+      });
+    }
+  }
+
+  private createElectricField(guardian: Guardian, x: number, y: number): void {
+    const definition = guardian.electricField;
+    if (!definition) return;
+    let cooldown = this.electricFieldCooldowns.get(guardian.instanceId);
+    if (!cooldown) {
+      cooldown = new AbilityCooldown();
+      this.electricFieldCooldowns.set(guardian.instanceId, cooldown);
+    }
+    if (!cooldown.tryActivate(this.simulationTimeMs, definition.cooldownMs)) return;
+    this.electricFields = this.electricFields.filter((field) => {
+      if (field.ownerId !== guardian.instanceId) return true;
+      field.graphic.destroy();
+      return false;
+    });
+    const graphic = this.add.graphics().setDepth(DEPTH.effects - 1);
+    graphic.fillStyle(0x9e65ff, 0.13);
+    graphic.fillCircle(x, y, definition.radius);
+    graphic.lineStyle(3, 0x7deaff, 0.72);
+    graphic.strokeCircle(x, y, definition.radius);
+    graphic.lineStyle(1, 0xe5d3ff, 0.65);
+    graphic.strokeCircle(x, y, definition.radius * 0.58);
+    this.electricFields.push({
+      ownerId: guardian.instanceId,
+      x,
+      y,
+      radius: definition.radius,
+      durationMs: definition.durationMs,
+      expiresAt: this.simulationTimeMs + definition.durationMs,
+      nextPulseAt: this.simulationTimeMs,
+      pulseIntervalMs: definition.pulseIntervalMs,
+      damage: definition.damage,
+      slowFactor: definition.slowFactor,
+      slowDurationMs: definition.slowDurationMs,
+      graphic,
+    });
+  }
+
+  private updateElectricFields(): void {
+    this.electricFields = this.electricFields.filter((field) => {
+      if (this.simulationTimeMs >= field.expiresAt) {
+        field.graphic.destroy();
+        return false;
+      }
+      const remaining = (field.expiresAt - this.simulationTimeMs) / field.durationMs;
+      field.graphic.setAlpha(Math.max(0.18, Math.min(1, remaining)));
+      if (this.simulationTimeMs >= field.nextPulseAt) {
+        field.nextPulseAt += field.pulseIntervalMs;
+        const affected = this.enemies.filter(
+          (enemy) => !enemy.dead && !enemy.reachedGoal && enemy.distanceTo(field.x, field.y) <= field.radius,
+        );
+        affected.forEach((enemy) => {
+          this.damageEnemy(enemy, field.damage, false);
+          enemy.applySlow(field.slowFactor, field.slowDurationMs, this.simulationTimeMs);
+        });
+        if (affected.length > 0) {
+          this.audio.play("zap");
+          this.shockwave(field.x, field.y, 0x8ff4ff, field.radius);
+        }
+      }
+      return true;
+    });
   }
 
   private cleanupEnemies(): void {
@@ -378,6 +728,13 @@ export class GameScene extends Phaser.Scene {
     this.scene.restart();
   }
 
+  private skipCountdown(): void {
+    if (this.gameOver || this.paused || !this.scheduler.skipCountdown()) return;
+    this.showMessage("Preparação encerrada. A onda começou!", 1300);
+    this.audio.play("wave");
+    this.emitHud();
+  }
+
   private toggleDebug(): void {
     this.debugFlags.enabled = !this.debugFlags.enabled;
     this.emitHud();
@@ -398,6 +755,7 @@ export class GameScene extends Phaser.Scene {
 
   private emitHud(): void {
     const selected = this.guardians.find((guardian) => guardian.instanceId === this.selectedPlacedGuardianId);
+    const nextUpgrade = selected?.nextUpgrade ?? null;
     const snapshot: HudSnapshot = {
       pearls: this.economy.pearls,
       reefHealth: this.reefHealth,
@@ -406,15 +764,17 @@ export class GameScene extends Phaser.Scene {
       totalWaves: this.scheduler.totalWaves,
       waveState: this.scheduler.state,
       countdownSeconds: this.scheduler.countdownSeconds,
+      canSkipCountdown: this.scheduler.state === "countdown",
       selectedGuardianId: this.selectedGuardianId,
       selectedPlacedGuardian: selected
         ? {
             instanceId: selected.instanceId,
             name: selected.definition.name,
-            upgraded: selected.upgraded,
-            upgradeName: selected.definition.upgrade.name,
-            upgradeDescription: selected.definition.upgrade.description,
-            upgradeCost: selected.definition.upgrade.cost,
+            upgradeLevel: selected.upgradeLevel,
+            maxUpgradeLevel: selected.definition.upgrades.length,
+            nextUpgradeName: nextUpgrade?.name ?? null,
+            nextUpgradeDescription: nextUpgrade?.description ?? null,
+            nextUpgradeCost: nextUpgrade?.cost ?? null,
           }
         : null,
       paused: this.paused,
@@ -426,9 +786,18 @@ export class GameScene extends Phaser.Scene {
     this.game.canvas.dataset.gameState = this.gameOver ?? this.scheduler.state;
     this.game.canvas.dataset.pearls = String(this.economy.pearls);
     this.game.canvas.dataset.guardians = String(this.guardians.length);
-    this.game.canvas.dataset.upgrades = String(this.guardians.filter((guardian) => guardian.upgraded).length);
+    this.game.canvas.dataset.upgrades = String(
+      this.guardians.reduce((total, guardian) => total + guardian.upgradeLevel, 0),
+    );
+    this.game.canvas.dataset.selected = this.selectedPlacedGuardianId ?? "";
     this.game.canvas.dataset.debug = String(this.debugFlags.enabled);
     this.game.canvas.dataset.paused = String(this.paused);
+    const shrimp = this.guardians.find((guardian) => guardian.definition.id === "pistol-shrimp");
+    this.game.canvas.dataset.shrimpAssets = String(this.textures.exists(SHRIMP_TEXTURES.idle[0]));
+    this.game.canvas.dataset.shrimpArt = String(shrimp?.usesSpriteArt ?? false);
+    this.game.canvas.dataset.shrimpAnimation = shrimp?.currentAnimationKey ?? "";
+    this.game.canvas.dataset.shrimpTexture = shrimp?.currentTextureKey ?? "";
+    this.game.canvas.dataset.projectileTexture = this.projectiles.at(-1)?.textureKey ?? "";
     EventBus.emit(Events.hudUpdate, snapshot);
   }
 
@@ -441,54 +810,91 @@ export class GameScene extends Phaser.Scene {
       this.level.currents,
       this.currentReversed,
       this.selectedPlacedGuardianId,
+      {
+        waterBounds: {
+          x: 44,
+          y: HUD_TOP + 38,
+          width: GAME_WIDTH - 88,
+          height: GAME_HEIGHT - HUD_BOTTOM - HUD_TOP - 76,
+        },
+        waterRouteClearance: 82,
+        waterSeparation: 78,
+        routePlacementClearance: ROUTE_PLACEMENT_CLEARANCE,
+        platforms: this.placements.map((placement) => ({
+          x: placement.definition.x,
+          y: placement.definition.y,
+        })),
+        routeBlockers: this.routePlacements.map((placement) => ({
+          id: placement.id,
+          x: placement.x,
+          y: placement.y,
+        })),
+      },
     );
   }
 
-  private renderSelection(): void {
+  private renderPlacementState(): void {
     this.selectionGraphic.clear();
+    this.placementGuideGraphic.clear();
     const selected = this.guardians.find((guardian) => guardian.instanceId === this.selectedPlacedGuardianId);
     if (selected) {
       this.selectionGraphic.fillStyle(selected.definition.accent, 0.06);
       this.selectionGraphic.fillCircle(selected.x, selected.y, selected.range);
       this.selectionGraphic.lineStyle(2, selected.definition.accent, 0.8);
       this.selectionGraphic.strokeCircle(selected.x, selected.y, selected.range);
-      this.selectionGraphic.lineStyle(3, 0xffe17d, 1);
-      this.selectionGraphic.strokeCircle(selected.x, selected.y, 40);
+    }
+
+    const placementMode = this.selectedGuardianId
+      ? GUARDIANS[this.selectedGuardianId].placementMode
+      : null;
+    if (placementMode === "platform") {
+      this.placements.forEach((placement) => {
+        this.placementGuideGraphic.fillStyle(placement.guardian ? 0xff6f79 : 0x67f2ac, 0.12);
+        this.placementGuideGraphic.lineStyle(3, placement.guardian ? 0xff6f79 : 0x67f2ac, 0.92);
+        this.placementGuideGraphic.fillCircle(placement.definition.x, placement.definition.y, 51);
+        this.placementGuideGraphic.strokeCircle(placement.definition.x, placement.definition.y, 51);
+      });
+    } else if (placementMode === "water") {
+      this.placementGuideGraphic.fillStyle(0x55dff2, 0.055);
+      this.placementGuideGraphic.fillRect(0, HUD_TOP, GAME_WIDTH, GAME_HEIGHT - HUD_TOP - HUD_BOTTOM);
+      this.placementGuideGraphic.lineStyle(164, 0xff6377, 0.11);
+      this.strokeRoute(this.placementGuideGraphic);
+      this.placements.forEach((placement) => {
+        this.placementGuideGraphic.fillStyle(0xff6377, 0.1);
+        this.placementGuideGraphic.fillCircle(placement.definition.x, placement.definition.y, 78);
+      });
+      this.guardians.forEach((guardian) => {
+        this.placementGuideGraphic.fillStyle(0xff6377, 0.1);
+        this.placementGuideGraphic.fillCircle(guardian.x, guardian.y, 78);
+      });
+    } else if (placementMode === "route") {
+      this.placementGuideGraphic.lineStyle(ROUTE_PLACEMENT_CLEARANCE * 2, 0x8aff98, 0.13);
+      this.strokeRoute(this.placementGuideGraphic);
+      this.routePlacements.forEach((placement) => {
+        this.placementGuideGraphic.fillStyle(0xff6f79, 0.2);
+        this.placementGuideGraphic.lineStyle(3, 0xff6f79, 0.9);
+        this.placementGuideGraphic.fillCircle(placement.x, placement.y, ROUTE_BLOCKER_SEPARATION / 2);
+        this.placementGuideGraphic.strokeCircle(placement.x, placement.y, ROUTE_BLOCKER_SEPARATION / 2);
+      });
+    } else {
+      this.placementPreviewGraphic.clear();
+      this.placementPreviewText.setVisible(false);
     }
     this.renderDebug();
   }
 
   private drawEnvironment(): void {
-    const background = this.add.graphics().setDepth(DEPTH.background);
-    background.fillGradientStyle(0x0c7292, 0x0c7292, 0x043b5c, 0x043b5c, 1);
-    background.fillRect(0, HUD_TOP, GAME_WIDTH, GAME_HEIGHT - HUD_TOP - HUD_BOTTOM);
-
-    for (let row = 0; row < 7; row += 1) {
-      background.lineStyle(2, 0x76e5ec, 0.08 + row * 0.01);
-      background.beginPath();
-      for (let x = -20; x <= GAME_WIDTH + 20; x += 40) {
-        const y = HUD_TOP + 34 + row * 77 + Math.sin(x / 60 + row) * 9;
-        if (x === -20) background.moveTo(x, y);
-        else background.lineTo(x, y);
-      }
-      background.strokePath();
-    }
-
-    this.drawSeabedDecor(background);
+    const playfieldCenterY = (HUD_TOP + GAME_HEIGHT - HUD_BOTTOM) / 2;
+    const levelBackground = this.add
+      .image(GAME_WIDTH / 2, playfieldCenterY, RECIFE_ONE_BACKGROUND_KEY)
+      .setDepth(DEPTH.background);
+    levelBackground.setScale(GAME_WIDTH / levelBackground.width);
 
     const pathGraphic = this.add.graphics().setDepth(DEPTH.path);
-    pathGraphic.lineStyle(92, 0x8d6d43, 0.45);
+    pathGraphic.lineStyle(82, 0x9cf7ff, 0.075);
     this.strokeRoute(pathGraphic);
-    pathGraphic.lineStyle(78, 0xf0cf8d, 1);
+    pathGraphic.lineStyle(3, 0xc9fbff, 0.22);
     this.strokeRoute(pathGraphic);
-    pathGraphic.lineStyle(4, 0xffecbd, 0.55);
-    this.strokeRoute(pathGraphic);
-
-    for (let distance = 45; distance < this.route.totalLength; distance += 78) {
-      const point = this.route.getPointAtDistance(distance);
-      pathGraphic.fillStyle(0xb18b56, 0.45);
-      pathGraphic.fillCircle(point.x, point.y + Math.sin(distance) * 13, 3);
-    }
 
     const current = this.level.currents[0];
     const currentGraphic = this.add.graphics().setDepth(DEPTH.current);
@@ -507,28 +913,6 @@ export class GameScene extends Phaser.Scene {
         padding: { x: 12, y: 7 },
       })
       .setDepth(DEPTH.effects);
-  }
-
-  private drawSeabedDecor(graphics: Phaser.GameObjects.Graphics): void {
-    const rocks = [
-      [90, 155, 30], [190, 540, 24], [405, 120, 34], [630, 510, 27], [910, 120, 31], [1180, 520, 38],
-      [1150, 190, 20], [70, 470, 18], [690, 125, 16],
-    ];
-    rocks.forEach(([x, y, radius], index) => {
-      graphics.fillStyle(index % 2 ? 0x174d57 : 0x123e51, 1);
-      graphics.fillCircle(x, y, radius);
-      graphics.fillStyle(0x297369, 0.65);
-      graphics.fillCircle(x - radius * 0.25, y - radius * 0.28, radius * 0.55);
-    });
-
-    const corals = [[120, 240], [260, 120], [430, 565], [680, 560], [930, 560], [1170, 250]];
-    corals.forEach(([x, y], index) => {
-      const color = index % 2 ? 0xff6e68 : 0xd55bd1;
-      graphics.lineStyle(7, color, 0.9);
-      graphics.lineBetween(x, y, x, y - 28);
-      graphics.lineBetween(x, y - 13, x - 12, y - 25);
-      graphics.lineBetween(x, y - 17, x + 13, y - 34);
-    });
   }
 
   private strokeRoute(graphics: Phaser.GameObjects.Graphics): void {
@@ -560,9 +944,21 @@ export class GameScene extends Phaser.Scene {
       const zone = this.add.zone(definition.x, definition.y, 94, 94).setDepth(DEPTH.pads + 1);
       zone.setInteractive({ useHandCursor: true });
       const view: PlacementView = { definition, guardian: null, graphic, zone };
-      zone.on("pointerdown", () => this.handlePlacement(view));
+      zone.on(
+        "pointerdown",
+        (
+          _pointer: Phaser.Input.Pointer,
+          _localX: number,
+          _localY: number,
+          event: Phaser.Types.Input.EventData,
+        ) => {
+          event.stopPropagation();
+          this.handlePlacement(view);
+        },
+      );
       zone.on("pointerover", () => graphic.setAlpha(0.82));
       zone.on("pointerout", () => graphic.setAlpha(1));
+      this.placements.push(view);
     });
   }
 

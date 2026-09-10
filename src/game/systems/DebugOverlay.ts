@@ -7,6 +7,15 @@ import type { Enemy } from "../objects/Enemy";
 import type { Guardian } from "../objects/Guardian";
 import type { Projectile } from "../objects/Projectile";
 
+export interface PlacementDebugInfo {
+  waterBounds: { x: number; y: number; width: number; height: number };
+  waterRouteClearance: number;
+  waterSeparation: number;
+  routePlacementClearance: number;
+  platforms: Array<{ x: number; y: number }>;
+  routeBlockers: Array<{ id: string; x: number; y: number }>;
+}
+
 export class DebugOverlay {
   private readonly graphics: Phaser.GameObjects.Graphics;
   private labels: Phaser.GameObjects.Text[] = [];
@@ -23,6 +32,7 @@ export class DebugOverlay {
     currents: readonly CurrentZoneDefinition[],
     currentReversed: boolean,
     selectedGuardianId: string | null,
+    placementInfo: PlacementDebugInfo,
   ): void {
     this.graphics.clear();
     this.labels.forEach((label) => label.destroy());
@@ -31,6 +41,7 @@ export class DebugOverlay {
 
     if (flags.route) this.drawRoute();
     if (flags.current) this.drawCurrents(currents, currentReversed);
+    if (flags.placements) this.drawPlacements(placementInfo, guardians);
 
     if (flags.ranges) {
       guardians.forEach((guardian) => {
@@ -70,7 +81,7 @@ export class DebugOverlay {
         this.addLabel(
           enemy.x,
           enemy.y + enemy.definition.hitRadius + 10,
-          `HP ${Math.ceil(enemy.health)} · ${enemy.effectiveSpeed.toFixed(0)}px/s · ${(enemy.progress * 100).toFixed(0)}%`,
+          `HP ${Math.ceil(enemy.health)} · ${enemy.effectiveSpeed.toFixed(0)}px/s · ${(enemy.progress * 100).toFixed(0)}%${enemy.blockedById ? ` · BLOQ ${enemy.blockedById}` : ""}`,
           0xffd4db,
         );
       });
@@ -121,6 +132,46 @@ export class DebugOverlay {
         }
       }
       this.addLabel(current.x + current.width / 2, current.y - 12, `${reversed ? "REVERSA" : "FLUXO"} · ±${current.speedModifier * 100}% · deriva ${current.projectileDrift}`, reversed ? 0xffad93 : 0x8ff2ff);
+    });
+  }
+
+  private drawPlacements(info: PlacementDebugInfo, guardians: readonly Guardian[]): void {
+    this.graphics.fillStyle(0x4edff0, 0.035);
+    this.graphics.fillRect(info.waterBounds.x, info.waterBounds.y, info.waterBounds.width, info.waterBounds.height);
+    this.graphics.lineStyle(info.waterRouteClearance * 2, 0xff526d, 0.055);
+    this.graphics.beginPath();
+    this.route.points.forEach((point, index) => {
+      if (index === 0) this.graphics.moveTo(point.x, point.y);
+      else this.graphics.lineTo(point.x, point.y);
+    });
+    this.graphics.strokePath();
+    this.graphics.lineStyle(1, 0x5feaff, 0.8);
+    this.graphics.strokeRect(info.waterBounds.x, info.waterBounds.y, info.waterBounds.width, info.waterBounds.height);
+
+    this.graphics.lineStyle(info.routePlacementClearance * 2, 0x74ff9a, 0.08);
+    this.graphics.beginPath();
+    this.route.points.forEach((point, index) => {
+      if (index === 0) this.graphics.moveTo(point.x, point.y);
+      else this.graphics.lineTo(point.x, point.y);
+    });
+    this.graphics.strokePath();
+
+    this.graphics.lineStyle(1, 0xff7181, 0.75);
+    info.platforms.forEach((platform) => this.graphics.strokeCircle(platform.x, platform.y, info.waterSeparation));
+    guardians.forEach((guardian) => this.graphics.strokeCircle(guardian.x, guardian.y, info.waterSeparation));
+
+    info.routeBlockers.forEach((placement, index) => {
+      const color = 0xff6676;
+      this.graphics.fillStyle(color, 0.18);
+      this.graphics.lineStyle(3, color, 0.95);
+      this.graphics.fillCircle(placement.x, placement.y, 28);
+      this.graphics.strokeCircle(placement.x, placement.y, 28);
+      this.addLabel(
+        placement.x,
+        placement.y - 36,
+        `BAIACU ${index + 1} · OCUPADO`,
+        color,
+      );
     });
   }
 
