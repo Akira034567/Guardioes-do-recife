@@ -1,57 +1,53 @@
 import Phaser from "phaser";
-import { shrimpProjectileTextureForLevel } from "../assets/recifeOneAssets";
 import { DEPTH } from "../constants";
-import { predictInterceptPoint, projectileTurnRate } from "../core/Combat";
 import { containsPoint, projectileDrift } from "../core/CurrentField";
+import { ProjectileCore, type ProjectileConfig, type ProjectileTarget } from "../core/ProjectileCore";
 import type { CurrentZoneDefinition } from "../types";
 import type { Enemy } from "./Enemy";
 
+export interface ProjectileHitResult {
+  enemy: Enemy;
+  damage: number;
+  splash: boolean;
+}
+
+/** Casca Phaser do projétil: a física e as regras de acerto vivem em `ProjectileCore`. */
 export class Projectile extends Phaser.GameObjects.Container {
-  readonly radius = 6;
-  targetId: string;
+  readonly radius: number;
   readonly textureKey: string | null;
-  private readonly hitEnemyIds = new Set<string>();
-  private remainingHits: number;
-  private lifetimeMs = 0;
-  private velocityX: number;
-  private velocityY: number;
+  readonly core: ProjectileCore;
 
   constructor(
     scene: Phaser.Scene,
     x: number,
     y: number,
     target: Enemy,
-    private readonly speed: number,
-    readonly damage: number,
-    extraTargets: number,
-    private readonly secondaryDamageMultiplier: number,
-    private readonly predictiveAim: boolean,
-    upgradeLevel: number,
+    config: ProjectileConfig,
+    textureKey: string | null,
   ) {
     super(scene, x, y);
-    this.targetId = target.instanceId;
-    this.remainingHits = 1 + extraTargets;
-    const aimPoint = predictiveAim ? predictInterceptPoint({ x, y }, target, speed) : target;
-    const angle = Math.atan2(aimPoint.y - y, aimPoint.x - x);
-    this.velocityX = Math.cos(angle) * speed;
-    this.velocityY = Math.sin(angle) * speed;
+    this.radius = config.radius;
+    this.core = new ProjectileCore({ x, y }, Projectile.snapshot(target), config);
 
-    const projectileKey = shrimpProjectileTextureForLevel(upgradeLevel);
-    if (scene.textures.exists(projectileKey)) {
-      const sprite = new Phaser.GameObjects.Image(scene, 0, 0, projectileKey);
+    if (textureKey && scene.textures.exists(textureKey)) {
+      const sprite = new Phaser.GameObjects.Image(scene, 0, 0, textureKey);
       sprite.setScale(0.5);
       this.add(sprite);
-      this.textureKey = projectileKey;
+      this.textureKey = textureKey;
     } else {
-      const fallback = new Phaser.GameObjects.Arc(scene, 0, 0, 6, 0, 360, false, 0x5ae8ff, 1);
+      const fallback = new Phaser.GameObjects.Arc(scene, 0, 0, config.radius, 0, 360, false, 0x5ae8ff, 1);
       fallback.setStrokeStyle(2, 0xd8fbff, 1);
       this.add(fallback);
       this.textureKey = null;
     }
 
-    this.setRotation(angle);
+    this.setRotation(this.core.rotation);
     this.setDepth(DEPTH.projectiles);
     scene.add.existing(this);
+  }
+
+  get targetId(): string | null {
+    return this.core.targetId;
   }
 
   tick(
@@ -59,72 +55,34 @@ export class Projectile extends Phaser.GameObjects.Container {
     currents: readonly CurrentZoneDefinition[],
     currentReversed: boolean,
     enemies: readonly Enemy[],
-  ): { hits: Array<{ enemy: Enemy; damage: number }>; expired: boolean } {
-    const deltaSeconds = deltaMs / 1000;
-    this.lifetimeMs += deltaMs;
+  ): { hits: ProjectileHitResult[]; expired: boolean } {
+    const result = this.core.step(deltaMs, enemies.map(Projectile.snapshot));
 
-    const trackedTarget = enemies.find(
-      (enemy) => enemy.instanceId === this.targetId && !enemy.dead && !enemy.reachedGoal,
-    );
-    if (trackedTarget) {
-      const aimPoint = this.predictiveAim ? predictInterceptPoint(this, trackedTarget, this.speed) : trackedTarget;
-      const currentAngle = Math.atan2(this.velocityY, this.velocityX);
-      const desiredAngle = Math.atan2(aimPoint.y - this.y, aimPoint.x - this.x);
-      const angleDifference = Phaser.Math.Angle.Wrap(desiredAngle - currentAngle);
-      const maxTurn = projectileTurnRate(this.predictiveAim, this.hitEnemyIds.size) * deltaSeconds;
-      const newAngle = currentAngle + Phaser.Math.Clamp(angleDifference, -maxTurn, maxTurn);
-      this.velocityX = Math.cos(newAngle) * this.speed;
-      this.velocityY = Math.sin(newAngle) * this.speed;
-    }
-
-    this.x += this.velocityX * deltaSeconds;
-    this.y += this.velocityY * deltaSeconds;
-    this.rotation = Math.atan2(this.velocityY, this.velocityX);
-
-    const zone = currents.find((candidate) => containsPoint(candidate, this));
+    const zone = currents.find((candidate) => containsPoint(candidate, this.core));
     if (zone) {
-      const drift = projectileDrift(zone, deltaSeconds, currentReversed);
-      this.x += drift.x;
-      this.y += drift.y;
+      const drift = projectileDrift(zone, deltaMs / 1000, currentReversed);
+      this.core.x += drift.x;
+      this.core.y += drift.y;
     }
+    this.setPosition(this.core.x, this.core.y);
+    this.setRotation(this.core.rotation);
 
-    const hits: Array<{ enemy: Enemy; damage: number }> = [];
-    for (const enemy of enemies) {
-      if (enemy.dead || enemy.reachedGoal || this.hitEnemyIds.has(enemy.instanceId)) continue;
-      if (Math.hypot(this.x - enemy.x, this.y - enemy.y) <= this.radius + enemy.definition.hitRadius) {
-        this.hitEnemyIds.add(enemy.instanceId);
-        const hitIndex = this.hitEnemyIds.size - 1;
-        hits.push({
-          enemy,
-          damage: this.damage * (hitIndex === 0 ? 1 : this.secondaryDamageMultiplier),
-        });
-        this.remainingHits -= 1;
-        if (this.remainingHits <= 0) break;
-        const nextTarget = enemies
-          .filter(
-            (candidate) =>
-              !candidate.dead &&
-              !candidate.reachedGoal &&
-              !this.hitEnemyIds.has(candidate.instanceId),
-          )
-          .sort(
-            (first, second) =>
-              Math.hypot(first.x - this.x, first.y - this.y) -
-              Math.hypot(second.x - this.x, second.y - this.y),
-          )[0];
-        if (nextTarget) this.targetId = nextTarget.instanceId;
-      }
+    const hits: ProjectileHitResult[] = [];
+    for (const hit of result.hits) {
+      const enemy = enemies.find((candidate) => candidate.instanceId === hit.targetId);
+      if (enemy) hits.push({ enemy, damage: hit.damage, splash: hit.splash });
     }
+    return { hits, expired: result.expired };
+  }
 
+  private static snapshot(enemy: Enemy): ProjectileTarget {
     return {
-      hits,
-      expired:
-        this.remainingHits <= 0 ||
-        this.lifetimeMs >= 2200 ||
-        this.x < -80 ||
-        this.x > 1360 ||
-        this.y < -80 ||
-        this.y > 800,
+      id: enemy.instanceId,
+      x: enemy.x,
+      y: enemy.y,
+      hitRadius: enemy.definition.hitRadius,
+      velocity: enemy.velocity,
+      alive: !enemy.dead && !enemy.reachedGoal,
     };
   }
 }

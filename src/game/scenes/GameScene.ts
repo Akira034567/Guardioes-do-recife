@@ -1,24 +1,40 @@
 import Phaser from "phaser";
-import { RECIFE_ONE_BACKGROUND_KEY, SHRIMP_LEVEL_TEXTURES } from "../assets/recifeOneAssets";
+import { SHRIMP_LEVEL_TEXTURES, shrimpProjectileTextureForLevel } from "../assets/recifeOneAssets";
 import { DEPTH, GAME_HEIGHT, GAME_WIDTH, HUD_BOTTOM, HUD_TOP } from "../constants";
 import { AbilityCooldown } from "../core/AbilityCooldown";
+import { resolveAura, type AuraSource } from "../core/Auras";
 import { hasReachedBlockerContact } from "../core/Combat";
 import { Economy } from "../core/Economy";
+import type { LevelProgress } from "../core/LevelProgress";
 import { RoutePath } from "../core/RoutePath";
 import { WaveScheduler, type WaveSchedulerEvent } from "../core/WaveScheduler";
-import { ENEMIES } from "../data/enemies";
+import { BOSS_CURRENT, ECONOMY, GUARDIAN_BALANCE } from "../data/balance";
+import { ENEMIES, scaleEnemy } from "../data/enemies";
 import { GUARDIANS } from "../data/guardians";
-import { RECIFE_ONE } from "../data/recifeOne";
+import { getLevel, LEVELS, levelIndex, nextLevelId } from "../data/levels";
 import { EventBus, Events } from "../EventBus";
 import { Enemy } from "../objects/Enemy";
 import { Guardian } from "../objects/Guardian";
 import { Projectile } from "../objects/Projectile";
 import { AudioManager } from "../systems/AudioManager";
 import { DebugOverlay } from "../systems/DebugOverlay";
-import type { DebugFlags, GuardianId, HudSnapshot, PlacementDefinition, Vec2 } from "../types";
+import { drawLevelBackdrop } from "../systems/LevelBackdrop";
+import { createLevelProgress } from "../systems/ProgressStore";
+import type {
+  BranchId,
+  DebugFlags,
+  GuardianId,
+  HudSnapshot,
+  LevelDefinition,
+  PlacementDefinition,
+  PlacementMode,
+  Vec2,
+} from "../types";
 
 const ROUTE_PLACEMENT_CLEARANCE = 52;
-const ROUTE_BLOCKER_SEPARATION = 78;
+const ROUTE_UNIT_SEPARATION = 78;
+const WATER_ROUTE_CLEARANCE = 82;
+const WATER_SEPARATION = 78;
 
 interface PlacementView {
   definition: PlacementDefinition;
@@ -43,13 +59,40 @@ interface ElectricFieldView {
   nextPulseAt: number;
   pulseIntervalMs: number;
   damage: number;
+  maxDamagePerTarget: number;
   slowFactor: number;
   slowDurationMs: number;
+  damageDealt: Map<string, number>;
   graphic: Phaser.GameObjects.Graphics;
 }
 
+interface InkCloudView {
+  ownerId: string;
+  x: number;
+  y: number;
+  radius: number;
+  durationMs: number;
+  expiresAt: number;
+  slowFactor: number;
+  vulnerabilityMultiplier: number;
+  graphic: Phaser.GameObjects.Graphics;
+}
+
+interface DamageOptions {
+  sound?: boolean;
+  continuous?: boolean;
+  armorPiercing?: boolean;
+}
+
+const PLACEMENT_HINTS: Record<PlacementMode, string> = {
+  platform: "uma plataforma de pedra",
+  water: "uma área livre da água",
+  route: "qualquer ponto da correnteza",
+};
+
 export class GameScene extends Phaser.Scene {
-  private readonly level = RECIFE_ONE;
+  private level: LevelDefinition = LEVELS[0];
+  private progress!: LevelProgress;
   private route!: RoutePath;
   private economy!: Economy;
   private scheduler!: WaveScheduler;
@@ -63,15 +106,17 @@ export class GameScene extends Phaser.Scene {
   private placements: PlacementView[] = [];
   private routePlacements: RoutePlacementView[] = [];
   private electricFields: ElectricFieldView[] = [];
-  private electricFieldCooldowns = new Map<string, AbilityCooldown>();
+  private inkClouds: InkCloudView[] = [];
+  private abilityCooldowns = new Map<string, AbilityCooldown>();
   private enemies: Enemy[] = [];
   private guardians: Guardian[] = [];
   private projectiles: Projectile[] = [];
-  private currentMotes: Phaser.GameObjects.Arc[] = [];
+  private currentMotes: Array<{ mote: Phaser.GameObjects.Arc; zoneIndex: number }> = [];
   private selectedGuardianId: GuardianId | null = null;
   private selectedPlacedGuardianId: string | null = null;
-  private reefHealth = this.level.reefHealth;
+  private reefHealth: number = ECONOMY.reefHealth;
   private gameOver: "victory" | "defeat" | null = null;
+  private unlockedNextLevelId: string | null = null;
   private paused = false;
   private currentReversed = false;
   private bossCycleMs = 0;
@@ -79,7 +124,8 @@ export class GameScene extends Phaser.Scene {
   private simulationTimeMs = 0;
   private enemySerial = 0;
   private guardianSerial = 0;
-  private message = "Escolha um Guardião e toque em uma plataforma.";
+  private routeSerial = 0;
+  private message = "";
   private messageUntilMs = 5_000;
   private hudAccumulatorMs = 0;
   private debugAccumulatorMs = 0;
@@ -89,7 +135,13 @@ export class GameScene extends Phaser.Scene {
     super("GameScene");
   }
 
+  init(data: { levelId?: string } = {}): void {
+    const requested = data.levelId ?? new URLSearchParams(window.location.search).get("level");
+    this.level = getLevel(requested) ?? LEVELS[0];
+  }
+
   create(): void {
+    this.progress = createLevelProgress();
     this.enemies = [];
     this.guardians = [];
     this.projectiles = [];
@@ -97,11 +149,13 @@ export class GameScene extends Phaser.Scene {
     this.placements = [];
     this.routePlacements = [];
     this.electricFields = [];
-    this.electricFieldCooldowns = new Map();
+    this.inkClouds = [];
+    this.abilityCooldowns = new Map();
     this.selectedGuardianId = null;
     this.selectedPlacedGuardianId = null;
     this.reefHealth = this.level.reefHealth;
     this.gameOver = null;
+    this.unlockedNextLevelId = null;
     this.paused = false;
     this.currentReversed = false;
     this.bossCycleMs = 0;
@@ -109,19 +163,24 @@ export class GameScene extends Phaser.Scene {
     this.simulationTimeMs = 0;
     this.enemySerial = 0;
     this.guardianSerial = 0;
+    this.routeSerial = 0;
     this.message = "Escolha um Guardião e toque em uma plataforma.";
     this.messageUntilMs = 5_000;
     this.hudAccumulatorMs = 0;
     this.debugAccumulatorMs = 0;
     this.route = new RoutePath(this.level.waypoints);
     this.economy = new Economy(this.level.startingPearls);
+    const query = new URLSearchParams(window.location.search);
+    const debugFromQuery = query.get("debug") === "1";
+    // Atalho de debug: `?debug=1&wave=5` começa direto na onda indicada.
+    const startWave = debugFromQuery ? Number(query.get("wave") ?? 1) - 1 : 0;
     this.scheduler = new WaveScheduler(
       this.level.waves,
       this.level.initialWaveDelayMs,
       this.level.betweenWaveDelayMs,
+      Number.isFinite(startWave) ? startWave : 0,
     );
     this.audio = new AudioManager();
-    const debugFromQuery = new URLSearchParams(window.location.search).get("debug") === "1";
     this.debugFlags = {
       enabled: debugFromQuery,
       route: true,
@@ -154,6 +213,8 @@ export class GameScene extends Phaser.Scene {
     this.debugOverlay = new DebugOverlay(this, this.route);
     this.registerEvents();
     this.game.canvas.addEventListener("pointerdown", this.unlockAudio, { passive: true });
+    this.game.canvas.dataset.screen = "game";
+    this.game.canvas.dataset.level = this.level.id;
     this.scene.launch("UIScene", { debugFromQuery });
     this.emitHud();
   }
@@ -178,20 +239,22 @@ export class GameScene extends Phaser.Scene {
       if (result.reachedGoal) {
         this.reefHealth = Math.max(0, this.reefHealth - enemy.definition.reefDamage);
         this.audio.play("warning");
-        this.showMessage(`O ${enemy.definition.name} atingiu o Recife!`, 1400);
+        this.showMessage(`${enemy.definition.name} atingiu o Recife! (-${enemy.definition.reefDamage})`, 1400);
         if (this.reefHealth <= 0) this.finishGame("defeat");
       }
     }
 
+    this.updateAuras();
     for (const guardian of this.guardians) {
       guardian.tick(this.simulationTimeMs, this.enemies, (attacker, target) => this.resolveGuardianAttack(attacker, target));
     }
 
     this.updateElectricFields();
+    this.updateInkClouds();
 
     for (const projectile of this.projectiles) {
       const result = projectile.tick(safeDelta, this.level.currents, this.currentReversed, this.enemies);
-      result.hits.forEach((hit) => this.damageEnemy(hit.enemy, hit.damage));
+      result.hits.forEach((hit) => this.damageEnemy(hit.enemy, hit.damage, { sound: !hit.splash }));
       if (result.expired) projectile.destroy();
     }
 
@@ -209,27 +272,35 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
+  // ------------------------------------------------------------------ eventos
+
   private registerEvents(): void {
     EventBus.on(Events.selectGuardian, this.selectGuardian, this);
     EventBus.on(Events.upgradeGuardian, this.upgradeSelectedGuardian, this);
+    EventBus.on(Events.sellGuardian, this.sellSelectedGuardian, this);
     EventBus.on(Events.togglePause, this.togglePause, this);
     EventBus.on(Events.toggleMute, this.toggleMute, this);
     EventBus.on(Events.restart, this.restartGame, this);
     EventBus.on(Events.skipCountdown, this.skipCountdown, this);
     EventBus.on(Events.toggleDebug, this.toggleDebug, this);
     EventBus.on(Events.toggleDebugFlag, this.toggleDebugFlag, this);
+    EventBus.on(Events.startLevel, this.startLevel, this);
+    EventBus.on(Events.openLevelSelect, this.openLevelSelect, this);
     this.input.on("pointermove", this.handleWorldPointerMove, this);
     this.input.on("pointerdown", this.handleWorldPointerDown, this);
 
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
       EventBus.off(Events.selectGuardian, this.selectGuardian, this);
       EventBus.off(Events.upgradeGuardian, this.upgradeSelectedGuardian, this);
+      EventBus.off(Events.sellGuardian, this.sellSelectedGuardian, this);
       EventBus.off(Events.togglePause, this.togglePause, this);
       EventBus.off(Events.toggleMute, this.toggleMute, this);
       EventBus.off(Events.restart, this.restartGame, this);
       EventBus.off(Events.skipCountdown, this.skipCountdown, this);
       EventBus.off(Events.toggleDebug, this.toggleDebug, this);
       EventBus.off(Events.toggleDebugFlag, this.toggleDebugFlag, this);
+      EventBus.off(Events.startLevel, this.startLevel, this);
+      EventBus.off(Events.openLevelSelect, this.openLevelSelect, this);
       this.input.off("pointermove", this.handleWorldPointerMove, this);
       this.input.off("pointerdown", this.handleWorldPointerDown, this);
       this.game.canvas.removeEventListener("pointerdown", this.unlockAudio);
@@ -244,16 +315,13 @@ export class GameScene extends Phaser.Scene {
     this.selectedPlacedGuardianId = null;
     if (this.selectedGuardianId) {
       const definition = GUARDIANS[id];
-      const hint = definition.placementMode === "platform"
-        ? "uma plataforma"
-        : definition.placementMode === "water"
-          ? "uma área livre da água"
-          : "qualquer ponto da correnteza";
-      this.showMessage(`Toque em ${hint} para posicionar ${definition.name}.`, 2200);
+      this.showMessage(`Toque em ${PLACEMENT_HINTS[definition.placementMode]} para posicionar ${definition.name}.`, 2200);
     }
     this.emitHud();
     this.renderPlacementState();
   }
+
+  // ------------------------------------------------------------ posicionamento
 
   private handlePlacement(placement: PlacementView): void {
     this.audio.unlock();
@@ -265,9 +333,7 @@ export class GameScene extends Phaser.Scene {
 
     if (!this.selectedGuardianId) {
       if (this.selectedPlacedGuardianId) {
-        this.selectedPlacedGuardianId = null;
-        this.emitHud();
-        this.renderPlacementState();
+        this.clearPlacedSelection();
         return;
       }
       this.showMessage("Escolha primeiro um Guardião no painel inferior.", 1800);
@@ -276,12 +342,7 @@ export class GameScene extends Phaser.Scene {
 
     const definition = GUARDIANS[this.selectedGuardianId];
     if (definition.placementMode !== "platform") {
-      this.showMessage(
-        definition.placementMode === "water"
-          ? "A Água-viva deve flutuar livremente na água, longe da rota."
-          : "O Baiacu pode ocupar qualquer ponto livre da correnteza.",
-        1900,
-      );
+      this.showMessage(`${definition.name} precisa de ${PLACEMENT_HINTS[definition.placementMode]}.`, 1900);
       return;
     }
 
@@ -344,7 +405,14 @@ export class GameScene extends Phaser.Scene {
   private selectPlacedGuardian(guardian: Guardian): void {
     this.selectedPlacedGuardianId = guardian.instanceId;
     this.selectedGuardianId = null;
-    this.showMessage(`${guardian.definition.name} · nível ${guardian.upgradeLevel}/2`, 1400);
+    const branch = guardian.branch ? ` · ${guardian.branch.name}` : "";
+    this.showMessage(`${guardian.definition.name} · nível ${guardian.upgradeLevel}/${guardian.maxUpgradeLevel}${branch}`, 1400);
+    this.emitHud();
+    this.renderPlacementState();
+  }
+
+  private clearPlacedSelection(): void {
+    this.selectedPlacedGuardianId = null;
     this.emitHud();
     this.renderPlacementState();
   }
@@ -352,11 +420,7 @@ export class GameScene extends Phaser.Scene {
   private handleWorldPointerDown(pointer: Phaser.Input.Pointer): void {
     if (this.gameOver || pointer.y <= HUD_TOP || pointer.y >= GAME_HEIGHT - HUD_BOTTOM) return;
     if (!this.selectedGuardianId) {
-      if (this.selectedPlacedGuardianId) {
-        this.selectedPlacedGuardianId = null;
-        this.emitHud();
-        this.renderPlacementState();
-      }
+      if (this.selectedPlacedGuardianId) this.clearPlacedSelection();
       return;
     }
     const definition = GUARDIANS[this.selectedGuardianId];
@@ -368,7 +432,7 @@ export class GameScene extends Phaser.Scene {
         return;
       }
       const guardian = this.placeGuardian(definition.id, pointer.worldX, pointer.worldY);
-      if (guardian) this.showMessage("Água-viva posicionada na água.", 1500);
+      if (guardian) this.showMessage(`${definition.name} posicionada na água.`, 1500);
     } else if (definition.placementMode === "route") {
       const validation = this.validateRoutePlacement(pointer.worldX, pointer.worldY);
       if (!validation.valid) {
@@ -377,7 +441,7 @@ export class GameScene extends Phaser.Scene {
         return;
       }
       const placement: RoutePlacementView = {
-        id: `bloqueio-livre-${this.routePlacements.length + 1}`,
+        id: `rota-${++this.routeSerial}`,
         x: validation.x,
         y: validation.y,
         routeDistance: validation.routeDistance,
@@ -385,7 +449,12 @@ export class GameScene extends Phaser.Scene {
         guardian: null,
       };
       const guardian = this.placeGuardian(definition.id, placement.x, placement.y, placement);
-      if (guardian) this.showMessage("Baiacu bloqueando a correnteza!", 1500);
+      if (guardian) {
+        this.showMessage(
+          definition.blocks ? `${definition.name} bloqueando a correnteza!` : `${definition.name} de guarda na correnteza!`,
+          1500,
+        );
+      }
     }
   }
 
@@ -423,13 +492,13 @@ export class GameScene extends Phaser.Scene {
     if (x < 44 || x > GAME_WIDTH - 44 || y < HUD_TOP + 38 || y > GAME_HEIGHT - HUD_BOTTOM - 38) {
       return { valid: false, reason: "Fora da área jogável" };
     }
-    if (this.route.getClosestPoint({ x, y }).distance < 82) {
+    if (this.route.getClosestPoint({ x, y }).distance < WATER_ROUTE_CLEARANCE) {
       return { valid: false, reason: "Muito perto da rota" };
     }
-    if (this.placements.some((placement) => Math.hypot(x - placement.definition.x, y - placement.definition.y) < 78)) {
+    if (this.placements.some((placement) => Math.hypot(x - placement.definition.x, y - placement.definition.y) < WATER_SEPARATION)) {
       return { valid: false, reason: "Plataforma ocupa este espaço" };
     }
-    if (this.guardians.some((guardian) => Math.hypot(x - guardian.x, y - guardian.y) < 78)) {
+    if (this.guardians.some((guardian) => Math.hypot(x - guardian.x, y - guardian.y) < WATER_SEPARATION)) {
       return { valid: false, reason: "Muito perto de outro Guardião" };
     }
     return { valid: true, reason: "Posição válida" };
@@ -460,94 +529,208 @@ export class GameScene extends Phaser.Scene {
     }
     if (
       this.routePlacements.some(
-        (placement) => Math.hypot(result.x - placement.x, result.y - placement.y) < ROUTE_BLOCKER_SEPARATION,
+        (placement) => Math.hypot(result.x - placement.x, result.y - placement.y) < ROUTE_UNIT_SEPARATION,
       )
     ) {
-      return { ...result, valid: false, reason: "Muito perto de outro Baiacu" };
+      return { ...result, valid: false, reason: "Muito perto de outro Guardião da correnteza" };
     }
     return result;
   }
 
-  private upgradeSelectedGuardian(): void {
+  // -------------------------------------------------------- upgrade e venda
+
+  private upgradeSelectedGuardian(branchId: BranchId): void {
     if (!this.selectedPlacedGuardianId || this.gameOver) return;
     const guardian = this.guardians.find((candidate) => candidate.instanceId === this.selectedPlacedGuardianId);
-    if (!guardian || !guardian.canUpgrade || !guardian.nextUpgrade) return;
-    const nextUpgrade = guardian.nextUpgrade;
-    const cost = nextUpgrade.cost;
-    if (!this.economy.spend(cost)) {
+    if (!guardian) return;
+    const option = guardian.options.find((candidate) => candidate.branchId === branchId);
+    if (!option) return;
+    if (!this.economy.canAfford(option.cost)) {
       this.showMessage("Pérolas insuficientes para este upgrade.", 1700);
       this.audio.play("warning");
       return;
     }
-    guardian.upgrade();
+    if (!guardian.applyUpgrade(branchId)) return;
+    this.economy.spend(option.cost);
     this.audio.play("upgrade");
-    this.showMessage(`${nextUpgrade.name} adquirido!`, 1900);
+    this.showMessage(`${option.name} adquirido! Ramo ${option.branchName}.`, 1900);
     this.emitHud();
     this.renderPlacementState();
   }
 
+  private sellSelectedGuardian(): void {
+    if (!this.selectedPlacedGuardianId || this.gameOver) return;
+    const guardian = this.guardians.find((candidate) => candidate.instanceId === this.selectedPlacedGuardianId);
+    if (!guardian) return;
+    const refund = guardian.sellValueAt(ECONOMY.sellRefundRate);
+    this.removeGuardian(guardian);
+    this.economy.earn(refund);
+    this.selectedPlacedGuardianId = null;
+    this.audio.play("buy");
+    this.showMessage(`${guardian.definition.name} vendido por ${refund} pérolas.`, 1800);
+    this.emitHud();
+    this.renderPlacementState();
+  }
+
+  /** Remove a unidade do mapa e libera a posição que ocupava. */
+  private removeGuardian(guardian: Guardian): void {
+    this.guardians = this.guardians.filter((candidate) => candidate !== guardian);
+    this.placements.forEach((placement) => {
+      if (placement.guardian === guardian) placement.guardian = null;
+    });
+    this.routePlacements = this.routePlacements.filter((placement) => placement.guardian !== guardian);
+    this.electricFields = this.electricFields.filter((field) => {
+      if (field.ownerId !== guardian.instanceId) return true;
+      field.graphic.destroy();
+      return false;
+    });
+    this.inkClouds = this.inkClouds.filter((cloud) => {
+      if (cloud.ownerId !== guardian.instanceId) return true;
+      cloud.graphic.destroy();
+      return false;
+    });
+    this.abilityCooldowns.delete(guardian.instanceId);
+    this.enemies.forEach((enemy) => {
+      if (enemy.blockedById === guardian.instanceId) enemy.clearBlocked();
+    });
+    guardian.destroy();
+  }
+
+  // -------------------------------------------------------------- combate
+
   private resolveGuardianAttack(guardian: Guardian, target: Enemy): void {
     const definition = guardian.definition;
-    if (definition.attackKind === "projectile") {
-      this.projectiles.push(
-        new Projectile(
-          this,
-          guardian.x + 22,
-          guardian.y,
-          target,
-          guardian.projectileSpeed,
-          guardian.damage,
-          guardian.extraTargets,
-          guardian.secondaryDamageMultiplier,
-          guardian.predictiveAim,
-          guardian.upgradeLevel,
-        ),
-      );
-      this.audio.play("shot");
-      this.shockwave(guardian.x + 22, guardian.y, definition.accent, 34);
-      return;
+    switch (definition.attackKind) {
+      case "projectile":
+        this.fireProjectile(guardian, target);
+        return;
+      case "chain":
+        this.resolveChain(guardian, target);
+        return;
+      case "melee":
+        this.resolveMelee(guardian, target);
+        return;
+      case "ink":
+        this.resolveInk(guardian, target);
+        return;
+      case "area":
+      default:
+        this.resolvePulse(guardian);
     }
+  }
 
-    if (definition.attackKind === "chain") {
-      const candidates = this.enemies
-        .filter((enemy) => !enemy.dead && !enemy.reachedGoal && enemy.distanceTo(guardian.x, guardian.y) <= guardian.range)
-        .sort((a, b) => b.progress - a.progress)
-        .slice(0, 1 + guardian.extraTargets);
-      candidates.forEach((enemy, index) => {
-        this.damageEnemy(enemy, guardian.damage * (index === 0 ? 1 : guardian.chainDamageMultiplier));
-        enemy.applySlow(definition.slowFactor ?? 1, definition.slowDurationMs ?? 0, this.simulationTimeMs);
-      });
-      this.lightningEffect(guardian, candidates);
-      if (guardian.electricField) this.createElectricField(guardian, target.x, target.y);
-      this.audio.play("zap");
-      return;
+  private fireProjectile(guardian: Guardian, target: Enemy): void {
+    const originX = guardian.x + 22;
+    const originY = guardian.y;
+    const shrimpBalance = GUARDIAN_BALANCE["pistol-shrimp"];
+    this.projectiles.push(
+      new Projectile(
+        this,
+        originX,
+        originY,
+        target,
+        {
+          speed: guardian.projectileSpeed,
+          damages: guardian.pierceDamages,
+          predictiveAim: guardian.predictiveAim,
+          straightRicochet: guardian.straightRicochet,
+          ricochetRange: shrimpBalance.ricochetRange,
+          splash: guardian.splash ?? undefined,
+          radius: 6,
+          lifetimeMs: 2200,
+          bounds: { minX: -80, maxX: GAME_WIDTH + 80, minY: -80, maxY: GAME_HEIGHT + 80 },
+        },
+        guardian.definition.id === "pistol-shrimp" ? shrimpProjectileTextureForLevel(guardian.upgradeLevel) : null,
+      ),
+    );
+    this.audio.play("shot");
+    this.shockwave(originX, originY, guardian.definition.accent, 34);
+  }
+
+  private resolveChain(guardian: Guardian, target: Enemy): void {
+    const damages = guardian.chainDamages;
+    const candidates = this.enemies
+      .filter((enemy) => !enemy.dead && !enemy.reachedGoal && enemy.distanceTo(guardian.x, guardian.y) <= guardian.range)
+      .sort((a, b) => b.progress - a.progress)
+      .slice(0, damages.length);
+    const slowFactor = guardian.slowFactor;
+    candidates.forEach((enemy, index) => {
+      this.damageEnemy(enemy, damages[index] ?? damages[damages.length - 1]);
+      if (slowFactor !== null) enemy.applySlow(slowFactor, guardian.slowDurationMs, this.simulationTimeMs);
+    });
+    const stun = guardian.stun;
+    if (stun && !target.dead) {
+      if (target.tryStun(stun.durationMs, stun.immunityMs, this.simulationTimeMs)) {
+        this.shockwave(target.x, target.y, 0xfff27a, 26);
+      }
     }
+    this.lightningEffect(guardian, candidates);
+    if (guardian.electricField) this.createElectricField(guardian, target.x, target.y);
+    this.audio.play("zap");
+  }
 
+  private resolvePulse(guardian: Guardian): void {
+    const slowFactor = guardian.slowFactor;
     this.enemies
       .filter((enemy) => !enemy.dead && !enemy.reachedGoal && enemy.distanceTo(guardian.x, guardian.y) <= guardian.range)
       .forEach((enemy) => {
         this.damageEnemy(enemy, guardian.damage);
+        if (slowFactor !== null) enemy.applySlow(slowFactor, guardian.slowDurationMs, this.simulationTimeMs);
       });
-    this.shockwave(guardian.x, guardian.y, definition.accent, guardian.range);
+    this.shockwave(guardian.x, guardian.y, guardian.definition.accent, guardian.range);
     this.audio.play("pulse");
   }
 
-  private damageEnemy(enemy: Enemy, damage: number, playSound = true, continuous = false): void {
-    const killed = continuous ? enemy.takeContinuousDamage(damage) : enemy.takeDamage(damage);
-    if (playSound) this.audio.play("impact");
+  private resolveMelee(guardian: Guardian, target: Enemy): void {
+    const spin = guardian.spin;
+    const spinning = spin !== null && guardian.attacksPerformed % spin.everyAttacks === 0;
+    const radius = spinning ? guardian.range * spin.radiusMultiplier : guardian.range;
+    const damage = spinning ? spin.damage : guardian.damage;
+    const targets = guardian.areaAttack || spinning
+      ? this.enemies.filter((enemy) => !enemy.dead && !enemy.reachedGoal && enemy.distanceTo(guardian.x, guardian.y) <= radius)
+      : [target];
+    const vulnerability = guardian.vulnerability;
+    targets.forEach((enemy) => {
+      this.damageEnemy(enemy, damage, { armorPiercing: guardian.armorPiercing });
+      if (vulnerability) enemy.applyVulnerability(vulnerability.multiplier, vulnerability.durationMs, this.simulationTimeMs);
+    });
+    this.shockwave(guardian.x, guardian.y, guardian.definition.accent, spinning ? radius : 30);
+    this.audio.play(spinning ? "pulse" : "impact");
+  }
+
+  private resolveInk(guardian: Guardian, target: Enemy): void {
+    const vulnerability = guardian.vulnerability;
+    const affected = vulnerability?.radius
+      ? this.enemies.filter(
+          (enemy) => !enemy.dead && !enemy.reachedGoal && enemy.distanceTo(target.x, target.y) <= (vulnerability.radius ?? 0),
+        )
+      : [target];
+    if (!affected.includes(target)) affected.push(target);
+    affected.forEach((enemy) => {
+      this.damageEnemy(enemy, enemy === target ? guardian.damage : Math.ceil(guardian.damage * 0.5), { sound: enemy === target });
+      if (vulnerability) enemy.applyVulnerability(vulnerability.multiplier, vulnerability.durationMs, this.simulationTimeMs);
+    });
+    this.inkSplash(guardian, target);
+    if (guardian.inkCloud) this.createInkCloud(guardian, target.x, target.y);
+    this.audio.play("zap");
+  }
+
+  private damageEnemy(enemy: Enemy, damage: number, options: DamageOptions = {}): void {
+    const killed = options.continuous
+      ? enemy.takeContinuousDamage(damage)
+      : enemy.takeDamage(damage, { armorPiercing: options.armorPiercing });
+    if (options.sound ?? true) this.audio.play("impact");
     if (killed) {
       this.economy.earn(enemy.definition.reward);
       if (enemy.definition.isBoss) {
         this.currentReversed = false;
-        this.showMessage("O Quebra-Marés caiu! A corrente se estabilizou.", 2400);
+        this.showMessage(`${enemy.definition.name} caiu! A corrente se estabilizou.`, 2400);
       }
     }
   }
 
   private updateBlockers(deltaMs: number): void {
-    const blockers = this.guardians.filter(
-      (guardian) => guardian.definition.placementMode === "route" && guardian.routeDistance !== null,
-    );
+    const blockers = this.guardians.filter((guardian) => guardian.blocks && guardian.routeDistance !== null);
     const blockerIds = new Set(blockers.map((guardian) => guardian.instanceId));
     this.enemies.forEach((enemy) => {
       if (enemy.blockedById && !blockerIds.has(enemy.blockedById)) enemy.clearBlocked();
@@ -562,38 +745,68 @@ export class GameScene extends Phaser.Scene {
         .filter((enemy) => enemy.blockedById === blocker.instanceId && !alreadyBlocked.includes(enemy))
         .forEach((enemy) => enemy.clearBlocked());
 
-      const candidates = this.enemies
-        .filter(
-          (enemy) =>
-            !enemy.dead &&
-            !enemy.reachedGoal &&
-            !enemy.blockedById &&
-            hasReachedBlockerContact(
-              enemy.pathDistance,
-              anchor,
-              28 + enemy.definition.hitRadius,
-            ),
-        )
+      const inContact = this.enemies.filter(
+        (enemy) =>
+          !enemy.dead &&
+          !enemy.reachedGoal &&
+          !enemy.blockedById &&
+          hasReachedBlockerContact(enemy.pathDistance, anchor, 28 + enemy.definition.hitRadius),
+      );
+      const candidates = inContact
+        .filter((enemy) => enemy.isBlockable)
         .sort((first, second) => second.pathDistance - first.pathDistance);
-      const blocked = [...alreadyBlocked, ...candidates.slice(0, blocker.blockCapacity - alreadyBlocked.length)];
+      const blocked = [...alreadyBlocked, ...candidates.slice(0, Math.max(0, blocker.blockCapacity - alreadyBlocked.length))];
       blocked.forEach((enemy) => {
         enemy.setBlocked(blocker.instanceId, enemy.pathDistance);
         if (blocker.contactDamagePerSecond > 0) {
-          this.damageEnemy(enemy, blocker.contactDamagePerSecond * (deltaMs / 1000), false, true);
+          this.damageEnemy(enemy, blocker.contactDamagePerSecond * (deltaMs / 1000), { sound: false, continuous: true });
         }
       });
+
+      // Chefes não são bloqueados; a Fortaleza pode pausá-los por pouco tempo.
+      const bossHold = blocker.bossHold;
+      inContact
+        .filter((enemy) => !enemy.isBlockable)
+        .forEach((enemy) => {
+          if (bossHold && enemy.tryHold(bossHold.durationMs, bossHold.immunityMs, this.simulationTimeMs)) {
+            this.showMessage(`${blocker.definition.name} segurou ${enemy.definition.name} por um instante!`, 1500);
+            this.shockwave(enemy.x, enemy.y, 0xffe082, 50);
+          }
+          if (enemy.status.isHeld(this.simulationTimeMs) && blocker.contactDamagePerSecond > 0) {
+            this.damageEnemy(enemy, blocker.contactDamagePerSecond * (deltaMs / 1000), { sound: false, continuous: true });
+          }
+        });
     }
+  }
+
+  private updateAuras(): void {
+    const sources: AuraSource[] = this.guardians
+      .filter((guardian) => guardian.providedAura)
+      .map((guardian) => ({
+        id: guardian.instanceId,
+        x: guardian.x,
+        y: guardian.y,
+        range: guardian.range,
+        aura: guardian.providedAura!,
+      }));
+    this.guardians.forEach((guardian) => {
+      guardian.setAura(resolveAura({ id: guardian.instanceId, x: guardian.x, y: guardian.y }, sources));
+    });
+  }
+
+  private cooldownFor(guardianId: string): AbilityCooldown {
+    let cooldown = this.abilityCooldowns.get(guardianId);
+    if (!cooldown) {
+      cooldown = new AbilityCooldown();
+      this.abilityCooldowns.set(guardianId, cooldown);
+    }
+    return cooldown;
   }
 
   private createElectricField(guardian: Guardian, x: number, y: number): void {
     const definition = guardian.electricField;
     if (!definition) return;
-    let cooldown = this.electricFieldCooldowns.get(guardian.instanceId);
-    if (!cooldown) {
-      cooldown = new AbilityCooldown();
-      this.electricFieldCooldowns.set(guardian.instanceId, cooldown);
-    }
-    if (!cooldown.tryActivate(this.simulationTimeMs, definition.cooldownMs)) return;
+    if (!this.cooldownFor(guardian.instanceId).tryActivate(this.simulationTimeMs, definition.cooldownMs)) return;
     this.electricFields = this.electricFields.filter((field) => {
       if (field.ownerId !== guardian.instanceId) return true;
       field.graphic.destroy();
@@ -616,8 +829,10 @@ export class GameScene extends Phaser.Scene {
       nextPulseAt: this.simulationTimeMs,
       pulseIntervalMs: definition.pulseIntervalMs,
       damage: definition.damage,
+      maxDamagePerTarget: definition.maxDamagePerTarget,
       slowFactor: definition.slowFactor,
       slowDurationMs: definition.slowDurationMs,
+      damageDealt: new Map(),
       graphic,
     });
   }
@@ -636,7 +851,12 @@ export class GameScene extends Phaser.Scene {
           (enemy) => !enemy.dead && !enemy.reachedGoal && enemy.distanceTo(field.x, field.y) <= field.radius,
         );
         affected.forEach((enemy) => {
-          this.damageEnemy(enemy, field.damage, false);
+          const dealt = field.damageDealt.get(enemy.instanceId) ?? 0;
+          const allowed = Math.max(0, Math.min(field.damage, field.maxDamagePerTarget - dealt));
+          if (allowed > 0) {
+            field.damageDealt.set(enemy.instanceId, dealt + allowed);
+            this.damageEnemy(enemy, allowed, { sound: false, continuous: true });
+          }
           enemy.applySlow(field.slowFactor, field.slowDurationMs, this.simulationTimeMs);
         });
         if (affected.length > 0) {
@@ -644,6 +864,53 @@ export class GameScene extends Phaser.Scene {
           this.shockwave(field.x, field.y, 0x8ff4ff, field.radius);
         }
       }
+      return true;
+    });
+  }
+
+  private createInkCloud(guardian: Guardian, x: number, y: number): void {
+    const definition = guardian.inkCloud;
+    if (!definition) return;
+    if (!this.cooldownFor(guardian.instanceId).tryActivate(this.simulationTimeMs, definition.cooldownMs)) return;
+    this.inkClouds = this.inkClouds.filter((cloud) => {
+      if (cloud.ownerId !== guardian.instanceId) return true;
+      cloud.graphic.destroy();
+      return false;
+    });
+    const graphic = this.add.graphics().setDepth(DEPTH.effects - 1);
+    graphic.fillStyle(0x2a1a4a, 0.45);
+    graphic.fillCircle(x, y, definition.radius);
+    graphic.fillStyle(0x6b5bd6, 0.25);
+    graphic.fillCircle(x - definition.radius * 0.25, y - definition.radius * 0.2, definition.radius * 0.6);
+    graphic.lineStyle(2, 0xd58cff, 0.6);
+    graphic.strokeCircle(x, y, definition.radius);
+    this.inkClouds.push({
+      ownerId: guardian.instanceId,
+      x,
+      y,
+      radius: definition.radius,
+      durationMs: definition.durationMs,
+      expiresAt: this.simulationTimeMs + definition.durationMs,
+      slowFactor: definition.slowFactor,
+      vulnerabilityMultiplier: definition.vulnerabilityMultiplier,
+      graphic,
+    });
+  }
+
+  private updateInkClouds(): void {
+    this.inkClouds = this.inkClouds.filter((cloud) => {
+      if (this.simulationTimeMs >= cloud.expiresAt) {
+        cloud.graphic.destroy();
+        return false;
+      }
+      const remaining = (cloud.expiresAt - this.simulationTimeMs) / cloud.durationMs;
+      cloud.graphic.setAlpha(Math.max(0.25, Math.min(1, remaining + 0.2)));
+      this.enemies
+        .filter((enemy) => !enemy.dead && !enemy.reachedGoal && enemy.distanceTo(cloud.x, cloud.y) <= cloud.radius)
+        .forEach((enemy) => {
+          enemy.applySlow(cloud.slowFactor, 320, this.simulationTimeMs);
+          enemy.applyVulnerability(cloud.vulnerabilityMultiplier, 320, this.simulationTimeMs);
+        });
       return true;
     });
   }
@@ -656,25 +923,30 @@ export class GameScene extends Phaser.Scene {
     });
   }
 
+  // ------------------------------------------------------------------ ondas
+
   private processWaveEvents(events: readonly WaveSchedulerEvent[]): void {
     for (const event of events) {
       if (event.type === "spawn") {
-        const definition = ENEMIES[event.enemyId];
+        const definition = scaleEnemy(ENEMIES[event.enemyId], this.level.enemyScaling, this.level.enemyOverrides?.[event.enemyId]);
         this.enemies.push(new Enemy(this, `E${++this.enemySerial}`, definition, this.route));
       } else if (event.type === "waveStarted") {
         this.audio.play(event.waveIndex === this.level.waves.length - 1 ? "warning" : "wave");
         this.showMessage(`Onda ${event.waveIndex + 1}: ${this.level.waves[event.waveIndex].name}`, 2200);
       } else if (event.type === "waveCleared") {
-        this.showMessage(`Onda ${event.waveIndex + 1} vencida!`, 1800);
+        this.economy.earn(ECONOMY.waveClearBonus);
+        this.showMessage(`Onda ${event.waveIndex + 1} vencida! +${ECONOMY.waveClearBonus} pérolas`, 1800);
       } else if (event.type === "victory") {
+        this.economy.earn(ECONOMY.levelClearBonus);
+        this.unlockedNextLevelId = this.progress.complete(this.level.id);
         this.finishGame("victory");
       }
     }
   }
 
   private updateBossCurrent(deltaMs: number): void {
-    const bossAlive = this.enemies.some((enemy) => enemy.definition.isBoss && !enemy.dead && !enemy.reachedGoal);
-    if (!bossAlive) {
+    const boss = this.enemies.find((enemy) => enemy.definition.isBoss && !enemy.dead && !enemy.reachedGoal);
+    if (!boss) {
       this.currentReversed = false;
       this.bossCycleMs = 0;
       this.bossReverseRemainingMs = 0;
@@ -690,11 +962,11 @@ export class GameScene extends Phaser.Scene {
       }
     } else {
       this.bossCycleMs += deltaMs;
-      if (this.bossCycleMs >= 6500) {
+      if (this.bossCycleMs >= BOSS_CURRENT.cycleMs) {
         this.currentReversed = true;
-        this.bossReverseRemainingMs = 3000;
+        this.bossReverseRemainingMs = BOSS_CURRENT.reverseMs;
         this.audio.play("warning");
-        this.showMessage("Quebra-Marés inverteu a corrente!", 2200);
+        this.showMessage(`${boss.definition.name} inverteu a corrente!`, 2200);
       }
     }
   }
@@ -702,11 +974,13 @@ export class GameScene extends Phaser.Scene {
   private finishGame(result: "victory" | "defeat"): void {
     if (this.gameOver) return;
     this.gameOver = result;
-    this.message = result === "victory" ? "RECIFE PROTEGIDO!" : "O RECIFE PRECISA DE REFORÇOS";
+    this.message = result === "victory" ? `RECIFE PROTEGIDO! +${ECONOMY.levelClearBonus} pérolas` : "O RECIFE PRECISA DE REFORÇOS";
     this.messageUntilMs = Number.POSITIVE_INFINITY;
     this.audio.play(result === "victory" ? "upgrade" : "warning");
     this.emitHud();
   }
+
+  // -------------------------------------------------------------- controles
 
   private togglePause(): void {
     if (this.gameOver) return;
@@ -724,7 +998,18 @@ export class GameScene extends Phaser.Scene {
 
   private restartGame(): void {
     this.scene.stop("UIScene");
-    this.scene.restart();
+    this.scene.restart({ levelId: this.level.id });
+  }
+
+  private startLevel(levelId: string): void {
+    if (!getLevel(levelId)) return;
+    this.scene.stop("UIScene");
+    this.scene.restart({ levelId });
+  }
+
+  private openLevelSelect(): void {
+    this.scene.stop("UIScene");
+    this.scene.start("LevelSelectScene");
   }
 
   private skipCountdown(): void {
@@ -752,10 +1037,16 @@ export class GameScene extends Phaser.Scene {
     this.emitHud();
   }
 
+  // -------------------------------------------------------------------- HUD
+
   private emitHud(): void {
     const selected = this.guardians.find((guardian) => guardian.instanceId === this.selectedPlacedGuardianId);
-    const nextUpgrade = selected?.nextUpgrade ?? null;
     const snapshot: HudSnapshot = {
+      levelId: this.level.id,
+      levelName: this.level.name,
+      levelIndex: levelIndex(this.level.id),
+      levelCount: LEVELS.length,
+      nextLevelId: this.gameOver === "victory" ? (this.unlockedNextLevelId ?? nextLevelId(this.level.id)) : null,
       pearls: this.economy.pearls,
       reefHealth: this.reefHealth,
       maxReefHealth: this.level.reefHealth,
@@ -768,12 +1059,16 @@ export class GameScene extends Phaser.Scene {
       selectedPlacedGuardian: selected
         ? {
             instanceId: selected.instanceId,
+            guardianId: selected.definition.id,
             name: selected.definition.name,
             upgradeLevel: selected.upgradeLevel,
-            maxUpgradeLevel: selected.definition.upgrades.length,
-            nextUpgradeName: nextUpgrade?.name ?? null,
-            nextUpgradeDescription: nextUpgrade?.description ?? null,
-            nextUpgradeCost: nextUpgrade?.cost ?? null,
+            maxUpgradeLevel: selected.maxUpgradeLevel,
+            branchId: selected.branchId,
+            branchName: selected.branch?.name ?? null,
+            branchColor: selected.branch?.color ?? null,
+            options: selected.options,
+            invested: selected.invested,
+            sellValue: selected.sellValueAt(ECONOMY.sellRefundRate),
           }
         : null,
       paused: this.paused,
@@ -782,21 +1077,32 @@ export class GameScene extends Phaser.Scene {
       message: this.message,
       gameOver: this.gameOver,
     };
-    this.game.canvas.dataset.gameState = this.gameOver ?? this.scheduler.state;
-    this.game.canvas.dataset.pearls = String(this.economy.pearls);
-    this.game.canvas.dataset.guardians = String(this.guardians.length);
-    this.game.canvas.dataset.upgrades = String(
-      this.guardians.reduce((total, guardian) => total + guardian.upgradeLevel, 0),
-    );
-    this.game.canvas.dataset.selected = this.selectedPlacedGuardianId ?? "";
-    this.game.canvas.dataset.debug = String(this.debugFlags.enabled);
-    this.game.canvas.dataset.paused = String(this.paused);
+    const dataset = this.game.canvas.dataset;
+    dataset.gameState = this.gameOver ?? this.scheduler.state;
+    dataset.level = this.level.id;
+    dataset.nextLevel = snapshot.nextLevelId ?? "";
+    dataset.wave = String(this.scheduler.currentWave);
+    dataset.pearls = String(this.economy.pearls);
+    dataset.reef = String(this.reefHealth);
+    dataset.guardians = String(this.guardians.length);
+    dataset.upgrades = String(this.guardians.reduce((total, guardian) => total + guardian.upgradeLevel, 0));
+    dataset.selected = this.selectedPlacedGuardianId ?? "";
+    dataset.selectedBranch = selected?.branchId ?? "";
+    dataset.selectedOptions = selected ? String(selected.options.length) : "";
+    dataset.sellValue = selected ? String(selected.sellValueAt(ECONOMY.sellRefundRate)) : "";
+    dataset.debug = String(this.debugFlags.enabled);
+    dataset.paused = String(this.paused);
     const shrimp = this.guardians.find((guardian) => guardian.definition.id === "pistol-shrimp");
-    this.game.canvas.dataset.shrimpAssets = String(this.textures.exists(SHRIMP_LEVEL_TEXTURES[0].idle));
-    this.game.canvas.dataset.shrimpArt = String(shrimp?.usesSpriteArt ?? false);
-    this.game.canvas.dataset.shrimpVisual = shrimp?.currentVisualKey ?? "";
-    this.game.canvas.dataset.shrimpTexture = shrimp?.currentTextureKey ?? "";
-    this.game.canvas.dataset.projectileTexture = this.projectiles.at(-1)?.textureKey ?? "";
+    dataset.shrimpAssets = String(this.textures.exists(SHRIMP_LEVEL_TEXTURES[0].idle));
+    dataset.shrimpArt = String(shrimp?.usesSpriteArt ?? false);
+    dataset.shrimpVisual = shrimp?.currentVisualKey ?? "";
+    dataset.shrimpTexture = shrimp?.currentTextureKey ?? "";
+    dataset.projectileTexture = this.projectiles.at(-1)?.textureKey ?? "";
+    const boss = this.enemies.find((enemy) => enemy.definition.isBoss && !enemy.dead && !enemy.reachedGoal);
+    dataset.boss = boss
+      ? `${boss.x.toFixed(0)},${boss.y.toFixed(0)},${boss.effectiveSpeed.toFixed(1)},${Math.ceil(boss.health)},${boss.blockedById ?? "-"}`
+      : "";
+    dataset.enemies = String(this.enemies.filter((enemy) => !enemy.dead && !enemy.reachedGoal).length);
     EventBus.emit(Events.hudUpdate, snapshot);
   }
 
@@ -816,8 +1122,8 @@ export class GameScene extends Phaser.Scene {
           width: GAME_WIDTH - 88,
           height: GAME_HEIGHT - HUD_BOTTOM - HUD_TOP - 76,
         },
-        waterRouteClearance: 82,
-        waterSeparation: 78,
+        waterRouteClearance: WATER_ROUTE_CLEARANCE,
+        waterSeparation: WATER_SEPARATION,
         routePlacementClearance: ROUTE_PLACEMENT_CLEARANCE,
         platforms: this.placements.map((placement) => ({
           x: placement.definition.x,
@@ -837,40 +1143,41 @@ export class GameScene extends Phaser.Scene {
     this.placementGuideGraphic.clear();
     const selected = this.guardians.find((guardian) => guardian.instanceId === this.selectedPlacedGuardianId);
     if (selected) {
-      this.selectionGraphic.fillStyle(selected.definition.accent, 0.06);
+      const color = selected.branch?.color ?? selected.definition.accent;
+      this.selectionGraphic.fillStyle(color, 0.06);
       this.selectionGraphic.fillCircle(selected.x, selected.y, selected.range);
-      this.selectionGraphic.lineStyle(2, selected.definition.accent, 0.8);
+      this.selectionGraphic.lineStyle(2, color, 0.8);
       this.selectionGraphic.strokeCircle(selected.x, selected.y, selected.range);
     }
 
-    const placementMode = this.selectedGuardianId
-      ? GUARDIANS[this.selectedGuardianId].placementMode
-      : null;
+    const placementMode = this.selectedGuardianId ? GUARDIANS[this.selectedGuardianId].placementMode : null;
     if (placementMode === "platform") {
       this.placements.forEach((placement) => {
         this.placementGuideGraphic.lineStyle(2, placement.guardian ? 0xff8290 : 0xa5f6d2, placement.guardian ? 0.42 : 0.72);
         this.placementGuideGraphic.strokeCircle(placement.definition.x, placement.definition.y, 38);
       });
-    } else if (placementMode === "water") {
-      // A validação aparece apenas no marcador sob o cursor; corredores técnicos ficam no debug.
-    } else if (placementMode === "route") {
-      // O encaixe na corrente é comunicado pelo marcador sob o cursor, sem pintar a rota normal.
-    } else {
+    } else if (placementMode === null) {
       this.placementPreviewGraphic.clear();
       this.placementPreviewText.setVisible(false);
     }
     this.renderDebug();
   }
 
+  // -------------------------------------------------------------- ambiente
+
   private drawEnvironment(): void {
     const playfieldCenterY = (HUD_TOP + GAME_HEIGHT - HUD_BOTTOM) / 2;
-    const levelBackground = this.add
-      .image(GAME_WIDTH / 2, playfieldCenterY, RECIFE_ONE_BACKGROUND_KEY)
-      .setDepth(DEPTH.background);
-    levelBackground.setScale(GAME_WIDTH / levelBackground.width);
+    if (this.level.backgroundKey && this.textures.exists(this.level.backgroundKey)) {
+      const levelBackground = this.add
+        .image(GAME_WIDTH / 2, playfieldCenterY, this.level.backgroundKey)
+        .setDepth(DEPTH.background);
+      levelBackground.setScale(GAME_WIDTH / levelBackground.width);
+    } else {
+      drawLevelBackdrop(this, this.level);
+    }
 
     this.add
-      .text(26, 88, "RECIFE 1  ·  RECIFE COSTEIRO", {
+      .text(26, 88, `RECIFE ${levelIndex(this.level.id) + 1}  ·  ${this.level.name.toUpperCase()}`, {
         fontFamily: "Arial, sans-serif",
         fontSize: "17px",
         fontStyle: "bold",
@@ -903,27 +1210,30 @@ export class GameScene extends Phaser.Scene {
   }
 
   private createCurrentMotes(): void {
-    const zone = this.level.currents[0];
-    for (let index = 0; index < 14; index += 1) {
-      const mote = this.add
-        .circle(
-          zone.x + ((index * 53) % zone.width),
-          zone.y + 12 + ((index * 37) % (zone.height - 24)),
-          2 + (index % 3),
-          0xa4f5ff,
-          0.32,
-        )
-        .setDepth(DEPTH.current + 1);
-      this.currentMotes.push(mote);
-    }
+    this.level.currents.forEach((zone, zoneIndex) => {
+      for (let index = 0; index < 14; index += 1) {
+        const mote = this.add
+          .circle(
+            zone.x + ((index * 53) % zone.width),
+            zone.y + 12 + ((index * 37) % Math.max(1, zone.height - 24)),
+            2 + (index % 3),
+            0xa4f5ff,
+            0.32,
+          )
+          .setDepth(DEPTH.current + 1);
+        this.currentMotes.push({ mote, zoneIndex });
+      }
+    });
   }
 
   private updateCurrentMotes(deltaMs: number): void {
-    const zone = this.level.currents[0];
-    const direction = this.currentReversed ? -1 : 1;
-    this.currentMotes.forEach((mote, index) => {
-      mote.x += direction * (22 + (index % 4) * 8) * (deltaMs / 1000);
-      mote.y += direction * 4 * (deltaMs / 1000);
+    const sign = this.currentReversed ? -1 : 1;
+    this.currentMotes.forEach(({ mote, zoneIndex }, index) => {
+      const zone = this.level.currents[zoneIndex];
+      const length = Math.hypot(zone.direction.x, zone.direction.y) || 1;
+      const speed = 22 + (index % 4) * 8;
+      mote.x += sign * (zone.direction.x / length) * speed * (deltaMs / 1000);
+      mote.y += sign * (zone.direction.y / length) * speed * (deltaMs / 1000);
       if (mote.x > zone.x + zone.width) mote.x = zone.x;
       if (mote.x < zone.x) mote.x = zone.x + zone.width;
       if (mote.y > zone.y + zone.height) mote.y = zone.y;
@@ -955,5 +1265,14 @@ export class GameScene extends Phaser.Scene {
       fromY = target.y;
     });
     this.tweens.add({ targets: graphics, alpha: 0, duration: 170, onComplete: () => graphics.destroy() });
+  }
+
+  private inkSplash(guardian: Guardian, target: Enemy): void {
+    const graphics = this.add.graphics().setDepth(DEPTH.effects);
+    graphics.lineStyle(3, guardian.definition.color, 0.85);
+    graphics.lineBetween(guardian.x, guardian.y - 10, target.x, target.y);
+    graphics.fillStyle(0x2a1a4a, 0.6);
+    graphics.fillCircle(target.x, target.y, 14);
+    this.tweens.add({ targets: graphics, alpha: 0, duration: 220, onComplete: () => graphics.destroy() });
   }
 }

@@ -29,7 +29,20 @@ export class GuardianStateMachine {
   private currentTargetId: string | null = null;
   private impactEmitted = false;
 
-  constructor(private readonly timings: GuardianFsmTimings) {}
+  private timings: GuardianFsmTimings;
+
+  constructor(timings: GuardianFsmTimings) {
+    this.timings = { ...timings };
+  }
+
+  /** Atualiza o ritmo (upgrades e auras). O estado atual continua de onde está. */
+  setTimings(timings: GuardianFsmTimings): void {
+    this.timings = { ...timings };
+  }
+
+  get currentTimings(): GuardianFsmTimings {
+    return { ...this.timings };
+  }
 
   get state(): GuardianState {
     return this.currentState;

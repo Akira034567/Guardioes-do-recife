@@ -12,8 +12,9 @@
     "typecheck": "tsc -b --pretty false",
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:e2e": "npm run build && playwright test",
-    "preview": "vite preview"
+    "test:e2e": "npm run build && playwright test --grep-invert @balance",
+    "preview": "vite preview",
+    "test:balance": "npm run build && playwright test --grep @balance --project=desktop-chromium --workers=3"
   },
   "dependencies": {
     "phaser": "^3.90.0"

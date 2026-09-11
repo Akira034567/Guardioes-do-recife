@@ -1,39 +1,54 @@
-import { expect, test } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
 
-test("loads the vertical slice and places a guardian", async ({ page }) => {
+/** Coordenadas do HUD (ver `HUD_LAYOUT` em UIScene) e do menu de fases. */
+const CARD_Y = 672;
+const CARD_X = { shrimp: 62, jellyfish: 180, pufferfish: 298, crab: 416, octopus: 534 } as const;
+const OPTION_A = { x: 690, y: 692 } as const;
+const OPTION_B = { x: 800, y: 692 } as const;
+const SELL = { x: 980, y: 692 } as const;
+const SKIP = { x: 1078, y: 640 } as const;
+const RESTART = { x: 1190, y: 640 } as const;
+const MENU = { x: 1190, y: 684 } as const;
+const PAUSE = { x: 1143, y: 36 } as const;
+const RESULT_NEXT = { x: 640, y: 408 } as const;
+const MENU_CARD_BUTTON = (index: number) => ({ x: 156 + index * 242, y: 478 });
+
+async function openGame(page: Page, query = "level=recife-1") {
   const pageErrors: string[] = [];
   page.on("pageerror", (error) => pageErrors.push(error.message));
-  await page.goto("/");
+  await page.goto(`/?${query}`);
   const canvas = page.locator("canvas");
   await expect(canvas).toBeVisible();
+  const box = await canvas.boundingBox();
+  if (!box) throw new Error("Canvas bounds unavailable");
+  const clickGame = (x: number, y: number) => page.mouse.click(box.x + (x * box.width) / 1280, box.y + (y * box.height) / 720);
+  return { canvas, clickGame, pageErrors };
+}
+
+test("loads a level directly and places a shrimp on a platform", async ({ page }) => {
+  const { canvas, clickGame, pageErrors } = await openGame(page);
+  await expect(canvas).toHaveAttribute("data-screen", "game");
+  await expect(canvas).toHaveAttribute("data-level", "recife-1");
   await expect(canvas).toHaveAttribute("data-game-state", /countdown|spawning|active/);
   await expect(canvas).toHaveAttribute("data-shrimp-assets", "true");
 
-  const box = await canvas.boundingBox();
-  if (!box) throw new Error("Canvas bounds unavailable");
-  const scaleX = box.width / 1280;
-  const scaleY = box.height / 720;
-  await page.mouse.click(box.x + 72 * scaleX, box.y + 672 * scaleY);
-  await page.mouse.click(box.x + 375 * scaleX, box.y + 245 * scaleY);
+  await clickGame(CARD_X.shrimp, CARD_Y);
+  await clickGame(375, 245);
   await expect(canvas).toHaveAttribute("data-guardians", "1");
-  await expect(canvas).toHaveAttribute("data-pearls", "120");
+  await expect(canvas).toHaveAttribute("data-pearls", "100");
   await expect(canvas).toHaveAttribute("data-shrimp-art", "true");
   await expect(canvas).toHaveAttribute("data-shrimp-visual", "shrimp-level-0-idle");
   await expect(canvas).toHaveAttribute("data-shrimp-texture", "shrimp-level-0-idle");
+  await expect(canvas).toHaveAttribute("data-selected", "G1");
+  await expect(canvas).toHaveAttribute("data-selected-options", "2");
+  await expect(canvas).toHaveAttribute("data-sell-value", "20");
   expect(pageErrors).toEqual([]);
 });
 
 test("opens debug overlay using F2", async ({ page }) => {
-  const pageErrors: string[] = [];
-  page.on("pageerror", (error) => pageErrors.push(error.message));
-  await page.goto("/?debug=1");
-  const canvas = page.locator("canvas");
-  await expect(canvas).toBeVisible();
+  const { canvas, clickGame, pageErrors } = await openGame(page, "level=recife-1&debug=1");
   await expect(canvas).toHaveAttribute("data-debug", "true");
   await expect(canvas).toHaveAttribute("data-debug-panel", "expanded");
-  const box = await canvas.boundingBox();
-  if (!box) throw new Error("Canvas bounds unavailable");
-  const clickGame = (x: number, y: number) => page.mouse.click(box.x + (x * box.width) / 1280, box.y + (y * box.height) / 720);
   await clickGame(1238, 105);
   await expect(canvas).toHaveAttribute("data-debug", "true");
   await expect(canvas).toHaveAttribute("data-debug-panel", "collapsed");
@@ -48,142 +63,171 @@ test("opens debug overlay using F2", async ({ page }) => {
   expect(pageErrors).toEqual([]);
 });
 
-test("upgrades, pauses and restarts without stale state", async ({ page }) => {
-  const pageErrors: string[] = [];
-  page.on("pageerror", (error) => pageErrors.push(error.message));
-  await page.goto("/");
-  const canvas = page.locator("canvas");
-  await expect(canvas).toBeVisible();
-  const box = await canvas.boundingBox();
-  if (!box) throw new Error("Canvas bounds unavailable");
-  const clickGame = (x: number, y: number) => page.mouse.click(box.x + (x * box.width) / 1280, box.y + (y * box.height) / 720);
-
-  await clickGame(72, 672);
+test("sells a guardian for a quarter of the investment and frees the platform", async ({ page }) => {
+  const { canvas, clickGame, pageErrors } = await openGame(page);
+  await clickGame(CARD_X.shrimp, CARD_Y);
   await clickGame(375, 245);
-  await clickGame(817, 672);
-  await expect(canvas).toHaveAttribute("data-upgrades", "1");
-  await expect(canvas).toHaveAttribute("data-pearls", "65");
-  await expect(canvas).toHaveAttribute("data-shrimp-visual", "shrimp-level-1-idle");
-  await expect(canvas).toHaveAttribute("data-shrimp-texture", "shrimp-level-1-idle");
+  await expect(canvas).toHaveAttribute("data-guardians", "1");
+  await expect(canvas).toHaveAttribute("data-pearls", "100");
 
-  await clickGame(1143, 36);
-  await expect(canvas).toHaveAttribute("data-paused", "true");
-  await clickGame(1143, 36);
-  await expect(canvas).toHaveAttribute("data-paused", "false");
-
-  await clickGame(1138, 673);
+  await clickGame(SELL.x, SELL.y);
   await expect(canvas).toHaveAttribute("data-guardians", "0");
-  await expect(canvas).toHaveAttribute("data-pearls", "180");
+  await expect(canvas).toHaveAttribute("data-pearls", "120");
+  await expect(canvas).toHaveAttribute("data-selected", "");
+
+  await clickGame(CARD_X.shrimp, CARD_Y);
+  await clickGame(375, 245);
+  await expect(canvas).toHaveAttribute("data-guardians", "1");
+  await expect(canvas).toHaveAttribute("data-pearls", "40");
   expect(pageErrors).toEqual([]);
 });
 
-test("enforces water and route placement rules", async ({ page }) => {
-  const pageErrors: string[] = [];
-  page.on("pageerror", (error) => pageErrors.push(error.message));
-  await page.goto("/");
-  const canvas = page.locator("canvas");
-  await expect(canvas).toBeVisible();
-  const box = await canvas.boundingBox();
-  if (!box) throw new Error("Canvas bounds unavailable");
-  const clickGame = (x: number, y: number) => page.mouse.click(box.x + (x * box.width) / 1280, box.y + (y * box.height) / 720);
+test("locks a unit into one upgrade branch, pauses and restarts without stale state", async ({ page }) => {
+  const { canvas, clickGame, pageErrors } = await openGame(page);
+  await clickGame(CARD_X.shrimp, CARD_Y);
+  await clickGame(375, 245);
+  await expect(canvas).toHaveAttribute("data-pearls", "100");
 
-  await clickGame(220, 672);
-  await clickGame(200, 340);
+  await clickGame(OPTION_A.x, OPTION_A.y);
+  await expect(canvas).toHaveAttribute("data-upgrades", "1");
+  await expect(canvas).toHaveAttribute("data-pearls", "30");
+  await expect(canvas).toHaveAttribute("data-selected-branch", "a");
+  await expect(canvas).toHaveAttribute("data-selected-options", "1");
+  await expect(canvas).toHaveAttribute("data-sell-value", "37");
+  await expect(canvas).toHaveAttribute("data-shrimp-visual", "shrimp-level-1-idle");
+  await expect(canvas).toHaveAttribute("data-shrimp-texture", "shrimp-level-1-idle");
+
+  // O segundo botão fica oculto após a escolha do ramo: clicar ali não compra nada.
+  await clickGame(OPTION_B.x, OPTION_B.y);
+  await expect(canvas).toHaveAttribute("data-upgrades", "1");
+  await expect(canvas).toHaveAttribute("data-pearls", "30");
+
+  await clickGame(PAUSE.x, PAUSE.y);
+  await expect(canvas).toHaveAttribute("data-paused", "true");
+  await clickGame(PAUSE.x, PAUSE.y);
+  await expect(canvas).toHaveAttribute("data-paused", "false");
+
+  await clickGame(RESTART.x, RESTART.y);
   await expect(canvas).toHaveAttribute("data-guardians", "0");
   await expect(canvas).toHaveAttribute("data-pearls", "180");
-  await clickGame(200, 170);
-  await expect(canvas).toHaveAttribute("data-guardians", "1");
-  await expect(canvas).toHaveAttribute("data-pearls", "105");
+  await expect(canvas).toHaveAttribute("data-level", "recife-1");
+  expect(pageErrors).toEqual([]);
+});
 
-  await clickGame(368, 672);
-  await clickGame(650, 520);
+test("enforces water and route placement rules on a procedural level", async ({ page }) => {
+  const { canvas, clickGame, pageErrors } = await openGame(page, "level=recife-5");
+  await expect(canvas).toHaveAttribute("data-level", "recife-5");
+  await expect(canvas).toHaveAttribute("data-pearls", "260");
+
+  await clickGame(CARD_X.jellyfish, CARD_Y);
+  await clickGame(175, 510);
+  await expect(canvas).toHaveAttribute("data-guardians", "0");
+  await clickGame(700, 150);
   await expect(canvas).toHaveAttribute("data-guardians", "1");
-  await expect(canvas).toHaveAttribute("data-pearls", "105");
-  await clickGame(330, 385);
+  await expect(canvas).toHaveAttribute("data-pearls", "160");
+
+  await clickGame(CARD_X.crab, CARD_Y);
+  await clickGame(1100, 520);
+  await expect(canvas).toHaveAttribute("data-guardians", "1");
+  await clickGame(175, 510);
   await expect(canvas).toHaveAttribute("data-guardians", "2");
-  await expect(canvas).toHaveAttribute("data-pearls", "5");
+  await expect(canvas).toHaveAttribute("data-pearls", "70");
   await expect(canvas).toHaveAttribute("data-selected", "G2");
-  await clickGame(200, 170);
+
+  await clickGame(700, 150);
   await expect(canvas).toHaveAttribute("data-selected", "G1");
   await clickGame(1100, 150);
   await expect(canvas).toHaveAttribute("data-selected", "");
-  await clickGame(330, 385);
+  await clickGame(175, 510);
   await expect(canvas).toHaveAttribute("data-selected", "G2");
   expect(pageErrors).toEqual([]);
 });
 
 test("skips wave preparation by keyboard and button", async ({ page }) => {
-  await page.goto("/");
-  const canvas = page.locator("canvas");
+  const { canvas, clickGame } = await openGame(page);
   await expect(canvas).toHaveAttribute("data-game-state", "countdown");
   await page.keyboard.press("Space");
   await expect(canvas).toHaveAttribute("data-game-state", /spawning|active/);
-
-  const box = await canvas.boundingBox();
-  if (!box) throw new Error("Canvas bounds unavailable");
-  const clickGame = (x: number, y: number) => page.mouse.click(box.x + (x * box.width) / 1280, box.y + (y * box.height) / 720);
-  await clickGame(1138, 673);
+  await clickGame(RESTART.x, RESTART.y);
   await expect(canvas).toHaveAttribute("data-game-state", "countdown");
   await page.waitForTimeout(250);
-  await clickGame(928, 673);
+  await clickGame(SKIP.x, SKIP.y);
   await expect(canvas).toHaveAttribute("data-game-state", /spawning|active/);
 });
 
-test("a balanced defense can finish all five waves", async ({ page }, testInfo) => {
-  test.skip(testInfo.project.name !== "desktop-chromium", "Full balance run is covered once in Chromium.");
-  test.setTimeout(180_000);
+test("level select only opens unlocked levels", async ({ page }) => {
   const pageErrors: string[] = [];
   page.on("pageerror", (error) => pageErrors.push(error.message));
-  await page.addInitScript(() => {
-    const nativeRequestAnimationFrame = window.requestAnimationFrame.bind(window);
-    let simulationTimestamp = performance.now();
-    window.requestAnimationFrame = (callback: FrameRequestCallback): number =>
-      nativeRequestAnimationFrame(() => {
-        simulationTimestamp += 80;
-        callback(simulationTimestamp);
-      });
-  });
   await page.goto("/");
   const canvas = page.locator("canvas");
   await expect(canvas).toBeVisible();
+  await expect(canvas).toHaveAttribute("data-screen", "menu");
+  await expect(canvas).toHaveAttribute("data-unlocked-levels", "1");
   const box = await canvas.boundingBox();
   if (!box) throw new Error("Canvas bounds unavailable");
   const clickGame = (x: number, y: number) => page.mouse.click(box.x + (x * box.width) / 1280, box.y + (y * box.height) / 720);
+
+  const locked = MENU_CARD_BUTTON(1);
+  await clickGame(locked.x, locked.y);
+  await page.waitForTimeout(200);
+  await expect(canvas).toHaveAttribute("data-screen", "menu");
+
+  const first = MENU_CARD_BUTTON(0);
+  await clickGame(first.x, first.y);
+  await expect(canvas).toHaveAttribute("data-screen", "game");
+  await expect(canvas).toHaveAttribute("data-level", "recife-1");
+
+  await clickGame(MENU.x, MENU.y);
+  await expect(canvas).toHaveAttribute("data-screen", "menu");
+  expect(pageErrors).toEqual([]);
+});
+
+test("a balanced defense can finish all five waves and unlock the next level", async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name !== "desktop-chromium", "Full balance run is covered once in Chromium.");
+  test.setTimeout(240_000);
+  const { canvas, clickGame, pageErrors } = await openGame(page);
   const waitForPearls = (minimum: number) =>
     expect
-      .poll(async () => Number(await canvas.getAttribute("data-pearls")), { timeout: 70_000 })
+      .poll(async () => Number(await canvas.getAttribute("data-pearls")), { timeout: 90_000 })
       .toBeGreaterThanOrEqual(minimum);
 
-  await clickGame(72, 672);
+  // Abertura: Camarão na plataforma norte e Caranguejo no trecho lento da rota.
+  await clickGame(CARD_X.shrimp, CARD_Y);
   await clickGame(375, 245);
-  await clickGame(368, 672);
-  await clickGame(280, 372);
+  await clickGame(CARD_X.crab, CARD_Y);
+  await clickGame(330, 388);
+  await expect(canvas).toHaveAttribute("data-guardians", "2");
+  await expect(canvas).toHaveAttribute("data-pearls", "10");
 
-  await waitForPearls(75);
-  await clickGame(220, 672);
-  await clickGame(300, 540);
-  await waitForPearls(60);
-  await clickGame(72, 672);
-  await clickGame(750, 135);
+  await waitForPearls(80);
+  await clickGame(CARD_X.shrimp, CARD_Y);
+  await clickGame(925, 500);
+  await expect(canvas).toHaveAttribute("data-guardians", "3");
 
-  await waitForPearls(55);
+  // Contra o chefe blindado, o ramo Dano Concentrado rende mais que a Perfuração.
+  await waitForPearls(70);
   await clickGame(375, 245);
-  await clickGame(817, 672);
-  await waitForPearls(85);
-  await clickGame(817, 672);
+  await clickGame(OPTION_B.x, OPTION_B.y);
+  await expect(canvas).toHaveAttribute("data-upgrades", "1");
 
-  await waitForPearls(75);
-  await clickGame(280, 372);
-  await clickGame(817, 672);
-  await waitForPearls(110);
-  await clickGame(817, 672);
+  await waitForPearls(70);
+  await clickGame(925, 500);
+  await clickGame(OPTION_B.x, OPTION_B.y);
+  await expect(canvas).toHaveAttribute("data-upgrades", "2");
 
-  await waitForPearls(65);
-  await clickGame(300, 540);
-  await clickGame(817, 672);
-  await waitForPearls(90);
-  await clickGame(817, 672);
+  await expect(canvas).toHaveAttribute("data-game-state", "victory", { timeout: 120_000 });
+  const finalPearls = await canvas.getAttribute("data-pearls");
+  const finalReef = await canvas.getAttribute("data-reef");
+  console.log(`[balance] recife-1 victory · pearls left: ${finalPearls} · reef: ${finalReef}/20`);
+  await expect(canvas).toHaveAttribute("data-next-level", "recife-2");
 
-  await expect(canvas).toHaveAttribute("data-game-state", "victory", { timeout: 70_000 });
+  await clickGame(RESULT_NEXT.x, RESULT_NEXT.y);
+  await expect(canvas).toHaveAttribute("data-level", "recife-2");
+  await expect(canvas).toHaveAttribute("data-game-state", "countdown");
+  await expect(canvas).toHaveAttribute("data-pearls", "200");
+
+  await clickGame(MENU.x, MENU.y);
+  await expect(canvas).toHaveAttribute("data-screen", "menu");
+  await expect(canvas).toHaveAttribute("data-unlocked-levels", "2");
   expect(pageErrors).toEqual([]);
 });

@@ -1,9 +1,31 @@
 import Phaser from "phaser";
 import { shrimpTextureForLevel, type ShrimpVisualState } from "../assets/recifeOneAssets";
 import { DEPTH } from "../constants";
+import { NEUTRAL_AURA, sameAura } from "../core/Auras";
 import { selectLeadingTarget } from "../core/Combat";
 import { GuardianStateMachine, type GuardianFsmEvent } from "../core/GuardianStateMachine";
-import type { GuardianDefinition, GuardianState, GuardianUpgrade } from "../types";
+import {
+  appliedUpgrades,
+  applyUpgrade,
+  branchOf,
+  investedValue,
+  MAX_UPGRADE_LEVEL,
+  resolveLast,
+  resolveProduct,
+  sellValue,
+  upgradeOptions,
+  type UpgradeProgress,
+} from "../core/UpgradeTree";
+import type {
+  AuraEffect,
+  BranchId,
+  GuardianDefinition,
+  GuardianState,
+  GuardianUpgrade,
+  UpgradeBranch,
+  UpgradeOption,
+  VulnerabilityEffect,
+} from "../types";
 import type { Enemy } from "./Enemy";
 
 export interface GuardianPlacementContext {
@@ -15,11 +37,16 @@ export class Guardian extends Phaser.GameObjects.Container {
   readonly fsm: GuardianStateMachine;
   readonly instanceId: string;
   readonly definition: GuardianDefinition;
-  upgradeLevel = 0;
   readonly routePlacementId: string | null;
   readonly routeDistance: number | null;
+  branchId: BranchId | null = null;
+  upgradeLevel = 0;
+  /** Contador de golpes para habilidades "a cada N ataques" (giro do Caranguejo). */
+  attacksPerformed = 0;
+  aura: AuraEffect = NEUTRAL_AURA;
 
   private readonly bodyGraphic: Phaser.GameObjects.Graphics;
+  private readonly badgeGraphic: Phaser.GameObjects.Graphics;
   private readonly artSprite: Phaser.GameObjects.Image | null;
   private visualState: GuardianState = "idle";
   private readonly artBaselineY = 34;
@@ -37,12 +64,10 @@ export class Guardian extends Phaser.GameObjects.Container {
     this.definition = definition;
     this.routePlacementId = placement.routePlacementId ?? null;
     this.routeDistance = placement.routeDistance ?? null;
-    this.fsm = new GuardianStateMachine({
-      ...definition.timings,
-      impactAtMs: definition.animation.impactAtMs,
-    });
+    this.fsm = new GuardianStateMachine(this.scaledTimings());
     this.bodyGraphic = scene.add.graphics();
-    this.add(this.bodyGraphic);
+    this.badgeGraphic = scene.add.graphics();
+    this.add([this.bodyGraphic, this.badgeGraphic]);
     const shrimpIdleTexture = shrimpTextureForLevel(0, "idle");
     if (definition.id === "pistol-shrimp" && scene.textures.exists(shrimpIdleTexture)) {
       this.artSprite = new Phaser.GameObjects.Image(scene, 0, this.artBaselineY, shrimpIdleTexture);
@@ -53,10 +78,13 @@ export class Guardian extends Phaser.GameObjects.Container {
       this.artSprite = null;
     }
     this.drawBody();
+    this.drawBadge();
     this.setDepth(DEPTH.guardians);
     scene.add.existing(this);
     this.applyStateVisual();
   }
+
+  // ---------------------------------------------------------------- estado
 
   get guardianState(): GuardianState {
     return this.fsm.state;
@@ -78,72 +106,167 @@ export class Guardian extends Phaser.GameObjects.Container {
     return this.artSprite?.texture.key ?? null;
   }
 
-  get range(): number {
-    return this.definition.range * this.productOf("rangeMultiplier");
+  // -------------------------------------------------------------- upgrades
+
+  get progress(): UpgradeProgress {
+    return { branchId: this.branchId, upgradeLevel: this.upgradeLevel };
   }
 
-  get damage(): number {
-    return this.definition.damage * this.productOf("damageMultiplier");
+  get branch(): UpgradeBranch | null {
+    return branchOf(this.definition, this.branchId);
   }
 
-  get extraTargets(): number {
-    return this.appliedUpgrades.reduce((total, upgrade) => total + (upgrade.extraTargets ?? 0), 0);
+  get applied(): GuardianUpgrade[] {
+    return appliedUpgrades(this.definition, this.progress);
   }
 
-  get projectileSpeed(): number {
-    return (this.definition.projectileSpeed ?? 400) * this.productOf("projectileSpeedMultiplier");
+  get options(): UpgradeOption[] {
+    return upgradeOptions(this.definition, this.progress);
   }
 
-  get predictiveAim(): boolean {
-    return this.appliedUpgrades.some((upgrade) => upgrade.predictiveAim);
+  get maxUpgradeLevel(): number {
+    return MAX_UPGRADE_LEVEL;
   }
 
-  get secondaryDamageMultiplier(): number {
-    return this.lastValue("secondaryDamageMultiplier") ?? 1;
+  get invested(): number {
+    return investedValue(this.definition, this.progress);
   }
 
-  get chainDamageMultiplier(): number {
-    return this.lastValue("chainDamageMultiplier") ?? 1;
+  sellValueAt(refundRate: number): number {
+    return sellValue(this.invested, refundRate);
   }
 
-  get blockCapacity(): number {
-    if (this.definition.placementMode !== "route") return 0;
-    return this.lastValue("blockCapacity") ?? 1;
-  }
-
-  get contactDamagePerSecond(): number {
-    return this.lastValue("contactDamagePerSecond") ?? 0;
-  }
-
-  get electricField(): GuardianUpgrade["electricField"] | null {
-    return [...this.appliedUpgrades].reverse().find((upgrade) => upgrade.electricField)?.electricField ?? null;
-  }
-
-  get nextUpgrade(): GuardianUpgrade | null {
-    return this.definition.upgrades[this.upgradeLevel] ?? null;
-  }
-
-  get canUpgrade(): boolean {
-    return this.upgradeLevel < this.definition.upgrades.length;
-  }
-
-  upgrade(): boolean {
-    if (!this.canUpgrade) return false;
-    this.upgradeLevel += 1;
+  applyUpgrade(branchId: BranchId): boolean {
+    const next = applyUpgrade(this.definition, this.progress, branchId);
+    if (!next) return false;
+    this.branchId = next.branchId;
+    this.upgradeLevel = next.upgradeLevel;
     this.drawBody();
+    this.drawBadge();
     this.syncArtTexture();
+    this.fsm.setTimings(this.scaledTimings());
     return true;
   }
 
-  tick(now: number, enemies: readonly Enemy[], onImpact: (guardian: Guardian, target: Enemy) => void): void {
-    if (this.fsm.state === "idle") {
-      const target = this.findTarget(enemies);
-      if (target) this.processEvents(this.fsm.beginAttack(target.instanceId, now), enemies, onImpact);
-    }
+  setAura(aura: AuraEffect): void {
+    if (sameAura(this.aura, aura)) return;
+    this.aura = { ...aura };
+    this.fsm.setTimings(this.scaledTimings());
+    this.drawBadge();
+  }
 
-    const target = enemies.find((enemy) => enemy.instanceId === this.fsm.targetId);
-    const valid = Boolean(target && !target.dead && !target.reachedGoal && target.distanceTo(this.x, this.y) <= this.range);
-    this.processEvents(this.fsm.update(now, valid), enemies, onImpact);
+  // ------------------------------------------------------------ atributos
+
+  get range(): number {
+    return this.definition.range * resolveProduct(this.applied, "rangeMultiplier") * this.aura.rangeMultiplier;
+  }
+
+  get damage(): number {
+    return resolveLast(this.applied, "damage") ?? this.definition.damage;
+  }
+
+  get canAttack(): boolean {
+    return this.damage > 0;
+  }
+
+  get cooldownMs(): number {
+    return (resolveLast(this.applied, "cooldownMs") ?? this.definition.cooldownMs) / this.aura.attackSpeedMultiplier;
+  }
+
+  get projectileSpeed(): number {
+    return (this.definition.projectileSpeed ?? 400) * resolveProduct(this.applied, "projectileSpeedMultiplier");
+  }
+
+  get predictiveAim(): boolean {
+    return this.applied.some((upgrade) => upgrade.predictiveAim);
+  }
+
+  get pierceDamages(): number[] {
+    return resolveLast(this.applied, "pierceDamages") ?? [this.damage];
+  }
+
+  get straightRicochet(): boolean {
+    return this.applied.some((upgrade) => upgrade.straightRicochet);
+  }
+
+  get splash(): NonNullable<GuardianUpgrade["splash"]> | null {
+    return resolveLast(this.applied, "splash") ?? null;
+  }
+
+  get chainDamages(): number[] {
+    return resolveLast(this.applied, "chainDamages") ?? [this.damage];
+  }
+
+  get slowFactor(): number | null {
+    return resolveLast(this.applied, "slowFactor") ?? this.definition.slowFactor ?? null;
+  }
+
+  get slowDurationMs(): number {
+    return resolveLast(this.applied, "slowDurationMs") ?? this.definition.slowDurationMs ?? 0;
+  }
+
+  get stun(): NonNullable<GuardianUpgrade["stun"]> | null {
+    return resolveLast(this.applied, "stun") ?? null;
+  }
+
+  get electricField(): NonNullable<GuardianUpgrade["electricField"]> | null {
+    return resolveLast(this.applied, "electricField") ?? null;
+  }
+
+  get blocks(): boolean {
+    return this.definition.placementMode === "route" && Boolean(this.definition.blocks);
+  }
+
+  get blockCapacity(): number {
+    if (!this.blocks) return 0;
+    return resolveLast(this.applied, "blockCapacity") ?? this.definition.blockCapacity ?? 1;
+  }
+
+  get contactDamagePerSecond(): number {
+    return resolveLast(this.applied, "contactDamagePerSecond") ?? this.definition.contactDamagePerSecond ?? 0;
+  }
+
+  get bossHold(): NonNullable<GuardianUpgrade["bossHold"]> | null {
+    return resolveLast(this.applied, "bossHold") ?? null;
+  }
+
+  get armorPiercing(): boolean {
+    return this.applied.some((upgrade) => upgrade.armorPiercing);
+  }
+
+  get vulnerability(): VulnerabilityEffect | null {
+    return resolveLast(this.applied, "vulnerability") ?? this.definition.vulnerability ?? null;
+  }
+
+  get areaAttack(): boolean {
+    return this.applied.some((upgrade) => upgrade.areaAttack);
+  }
+
+  get spin(): NonNullable<GuardianUpgrade["spin"]> | null {
+    return resolveLast(this.applied, "spin") ?? null;
+  }
+
+  get inkCloud(): NonNullable<GuardianUpgrade["inkCloud"]> | null {
+    return resolveLast(this.applied, "inkCloud") ?? null;
+  }
+
+  /** Aura que esta unidade fornece aos aliados (Polvo, ramo Maré Aliada). */
+  get providedAura(): AuraEffect | null {
+    return resolveLast(this.applied, "aura") ?? null;
+  }
+
+  // ------------------------------------------------------------------ tick
+
+  tick(now: number, enemies: readonly Enemy[], onImpact: (guardian: Guardian, target: Enemy) => void): void {
+    if (this.canAttack) {
+      if (this.fsm.state === "idle") {
+        const target = this.findTarget(enemies);
+        if (target) this.processEvents(this.fsm.beginAttack(target.instanceId, now), enemies, onImpact);
+      }
+      const target = enemies.find((enemy) => enemy.instanceId === this.fsm.targetId);
+      const valid = Boolean(target && !target.dead && !target.reachedGoal && target.distanceTo(this.x, this.y) <= this.range);
+      this.processEvents(this.fsm.update(now, valid), enemies, onImpact);
+    }
     this.animatePassiveVisual(now);
   }
 
@@ -162,10 +285,28 @@ export class Guardian extends Phaser.GameObjects.Container {
         this.applyStateVisual();
       } else {
         const target = enemies.find((enemy) => enemy.instanceId === event.targetId);
-        if (target && !target.dead && !target.reachedGoal) onImpact(this, target);
+        if (target && !target.dead && !target.reachedGoal) {
+          this.attacksPerformed += 1;
+          onImpact(this, target);
+        }
       }
     }
   }
+
+  /** Escala os tempos de animação para que o ciclo completo dure `cooldownMs`. */
+  private scaledTimings() {
+    const base = this.definition.timings;
+    const baseTotal = base.windupMs + base.attackMs + base.recoveryMs;
+    const scale = baseTotal > 0 ? this.cooldownMs / baseTotal : 1;
+    return {
+      windupMs: base.windupMs * scale,
+      attackMs: base.attackMs * scale,
+      recoveryMs: base.recoveryMs * scale,
+      impactAtMs: this.definition.animation.impactAtMs * scale,
+    };
+  }
+
+  // ---------------------------------------------------------------- visual
 
   private applyStateVisual(): void {
     if (this.visualState !== "idle") {
@@ -190,12 +331,8 @@ export class Guardian extends Phaser.GameObjects.Container {
       case "recovery":
         this.setScale(0.96, 1);
         break;
-      case "disabled":
+      default:
         this.setScale(1);
-        break;
-      case "idle":
-        this.setScale(1);
-        break;
     }
   }
 
@@ -220,66 +357,116 @@ export class Guardian extends Phaser.GameObjects.Container {
     if (this.artSprite.texture.key !== texture) this.artSprite.setTexture(texture);
   }
 
+  /** Anel colorido do ramo escolhido + marcadores de nível; halo quando recebe aura. */
+  private drawBadge(): void {
+    this.badgeGraphic.clear();
+    const buffed = !sameAura(this.aura, NEUTRAL_AURA);
+    if (buffed) {
+      this.badgeGraphic.lineStyle(2, 0xffc3f0, 0.55);
+      this.badgeGraphic.strokeCircle(0, 6, 40);
+    }
+    const branch = this.branch;
+    if (!branch) return;
+    this.badgeGraphic.lineStyle(4, branch.color, 0.95);
+    this.badgeGraphic.strokeCircle(0, 6, 34);
+    this.badgeGraphic.fillStyle(branch.color, 1);
+    for (let index = 0; index < this.upgradeLevel; index += 1) {
+      this.badgeGraphic.fillCircle(-7 + index * 14, 44, 5);
+      this.badgeGraphic.lineStyle(2, 0x03212f, 1);
+      this.badgeGraphic.strokeCircle(-7 + index * 14, 44, 5);
+    }
+  }
+
   private drawBody(): void {
     const primary = this.definition.color;
     const accent = this.definition.accent;
-    this.bodyGraphic.clear();
-    this.bodyGraphic.fillStyle(0x001823, 0.35);
-    this.bodyGraphic.fillEllipse(0, 18, 62, 18);
+    const graphic = this.bodyGraphic;
+    graphic.clear();
+    graphic.fillStyle(0x001823, 0.35);
+    graphic.fillEllipse(0, 18, 62, 18);
 
-    if (this.definition.id === "pistol-shrimp") {
-      this.bodyGraphic.fillStyle(primary, 1);
-      this.bodyGraphic.fillEllipse(-5, 0, 50, 30);
-      this.bodyGraphic.fillCircle(-24, 1, 11);
-      this.bodyGraphic.fillStyle(accent, 1);
-      this.bodyGraphic.fillCircle(23, 5, 18);
-      this.bodyGraphic.lineStyle(4, 0x062c3b, 1);
-      this.bodyGraphic.lineBetween(23, -10, 23, 17);
-      this.bodyGraphic.lineStyle(2, primary, 1);
-      this.bodyGraphic.lineBetween(-18, -12, -30, -29);
-      this.bodyGraphic.lineBetween(-10, -14, -15, -33);
-      this.bodyGraphic.fillStyle(0xffffff, 1);
-      this.bodyGraphic.fillCircle(-14, -7, 4);
-      this.bodyGraphic.fillStyle(0x092333, 1);
-      this.bodyGraphic.fillCircle(-13, -7, 2);
-    } else if (this.definition.id === "jellyfish") {
-      this.bodyGraphic.fillStyle(primary, 0.95);
-      this.bodyGraphic.fillEllipse(0, -3, 48, 38);
-      this.bodyGraphic.fillRect(-24, -3, 48, 8);
-      this.bodyGraphic.lineStyle(4, accent, 0.9);
-      for (const x of [-16, -5, 6, 17]) this.bodyGraphic.lineBetween(x, 3, x - 4, 28);
-      this.bodyGraphic.fillStyle(0xffffff, 1);
-      this.bodyGraphic.fillCircle(-8, -8, 4);
-      this.bodyGraphic.fillCircle(8, -8, 4);
-    } else {
-      this.bodyGraphic.fillStyle(primary, 1);
-      this.bodyGraphic.fillCircle(0, 0, 25);
-      this.bodyGraphic.lineStyle(3, accent, 1);
-      for (let index = 0; index < 12; index += 1) {
-        const angle = (Math.PI * 2 * index) / 12;
-        this.bodyGraphic.lineBetween(Math.cos(angle) * 22, Math.sin(angle) * 22, Math.cos(angle) * 32, Math.sin(angle) * 32);
-      }
-      this.bodyGraphic.fillStyle(0xffffff, 1);
-      this.bodyGraphic.fillCircle(-8, -6, 5);
-      this.bodyGraphic.fillCircle(8, -6, 5);
-      this.bodyGraphic.fillStyle(0x092333, 1);
-      this.bodyGraphic.fillCircle(-7, -6, 2);
-      this.bodyGraphic.fillCircle(9, -6, 2);
+    switch (this.definition.id) {
+      case "pistol-shrimp":
+        graphic.fillStyle(primary, 1);
+        graphic.fillEllipse(-5, 0, 50, 30);
+        graphic.fillCircle(-24, 1, 11);
+        graphic.fillStyle(accent, 1);
+        graphic.fillCircle(23, 5, 18);
+        graphic.lineStyle(4, 0x062c3b, 1);
+        graphic.lineBetween(23, -10, 23, 17);
+        graphic.lineStyle(2, primary, 1);
+        graphic.lineBetween(-18, -12, -30, -29);
+        graphic.lineBetween(-10, -14, -15, -33);
+        graphic.fillStyle(0xffffff, 1);
+        graphic.fillCircle(-14, -7, 4);
+        graphic.fillStyle(0x092333, 1);
+        graphic.fillCircle(-13, -7, 2);
+        break;
+      case "jellyfish":
+        graphic.fillStyle(primary, 0.95);
+        graphic.fillEllipse(0, -3, 48, 38);
+        graphic.fillRect(-24, -3, 48, 8);
+        graphic.lineStyle(4, accent, 0.9);
+        for (const x of [-16, -5, 6, 17]) graphic.lineBetween(x, 3, x - 4, 28);
+        graphic.fillStyle(0xffffff, 1);
+        graphic.fillCircle(-8, -8, 4);
+        graphic.fillCircle(8, -8, 4);
+        break;
+      case "pufferfish":
+        graphic.fillStyle(primary, 1);
+        graphic.fillCircle(0, 0, 25);
+        graphic.lineStyle(3, accent, 1);
+        for (let index = 0; index < 12; index += 1) {
+          const angle = (Math.PI * 2 * index) / 12;
+          graphic.lineBetween(Math.cos(angle) * 22, Math.sin(angle) * 22, Math.cos(angle) * 32, Math.sin(angle) * 32);
+        }
+        graphic.fillStyle(0xffffff, 1);
+        graphic.fillCircle(-8, -6, 5);
+        graphic.fillCircle(8, -6, 5);
+        graphic.fillStyle(0x092333, 1);
+        graphic.fillCircle(-7, -6, 2);
+        graphic.fillCircle(9, -6, 2);
+        break;
+      case "reef-crab":
+        graphic.fillStyle(primary, 1);
+        graphic.fillEllipse(0, 2, 46, 28);
+        graphic.lineStyle(4, primary, 1);
+        for (const side of [-1, 1]) {
+          graphic.lineBetween(side * 14, 8, side * 28, 20);
+          graphic.lineBetween(side * 20, 4, side * 34, 10);
+          graphic.lineBetween(side * 18, -6, side * 30, -16);
+        }
+        graphic.fillStyle(accent, 1);
+        graphic.fillCircle(-30, -20, 8);
+        graphic.fillCircle(30, -20, 8);
+        graphic.fillStyle(primary, 1);
+        graphic.fillTriangle(-30, -28, -22, -20, -36, -18);
+        graphic.fillTriangle(30, -28, 22, -20, 36, -18);
+        graphic.fillStyle(0xffffff, 1);
+        graphic.fillCircle(-9, -8, 4);
+        graphic.fillCircle(9, -8, 4);
+        graphic.fillStyle(0x092333, 1);
+        graphic.fillCircle(-8, -8, 2);
+        graphic.fillCircle(10, -8, 2);
+        break;
+      case "ink-octopus":
+        graphic.fillStyle(primary, 1);
+        graphic.fillEllipse(0, -6, 44, 40);
+        graphic.lineStyle(5, primary, 1);
+        for (const x of [-18, -9, 0, 9, 18]) {
+          graphic.lineBetween(x, 10, x + (x < 0 ? -6 : 6), 30);
+        }
+        graphic.fillStyle(accent, 0.9);
+        graphic.fillCircle(-12, -14, 4);
+        graphic.fillCircle(6, -20, 3);
+        graphic.fillCircle(14, -4, 3);
+        graphic.fillStyle(0xffffff, 1);
+        graphic.fillCircle(-8, -4, 5);
+        graphic.fillCircle(8, -4, 5);
+        graphic.fillStyle(0x092333, 1);
+        graphic.fillCircle(-7, -4, 2.5);
+        graphic.fillCircle(9, -4, 2.5);
+        break;
     }
-
-  }
-
-  private get appliedUpgrades(): readonly GuardianUpgrade[] {
-    return this.definition.upgrades.slice(0, this.upgradeLevel);
-  }
-
-  private productOf(key: "damageMultiplier" | "rangeMultiplier" | "projectileSpeedMultiplier"): number {
-    return this.appliedUpgrades.reduce((product, upgrade) => product * (upgrade[key] ?? 1), 1);
-  }
-
-  private lastValue<K extends "secondaryDamageMultiplier" | "chainDamageMultiplier" | "blockCapacity" | "contactDamagePerSecond">(
-    key: K,
-  ): GuardianUpgrade[K] | undefined {
-    return [...this.appliedUpgrades].reverse().find((upgrade) => upgrade[key] !== undefined)?.[key];
   }
 }

@@ -1,7 +1,4 @@
 import { describe, expect, it } from "vitest";
-import { GUARDIANS } from "../src/game/data/guardians";
-import { RECIFE_ONE } from "../src/game/data/recifeOne";
-import { RoutePath } from "../src/game/core/RoutePath";
 import {
   RECIFE_ONE_BACKGROUND_KEY,
   RECIFE_ONE_IMAGE_ASSETS,
@@ -10,19 +7,46 @@ import {
   shrimpTextureForLevel,
 } from "../src/game/assets/recifeOneAssets";
 import { containsPoint } from "../src/game/core/CurrentField";
+import { RoutePath } from "../src/game/core/RoutePath";
+import { GUARDIAN_BALANCE } from "../src/game/data/balance";
+import { GUARDIANS, GUARDIAN_ORDER } from "../src/game/data/guardians";
+import { RECIFE_ONE } from "../src/game/data/levels";
+import type { GuardianId } from "../src/game/types";
 
 describe("Recife 1 content contracts", () => {
-  it("keeps five waves and four shrimp platforms", () => {
+  it("keeps five waves and four platforms", () => {
     expect(RECIFE_ONE.waves).toHaveLength(5);
     expect(RECIFE_ONE.placements).toHaveLength(4);
     expect("routePlacements" in RECIFE_ONE).toBe(false);
   });
 
-  it("assigns distinct placement rules and two linear upgrades", () => {
+  it("assigns distinct placement rules to the five guardians", () => {
+    expect(GUARDIAN_ORDER).toHaveLength(5);
+    expect(new Set(GUARDIAN_ORDER).size).toBe(5);
     expect(GUARDIANS["pistol-shrimp"].placementMode).toBe("platform");
     expect(GUARDIANS.jellyfish.placementMode).toBe("water");
     expect(GUARDIANS.pufferfish.placementMode).toBe("route");
-    Object.values(GUARDIANS).forEach((guardian) => expect(guardian.upgrades).toHaveLength(2));
+    expect(GUARDIANS.pufferfish.blocks).toBe(true);
+    expect(GUARDIANS["reef-crab"].placementMode).toBe("route");
+    expect(GUARDIANS["reef-crab"].blocks).toBe(false);
+    expect(GUARDIANS["ink-octopus"].placementMode).toBe("platform");
+  });
+
+  it("gives every guardian two branches of two upgrades with shared costs per level", () => {
+    (Object.keys(GUARDIANS) as GuardianId[]).forEach((id) => {
+      const definition = GUARDIANS[id];
+      expect(definition.branches).toHaveLength(2);
+      expect(definition.branches.map((branch) => branch.id)).toEqual(["a", "b"]);
+      definition.branches.forEach((branch) => {
+        expect(branch.upgrades).toHaveLength(2);
+        expect(branch.upgrades.map((upgrade) => upgrade.cost)).toEqual([...GUARDIAN_BALANCE[id].upgradeCosts]);
+        branch.upgrades.forEach((upgrade) => {
+          expect(upgrade.name.length).toBeGreaterThan(0);
+          expect(upgrade.description.length).toBeGreaterThan(0);
+        });
+      });
+      expect(definition.cost).toBe(GUARDIAN_BALANCE[id].cost);
+    });
   });
 
   it("places the upper-left shrimp platform within attack range but outside the route", () => {
@@ -34,11 +58,13 @@ describe("Recife 1 content contracts", () => {
     expect(distance).toBeGreaterThan(82);
   });
 
-  it("uses the refined puffer pulse and the limited electric field", () => {
-    expect(GUARDIANS.pufferfish.damage).toBe(15);
-    expect(GUARDIANS.pufferfish.range).toBe(112);
-    const field = GUARDIANS.jellyfish.upgrades[1].electricField;
-    expect(field).toMatchObject({ durationMs: 2500, cooldownMs: 5000 });
+  it("uses the agreed jellyfish field cap and pufferfish boss hold", () => {
+    const field = GUARDIANS.jellyfish.branches[0].upgrades[1].electricField;
+    expect(field).toMatchObject({ durationMs: 2500, cooldownMs: 5000, maxDamagePerTarget: 30, damage: 6 });
+    const hold = GUARDIANS.pufferfish.branches[0].upgrades[1].bossHold;
+    expect(hold).toBeDefined();
+    expect(hold!.durationMs).toBeLessThanOrEqual(1500);
+    expect(hold!.immunityMs).toBeGreaterThan(hold!.durationMs * 4);
   });
 
   it("maps one shrimp projectile image to each upgrade level", () => {
@@ -55,6 +81,7 @@ describe("Recife 1 content contracts", () => {
   it("registers the level artwork and every shrimp runtime image", () => {
     const keys = RECIFE_ONE_IMAGE_ASSETS.map((asset) => asset.key);
     expect(keys).toContain(RECIFE_ONE_BACKGROUND_KEY);
+    expect(RECIFE_ONE.backgroundKey).toBe(RECIFE_ONE_BACKGROUND_KEY);
     expect(new Set(keys).size).toBe(keys.length);
     expect(RECIFE_ONE_IMAGE_ASSETS).toHaveLength(10);
   });

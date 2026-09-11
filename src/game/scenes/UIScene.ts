@@ -3,7 +3,7 @@ import { SHRIMP_LEVEL_TEXTURES } from "../assets/recifeOneAssets";
 import { GAME_HEIGHT, GAME_WIDTH, HUD_BOTTOM, HUD_TOP } from "../constants";
 import { GUARDIANS, GUARDIAN_ORDER } from "../data/guardians";
 import { EventBus, Events } from "../EventBus";
-import type { DebugFlags, GuardianId, HudSnapshot } from "../types";
+import type { BranchId, DebugFlags, GuardianId, HudSnapshot, UpgradeOption } from "../types";
 
 interface GuardianCard {
   id: GuardianId;
@@ -19,6 +19,36 @@ interface DebugButton {
   label: Phaser.GameObjects.Text;
 }
 
+interface OptionButton {
+  slot: BranchId;
+  background: Phaser.GameObjects.Rectangle;
+  label: Phaser.GameObjects.Text;
+  option: UpgradeOption | null;
+}
+
+/** Layout da fila de cartas e do painel de upgrade no HUD inferior. */
+export const HUD_LAYOUT = {
+  cardStartX: 62,
+  cardStep: 118,
+  cardWidth: 108,
+  panelX: 820,
+  panelWidth: 430,
+  optionButtonY: GAME_HEIGHT - 28,
+  optionButtonXs: [690, 800] as const,
+  sellButtonX: 980,
+  skipButtonX: 1078,
+  skipButtonY: 640,
+  debugButtonX: 1078,
+  debugButtonY: 684,
+  restartButtonX: 1190,
+  restartButtonY: 640,
+  menuButtonX: 1190,
+  menuButtonY: 684,
+  pauseButtonX: 1143,
+  muteButtonX: 1201,
+  topButtonY: 36,
+} as const;
+
 export class UIScene extends Phaser.Scene {
   private pearlText!: Phaser.GameObjects.Text;
   private healthText!: Phaser.GameObjects.Text;
@@ -28,14 +58,16 @@ export class UIScene extends Phaser.Scene {
   private cards: GuardianCard[] = [];
   private upgradeTitle!: Phaser.GameObjects.Text;
   private upgradeDescription!: Phaser.GameObjects.Text;
-  private upgradeButton!: Phaser.GameObjects.Rectangle;
-  private upgradeButtonText!: Phaser.GameObjects.Text;
+  private optionButtons: OptionButton[] = [];
+  private sellButton!: Phaser.GameObjects.Rectangle;
+  private sellButtonText!: Phaser.GameObjects.Text;
   private pauseButton!: Phaser.GameObjects.Rectangle;
   private pauseText!: Phaser.GameObjects.Text;
   private muteButton!: Phaser.GameObjects.Rectangle;
   private muteText!: Phaser.GameObjects.Text;
   private skipButton!: Phaser.GameObjects.Rectangle;
   private skipButtonText!: Phaser.GameObjects.Text;
+  private levelLabel!: Phaser.GameObjects.Text;
   private debugToggle!: Phaser.GameObjects.Rectangle;
   private debugToggleText!: Phaser.GameObjects.Text;
   private debugPanel!: Phaser.GameObjects.Rectangle;
@@ -51,6 +83,11 @@ export class UIScene extends Phaser.Scene {
   private resultSubtitle!: Phaser.GameObjects.Text;
   private resultRestart!: Phaser.GameObjects.Rectangle;
   private resultRestartText!: Phaser.GameObjects.Text;
+  private resultNext!: Phaser.GameObjects.Rectangle;
+  private resultNextText!: Phaser.GameObjects.Text;
+  private resultMenu!: Phaser.GameObjects.Rectangle;
+  private resultMenuText!: Phaser.GameObjects.Text;
+  private nextLevelId: string | null = null;
   private debugFromQuery = false;
 
   constructor() {
@@ -83,19 +120,18 @@ export class UIScene extends Phaser.Scene {
     this.add
       .rectangle(GAME_WIDTH / 2, HUD_TOP / 2, GAME_WIDTH, HUD_TOP, 0x031d2d, 0.96)
       .setStrokeStyle(2, 0x1581a3, 0.7);
-    this.add
-      .text(22, 13, "GUARDIÕES\nDO RECIFE", {
-        fontFamily: "Arial Black, Arial, sans-serif",
-        fontSize: "18px",
-        lineSpacing: -4,
-        color: "#f3fcff",
-      });
+    this.add.text(22, 13, "GUARDIÕES\nDO RECIFE", {
+      fontFamily: "Arial Black, Arial, sans-serif",
+      fontSize: "18px",
+      lineSpacing: -4,
+      color: "#f3fcff",
+    });
     this.pearlText = this.add.text(206, 24, "◉ 180", this.topStyle("#ffe69a"));
-    this.healthText = this.add.text(350, 24, "RECIFE ♥ 20/20", this.topStyle("#82f1bd"));
-    this.waveText = this.add.text(568, 24, "ONDA 1/5", this.topStyle("#d4f7ff"));
-    this.timerText = this.add.text(705, 24, "EM 10s", this.topStyle("#75e2f5"));
+    this.healthText = this.add.text(340, 24, "RECIFE ♥ 20/20", this.topStyle("#82f1bd"));
+    this.waveText = this.add.text(548, 24, "ONDA 1/5", this.topStyle("#d4f7ff"));
+    this.timerText = this.add.text(690, 24, "EM 10s", this.topStyle("#75e2f5"));
     this.messageText = this.add
-      .text(905, 36, "", {
+      .text(915, 36, "", {
         fontFamily: "Arial, sans-serif",
         fontSize: "14px",
         fontStyle: "bold",
@@ -105,9 +141,9 @@ export class UIScene extends Phaser.Scene {
       })
       .setOrigin(0.5);
 
-    this.pauseButton = this.button(1143, 36, 48, 42, "Ⅱ", () => EventBus.emit(Events.togglePause));
+    this.pauseButton = this.button(HUD_LAYOUT.pauseButtonX, HUD_LAYOUT.topButtonY, 48, 42, "Ⅱ", () => EventBus.emit(Events.togglePause));
     this.pauseText = this.pauseButton.getData("label") as Phaser.GameObjects.Text;
-    this.muteButton = this.button(1201, 36, 48, 42, "♪", () => EventBus.emit(Events.toggleMute));
+    this.muteButton = this.button(HUD_LAYOUT.muteButtonX, HUD_LAYOUT.topButtonY, 48, 42, "♪", () => EventBus.emit(Events.toggleMute));
     this.muteText = this.muteButton.getData("label") as Phaser.GameObjects.Text;
   }
 
@@ -116,7 +152,7 @@ export class UIScene extends Phaser.Scene {
     this.add
       .rectangle(GAME_WIDTH / 2, centerY, GAME_WIDTH, HUD_BOTTOM, 0x031d2d, 0.97)
       .setStrokeStyle(2, 0x1581a3, 0.7);
-    this.add.text(18, GAME_HEIGHT - HUD_BOTTOM + 8, "GUARDIÕES", {
+    this.add.text(18, GAME_HEIGHT - HUD_BOTTOM + 6, "GUARDIÕES", {
       fontFamily: "Arial, sans-serif",
       fontSize: "11px",
       fontStyle: "bold",
@@ -126,65 +162,88 @@ export class UIScene extends Phaser.Scene {
 
     this.cards = GUARDIAN_ORDER.map((id, index) => {
       const definition = GUARDIANS[id];
-      const x = 72 + index * 148;
+      const x = HUD_LAYOUT.cardStartX + index * HUD_LAYOUT.cardStep;
       const background = this.add
-        .rectangle(x, centerY + 10, 136, 78, 0x0a3c53, 1)
+        .rectangle(x, centerY + 10, HUD_LAYOUT.cardWidth, 78, 0x0a3c53, 1)
         .setStrokeStyle(2, definition.color, 0.78)
         .setInteractive({ useHandCursor: true });
       background.on("pointerdown", () => EventBus.emit(Events.selectGuardian, id));
-      const icon = id === "pistol-shrimp"
-        ? this.add.image(x - 45, centerY + 5, SHRIMP_LEVEL_TEXTURES[0].idle).setScale(0.5)
-        : this.add.circle(x - 45, centerY + 5, 17, definition.color, 1).setStrokeStyle(3, definition.accent, 1);
+      const icon = id === "pistol-shrimp" && this.textures.exists(SHRIMP_LEVEL_TEXTURES[0].idle)
+        ? this.add.image(x - 34, centerY + 6, SHRIMP_LEVEL_TEXTURES[0].idle).setScale(0.36)
+        : this.add.circle(x - 34, centerY + 6, 13, definition.color, 1).setStrokeStyle(3, definition.accent, 1);
       icon.setData("guardian", id);
-      const name = this.add.text(x - 20, centerY - 17, definition.shortName, {
+      const name = this.add.text(x - 17, centerY - 20, definition.shortName, {
         fontFamily: "Arial, sans-serif",
-        fontSize: "14px",
+        fontSize: "12px",
         fontStyle: "bold",
         color: "#f3fbff",
       });
-      const cost = this.add.text(x - 20, centerY + 7, `◉ ${definition.cost}`, {
+      const cost = this.add.text(x - 17, centerY - 2, `◉ ${definition.cost}`, {
         fontFamily: "Arial, sans-serif",
-        fontSize: "13px",
+        fontSize: "12px",
         color: "#ffe69a",
+      });
+      this.add.text(x - 17, centerY + 16, definition.role, {
+        fontFamily: "Arial, sans-serif",
+        fontSize: "9px",
+        color: "#8dcbd8",
       });
       return { id, background, icon, name, cost };
     });
 
     this.add
-      .rectangle(695, centerY + 10, 355, 78, 0x092f43, 1)
+      .rectangle(HUD_LAYOUT.panelX, centerY + 4, HUD_LAYOUT.panelWidth, 100, 0x092f43, 1)
       .setStrokeStyle(2, 0x3da7bd, 0.6);
-    this.upgradeTitle = this.add.text(530, centerY - 22, "Selecione um Guardião posicionado", {
+    const panelLeft = HUD_LAYOUT.panelX - HUD_LAYOUT.panelWidth / 2 + 10;
+    this.upgradeTitle = this.add.text(panelLeft, GAME_HEIGHT - HUD_BOTTOM + 10, "Selecione um Guardião posicionado", {
       fontFamily: "Arial, sans-serif",
-      fontSize: "14px",
+      fontSize: "13px",
       fontStyle: "bold",
       color: "#d9f8ff",
     });
-    this.upgradeDescription = this.add.text(530, centerY + 1, "Toque em um Guardião no mapa para ver o upgrade.", {
+    this.upgradeDescription = this.add.text(panelLeft, GAME_HEIGHT - HUD_BOTTOM + 28, "Toque em um Guardião no mapa para ver os ramos de upgrade e vender.", {
       fontFamily: "Arial, sans-serif",
-      fontSize: "11px",
+      fontSize: "10px",
       color: "#8dcbd8",
-      wordWrap: { width: 210 },
+      wordWrap: { width: HUD_LAYOUT.panelWidth - 20 },
+      lineSpacing: 1,
     });
-    this.upgradeButton = this.button(817, centerY + 12, 92, 48, "UPGRADE", () => EventBus.emit(Events.upgradeGuardian));
-    this.upgradeButtonText = this.upgradeButton.getData("label") as Phaser.GameObjects.Text;
-    this.upgradeButton.setVisible(false);
-    this.upgradeButtonText.setVisible(false);
 
-    this.skipButton = this.button(928, centerY + 11, 92, 48, "PULAR  ␣", () => EventBus.emit(Events.skipCountdown));
+    this.optionButtons = (["a", "b"] as BranchId[]).map((slot, index) => {
+      const background = this.button(HUD_LAYOUT.optionButtonXs[index], HUD_LAYOUT.optionButtonY, 104, 34, "", () => {
+        const option = this.optionButtons[index].option;
+        if (option) EventBus.emit(Events.upgradeGuardian, option.branchId);
+      });
+      const label = background.getData("label") as Phaser.GameObjects.Text;
+      label.setFontSize(10);
+      background.setVisible(false);
+      label.setVisible(false);
+      return { slot, background, label, option: null };
+    });
+
+    this.sellButton = this.button(HUD_LAYOUT.sellButtonX, HUD_LAYOUT.optionButtonY, 96, 34, "VENDER", () => EventBus.emit(Events.sellGuardian));
+    this.sellButtonText = this.sellButton.getData("label") as Phaser.GameObjects.Text;
+    this.sellButtonText.setFontSize(10);
+    this.sellButton.setFillStyle(0x4a2a33, 1).setStrokeStyle(2, 0xff8290, 0.8);
+    this.sellButton.setVisible(false);
+    this.sellButtonText.setVisible(false);
+
+    this.skipButton = this.button(HUD_LAYOUT.skipButtonX, HUD_LAYOUT.skipButtonY, 84, 34, "PULAR  ␣", () => EventBus.emit(Events.skipCountdown));
     this.skipButtonText = this.skipButton.getData("label") as Phaser.GameObjects.Text;
 
-    this.button(1138, centerY + 11, 96, 48, "REINICIAR", () => EventBus.emit(Events.restart));
-    this.add
-      .text(1138, centerY - 30, "RECIFE 1", {
+    this.button(HUD_LAYOUT.restartButtonX, HUD_LAYOUT.restartButtonY, 120, 34, "REINICIAR", () => EventBus.emit(Events.restart));
+    this.button(HUD_LAYOUT.menuButtonX, HUD_LAYOUT.menuButtonY, 120, 34, "FASES", () => EventBus.emit(Events.openLevelSelect));
+    this.levelLabel = this.add
+      .text(HUD_LAYOUT.restartButtonX, GAME_HEIGHT - HUD_BOTTOM + 8, "RECIFE 1", {
         fontFamily: "Arial, sans-serif",
-        fontSize: "11px",
+        fontSize: "10px",
         color: "#69bfd1",
       })
-      .setOrigin(0.5);
+      .setOrigin(0.5, 0);
   }
 
   private createDebugPanel(): void {
-    this.debugToggle = this.button(1030, GAME_HEIGHT - HUD_BOTTOM / 2 + 11, 88, 48, "DEBUG F2", () => EventBus.emit(Events.toggleDebug));
+    this.debugToggle = this.button(HUD_LAYOUT.debugButtonX, HUD_LAYOUT.debugButtonY, 84, 34, "DEBUG F2", () => EventBus.emit(Events.toggleDebug));
     this.debugToggleText = this.debugToggle.getData("label") as Phaser.GameObjects.Text;
     this.debugToggle.setVisible(this.debugFromQuery);
     this.debugToggleText.setVisible(this.debugFromQuery);
@@ -265,13 +324,22 @@ export class UIScene extends Phaser.Scene {
         fontFamily: "Arial, sans-serif",
         fontSize: "19px",
         color: "#a7e4f0",
+        align: "center",
       })
       .setOrigin(0.5)
       .setVisible(false);
-    this.resultRestart = this.button(GAME_WIDTH / 2, 408, 180, 54, "JOGAR DE NOVO", () => EventBus.emit(Events.restart));
+    this.resultRestart = this.button(GAME_WIDTH / 2 - 210, 408, 180, 54, "JOGAR DE NOVO", () => EventBus.emit(Events.restart));
     this.resultRestartText = this.resultRestart.getData("label") as Phaser.GameObjects.Text;
-    this.resultRestart.setVisible(false);
-    this.resultRestartText.setVisible(false);
+    this.resultNext = this.button(GAME_WIDTH / 2, 408, 180, 54, "PRÓXIMA FASE", () => {
+      if (this.nextLevelId) EventBus.emit(Events.startLevel, this.nextLevelId);
+    });
+    this.resultNextText = this.resultNext.getData("label") as Phaser.GameObjects.Text;
+    this.resultNext.setFillStyle(0x13728a, 1).setStrokeStyle(2, 0x67f2ac, 0.9);
+    this.resultMenu = this.button(GAME_WIDTH / 2 + 210, 408, 180, 54, "FASES", () => EventBus.emit(Events.openLevelSelect));
+    this.resultMenuText = this.resultMenu.getData("label") as Phaser.GameObjects.Text;
+    [this.resultRestart, this.resultRestartText, this.resultNext, this.resultNextText, this.resultMenu, this.resultMenuText].forEach(
+      (item) => item.setVisible(false),
+    );
   }
 
   private renderSnapshot(snapshot: HudSnapshot): void {
@@ -285,6 +353,8 @@ export class UIScene extends Phaser.Scene {
     this.muteText.setText(snapshot.muted ? "×♪" : "♪");
     this.skipButton.setVisible(snapshot.canSkipCountdown && !snapshot.gameOver);
     this.skipButtonText.setVisible(snapshot.canSkipCountdown && !snapshot.gameOver);
+    this.levelLabel.setText(`FASE ${snapshot.levelIndex + 1}/${snapshot.levelCount} · ${snapshot.levelName.toUpperCase()}`);
+    this.nextLevelId = snapshot.nextLevelId;
 
     this.cards.forEach((card) => {
       const selected = snapshot.selectedGuardianId === card.id;
@@ -296,28 +366,58 @@ export class UIScene extends Phaser.Scene {
       card.cost.setColor(affordable ? "#ffe69a" : "#ff8585");
     });
 
+    this.renderUpgradePanel(snapshot);
+    this.renderDebugState(snapshot.debug);
+    this.renderResult(snapshot);
+  }
+
+  private renderUpgradePanel(snapshot: HudSnapshot): void {
     const selected = snapshot.selectedPlacedGuardian;
-    if (selected) {
-      const hasNext = selected.nextUpgradeCost !== null;
-      this.upgradeTitle.setText(
-        `${selected.name} · nível ${selected.upgradeLevel}/${selected.maxUpgradeLevel}${selected.nextUpgradeName ? ` · ${selected.nextUpgradeName}` : ""}`,
-      );
-      this.upgradeDescription.setText(selected.nextUpgradeDescription ?? "Todos os upgrades instalados.");
-      this.upgradeButtonText.setText(hasNext ? `◉ ${selected.nextUpgradeCost}` : "MÁXIMO");
-      this.upgradeButton.setVisible(hasNext);
-      this.upgradeButtonText.setVisible(hasNext);
-      if (hasNext) {
-        this.upgradeButton.setFillStyle(snapshot.pearls >= selected.nextUpgradeCost! ? 0x13728a : 0x563947, 1);
-      }
-    } else {
+    if (!selected) {
       this.upgradeTitle.setText("Selecione um Guardião posicionado");
-      this.upgradeDescription.setText("Toque em um Guardião no mapa para ver o upgrade.");
-      this.upgradeButton.setVisible(false);
-      this.upgradeButtonText.setVisible(false);
+      this.upgradeTitle.setColor("#d9f8ff");
+      this.upgradeDescription.setText("Toque em um Guardião no mapa para ver os ramos de upgrade e vender.");
+      this.optionButtons.forEach((button) => {
+        button.option = null;
+        button.background.setVisible(false);
+        button.label.setVisible(false);
+      });
+      this.sellButton.setVisible(false);
+      this.sellButtonText.setVisible(false);
+      return;
     }
 
-    this.renderDebugState(snapshot.debug);
-    this.renderResult(snapshot.gameOver);
+    const branchLabel = selected.branchName ? ` · ${selected.branchName}` : "";
+    this.upgradeTitle.setText(`${selected.name} · nível ${selected.upgradeLevel}/${selected.maxUpgradeLevel}${branchLabel}`);
+    this.upgradeTitle.setColor(selected.branchColor !== null ? `#${selected.branchColor.toString(16).padStart(6, "0")}` : "#d9f8ff");
+
+    if (selected.options.length === 0) {
+      this.upgradeDescription.setText(`Todos os upgrades do ramo ${selected.branchName ?? ""} instalados. Investido: ◉ ${selected.invested}.`);
+    } else if (selected.options.length === 1) {
+      const option = selected.options[0];
+      this.upgradeDescription.setText(`${option.name}: ${option.description}`);
+    } else {
+      this.upgradeDescription.setText(
+        selected.options.map((option) => `${option.branchName.toUpperCase()} · ${option.name}: ${option.description}`).join("\n"),
+      );
+    }
+
+    this.optionButtons.forEach((button, index) => {
+      const option = selected.options[index] ?? null;
+      button.option = option;
+      const visible = option !== null;
+      button.background.setVisible(visible);
+      button.label.setVisible(visible);
+      if (!option) return;
+      const affordable = snapshot.pearls >= option.cost;
+      button.label.setText(`${option.branchName.toUpperCase()} ${"I".repeat(option.level)}\n◉ ${option.cost}`);
+      button.background.setFillStyle(affordable ? 0x13728a : 0x563947, 1);
+      button.background.setStrokeStyle(2, option.branchColor, 0.95);
+    });
+
+    this.sellButtonText.setText(`VENDER\n◉ ${selected.sellValue}`);
+    this.sellButton.setVisible(true);
+    this.sellButtonText.setVisible(true);
   }
 
   private renderDebugState(debug: DebugFlags): void {
@@ -351,17 +451,29 @@ export class UIScene extends Phaser.Scene {
     });
   }
 
-  private renderResult(result: HudSnapshot["gameOver"]): void {
+  private renderResult(snapshot: HudSnapshot): void {
+    const result = snapshot.gameOver;
     const visible = result !== null;
     this.resultShade.setVisible(visible);
     this.resultTitle.setVisible(visible);
     this.resultSubtitle.setVisible(visible);
     this.resultRestart.setVisible(visible);
     this.resultRestartText.setVisible(visible);
+    this.resultMenu.setVisible(visible);
+    this.resultMenuText.setVisible(visible);
+    const showNext = visible && result === "victory" && snapshot.nextLevelId !== null;
+    this.resultNext.setVisible(showNext);
+    this.resultNextText.setVisible(showNext);
     if (!result) return;
     this.resultTitle.setText(result === "victory" ? "RECIFE PROTEGIDO!" : "O RECIFE CAIU");
     this.resultTitle.setColor(result === "victory" ? "#8dffd0" : "#ff858b");
-    this.resultSubtitle.setText(result === "victory" ? "As cinco ondas foram vencidas." : "Reposicione sua defesa e tente novamente.");
+    this.resultSubtitle.setText(
+      result === "victory"
+        ? snapshot.nextLevelId
+          ? `${snapshot.levelName}: ${snapshot.totalWaves} ondas vencidas. A próxima fase foi liberada!`
+          : `${snapshot.levelName}: ${snapshot.totalWaves} ondas vencidas. Você protegeu todo o Recife!`
+        : "Reposicione sua defesa e tente novamente.",
+    );
   }
 
   private button(

@@ -1,6 +1,7 @@
 import Phaser from "phaser";
 import { preloadRecifeOneAssets } from "../assets/recifeOneAssets";
 import { GAME_HEIGHT, GAME_WIDTH } from "../constants";
+import { getLevel } from "../data/levels";
 
 export class BootScene extends Phaser.Scene {
   constructor() {
@@ -13,6 +14,7 @@ export class BootScene extends Phaser.Scene {
 
   create(): void {
     this.cameras.main.setBackgroundColor("#052f49");
+    const requestedLevel = getLevel(new URLSearchParams(window.location.search).get("level"));
     this.add
       .text(GAME_WIDTH / 2, GAME_HEIGHT / 2 - 18, "GUARDIÕES DO RECIFE", {
         fontFamily: "Arial Black, Arial, sans-serif",
@@ -22,13 +24,16 @@ export class BootScene extends Phaser.Scene {
       })
       .setOrigin(0.5);
     this.add
-      .text(GAME_WIDTH / 2, GAME_HEIGHT / 2 + 24, "Preparando Recife 1…", {
+      .text(GAME_WIDTH / 2, GAME_HEIGHT / 2 + 24, requestedLevel ? `Preparando ${requestedLevel.name}…` : "Carregando fases…", {
         fontFamily: "Arial, sans-serif",
         fontSize: "17px",
         color: "#75dff4",
       })
       .setOrigin(0.5);
 
-    this.time.delayedCall(80, () => this.scene.start("GameScene"));
+    this.time.delayedCall(80, () => {
+      if (requestedLevel) this.scene.start("GameScene", { levelId: requestedLevel.id });
+      else this.scene.start("LevelSelectScene");
+    });
   }
 }

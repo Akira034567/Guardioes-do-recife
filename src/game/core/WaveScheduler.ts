@@ -21,8 +21,10 @@ export class WaveScheduler {
     private readonly waves: readonly WaveDefinition[],
     initialDelayMs: number,
     private readonly betweenWaveDelayMs: number,
+    startWaveIndex = 0,
   ) {
     if (waves.length === 0) throw new Error("At least one wave is required.");
+    this.waveIndex = Math.max(0, Math.min(waves.length - 1, Math.floor(startWaveIndex)));
     this.countdownRemainingMs = initialDelayMs;
     this.resetGroups();
   }
