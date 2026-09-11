@@ -34,6 +34,7 @@ export interface ProjectileStepResult {
 }
 
 const wrapAngle = (angle: number): number => Math.atan2(Math.sin(angle), Math.cos(angle));
+const MAX_SUBSTEP_MS = 20;
 
 /**
  * Simulação pura do projétil do Camarão. Regra global: um mesmo disparo nunca
@@ -73,7 +74,23 @@ export class ProjectileCore {
     return Math.atan2(this.velocityY, this.velocityX);
   }
 
+  /**
+   * Avança o projétil. Quadros longos são divididos em sub-passos de até
+   * `MAX_SUBSTEP_MS` para a colisão não pular inimigos em máquinas lentas.
+   */
   step(deltaMs: number, targets: readonly ProjectileTarget[]): ProjectileStepResult {
+    const substeps = Math.max(1, Math.ceil(deltaMs / MAX_SUBSTEP_MS));
+    if (substeps === 1) return this.advance(deltaMs, targets);
+    const hits: ProjectileHit[] = [];
+    for (let index = 0; index < substeps; index += 1) {
+      const result = this.advance(deltaMs / substeps, targets);
+      hits.push(...result.hits);
+      if (result.expired) return { hits, expired: true };
+    }
+    return { hits, expired: false };
+  }
+
+  private advance(deltaMs: number, targets: readonly ProjectileTarget[]): ProjectileStepResult {
     const deltaSeconds = deltaMs / 1000;
     this.lifetimeMs += deltaMs;
     this.steer(deltaSeconds, targets);

@@ -1,5 +1,5 @@
 import Phaser from "phaser";
-import { shrimpTextureForLevel, type ShrimpVisualState } from "../assets/recifeOneAssets";
+import { artTextureFor, artVariant, GUARDIAN_ART, hasGuardianArt, type ArtKind } from "../assets/guardianArt";
 import { DEPTH } from "../constants";
 import { NEUTRAL_AURA, sameAura } from "../core/Auras";
 import { selectLeadingTarget } from "../core/Combat";
@@ -68,10 +68,11 @@ export class Guardian extends Phaser.GameObjects.Container {
     this.bodyGraphic = scene.add.graphics();
     this.badgeGraphic = scene.add.graphics();
     this.add([this.bodyGraphic, this.badgeGraphic]);
-    const shrimpIdleTexture = shrimpTextureForLevel(0, "idle");
-    if (definition.id === "pistol-shrimp" && scene.textures.exists(shrimpIdleTexture)) {
-      this.artSprite = new Phaser.GameObjects.Image(scene, 0, this.artBaselineY, shrimpIdleTexture);
-      this.artSprite.setOrigin(0.5, 1).setScale(0.88);
+    if (hasGuardianArt(scene, definition.id)) {
+      // As imagens preservam a célula da tabela: a criatura fica encostada na base do canvas, então a
+      // âncora é o centro da base e uma escala única por Guardião mantém a proporção entre variantes.
+      this.artSprite = new Phaser.GameObjects.Image(scene, 0, this.artBaselineY, this.artTexture("idle"));
+      this.artSprite.setOrigin(0.5, 1).setScale(GUARDIAN_ART[definition.id].scale);
       this.add(this.artSprite);
       this.bodyGraphic.setVisible(false);
     } else {
@@ -99,11 +100,21 @@ export class Guardian extends Phaser.GameObjects.Container {
   }
 
   get currentVisualKey(): string {
-    return this.artSprite ? `shrimp-level-${this.upgradeLevel}-${this.shrimpVisualState}` : this.visualState;
+    return this.artSprite ? this.artTexture(this.artVisualState) : this.visualState;
   }
 
   get currentTextureKey(): string | null {
     return this.artSprite?.texture.key ?? null;
+  }
+
+  /** Pasta da variante visual atual (`base`, `perfuracao-1`, ...). */
+  get artVariantFolder(): string {
+    return artVariant(this.definition.id, this.progress).folder;
+  }
+
+  /** Chave de textura de um tipo de imagem para a variante visual atual. */
+  artTexture(kind: ArtKind): string {
+    return artTextureFor(this.definition.id, this.progress, kind);
   }
 
   // -------------------------------------------------------------- upgrades
@@ -347,14 +358,14 @@ export class Guardian extends Phaser.GameObjects.Container {
     }
   }
 
-  private get shrimpVisualState(): ShrimpVisualState {
+  private get artVisualState(): "idle" | "attack" {
     return this.visualState === "idle" || this.visualState === "disabled" ? "idle" : "attack";
   }
 
   private syncArtTexture(): void {
     if (!this.artSprite) return;
-    const texture = shrimpTextureForLevel(this.upgradeLevel, this.shrimpVisualState);
-    if (this.artSprite.texture.key !== texture) this.artSprite.setTexture(texture);
+    const texture = this.artTexture(this.artVisualState);
+    if (this.artSprite.texture.key !== texture && this.scene.textures.exists(texture)) this.artSprite.setTexture(texture);
   }
 
   /** Anel colorido do ramo escolhido + marcadores de nível; halo quando recebe aura. */

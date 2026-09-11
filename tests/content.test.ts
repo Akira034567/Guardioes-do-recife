@@ -1,11 +1,5 @@
 import { describe, expect, it } from "vitest";
-import {
-  RECIFE_ONE_BACKGROUND_KEY,
-  RECIFE_ONE_IMAGE_ASSETS,
-  SHRIMP_LEVEL_TEXTURES,
-  shrimpProjectileTextureForLevel,
-  shrimpTextureForLevel,
-} from "../src/game/assets/recifeOneAssets";
+import { RECIFE_ONE_BACKGROUND_KEY } from "../src/game/assets/recifeOneAssets";
 import { containsPoint } from "../src/game/core/CurrentField";
 import { RoutePath } from "../src/game/core/RoutePath";
 import { GUARDIAN_BALANCE } from "../src/game/data/balance";
@@ -67,23 +61,8 @@ describe("Recife 1 content contracts", () => {
     expect(hold!.immunityMs).toBeGreaterThan(hold!.durationMs * 4);
   });
 
-  it("maps one shrimp projectile image to each upgrade level", () => {
-    expect(SHRIMP_LEVEL_TEXTURES).toHaveLength(3);
-    SHRIMP_LEVEL_TEXTURES.forEach((textures, level) => {
-      expect(shrimpTextureForLevel(level, "idle")).toBe(textures.idle);
-      expect(shrimpTextureForLevel(level, "attack")).toBe(textures.attack);
-      expect(shrimpProjectileTextureForLevel(level)).toBe(textures.projectile);
-      expect(textures.idle).not.toBe(textures.attack);
-    });
-    expect(shrimpProjectileTextureForLevel(99)).toBe(SHRIMP_LEVEL_TEXTURES[2].projectile);
-  });
-
-  it("registers the level artwork and every shrimp runtime image", () => {
-    const keys = RECIFE_ONE_IMAGE_ASSETS.map((asset) => asset.key);
-    expect(keys).toContain(RECIFE_ONE_BACKGROUND_KEY);
+  it("paints Recife 1 with the registered background", () => {
     expect(RECIFE_ONE.backgroundKey).toBe(RECIFE_ONE_BACKGROUND_KEY);
-    expect(new Set(keys).size).toBe(keys.length);
-    expect(RECIFE_ONE_IMAGE_ASSETS).toHaveLength(10);
   });
 
   it("aligns platforms and the active current to the painted landmarks", () => {

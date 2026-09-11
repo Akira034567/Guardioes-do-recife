@@ -10,11 +10,12 @@ export const RECIFE_FOUR: LevelDefinition = {
   name: "Correntes Cruzadas",
   subtitle: "Uma corrente empurra, a outra segura",
   theme: { water: 0x1b4f7a, sand: 0x94a9b8, path: 0xc2dcef, rock: 0x35485c },
-  startingPearls: ECONOMY.startingPearls + 60,
+  startingPearls: ECONOMY.startingPearls + 120,
   reefHealth: ECONOMY.reefHealth,
   initialWaveDelayMs: 10_000,
   betweenWaveDelayMs: 8_000,
-  enemyScaling: { health: 1.2, speed: 1.03, reward: 1 },
+  enemyScaling: { health: 0.95, speed: 1.03, reward: 1.15 },
+  enemyOverrides: { tidebreaker: { maxHealth: 550 } },
   waypoints: [
     { x: -40, y: 150 },
     { x: 140, y: 150 },
@@ -64,54 +65,54 @@ export const RECIFE_FOUR: LevelDefinition = {
     {
       name: "Patrulha",
       groups: [
-        { enemyId: "swimmer", count: 8, intervalMs: 750, delayMs: 0 },
-        { enemyId: "needlefish", count: 4, intervalMs: 700, delayMs: 3500 },
+        { enemyId: "swimmer", count: 6, intervalMs: 750, delayMs: 0 },
+        { enemyId: "needlefish", count: 3, intervalMs: 700, delayMs: 3500 },
       ],
     },
     {
       name: "Nuvem de Peixinhos",
       groups: [
-        { enemyId: "minnow", count: 16, intervalMs: 220, delayMs: 0 },
-        { enemyId: "shellback", count: 2, intervalMs: 1800, delayMs: 2000 },
+        { enemyId: "minnow", count: 12, intervalMs: 220, delayMs: 0 },
+        { enemyId: "shellback", count: 1, intervalMs: 1800, delayMs: 2000 },
       ],
     },
     {
       name: "Escolta",
       groups: [
-        { enemyId: "shellback", count: 3, intervalMs: 1500, delayMs: 0 },
+        { enemyId: "shellback", count: 2, intervalMs: 1500, delayMs: 0 },
         { enemyId: "moray", count: 1, intervalMs: 1000, delayMs: 2500 },
-        { enemyId: "dartfish", count: 6, intervalMs: 600, delayMs: 4000 },
+        { enemyId: "dartfish", count: 4, intervalMs: 600, delayMs: 4000 },
       ],
     },
     {
       name: "Velocidade Máxima",
       groups: [
-        { enemyId: "needlefish", count: 10, intervalMs: 500, delayMs: 0 },
-        { enemyId: "dartfish", count: 8, intervalMs: 600, delayMs: 2500 },
+        { enemyId: "needlefish", count: 7, intervalMs: 500, delayMs: 0 },
+        { enemyId: "dartfish", count: 5, intervalMs: 600, delayMs: 2500 },
       ],
     },
     {
       name: "Parede Blindada",
       groups: [
-        { enemyId: "shellback", count: 6, intervalMs: 1300, delayMs: 0 },
-        { enemyId: "minnow", count: 12, intervalMs: 240, delayMs: 3000 },
+        { enemyId: "shellback", count: 4, intervalMs: 1300, delayMs: 0 },
+        { enemyId: "minnow", count: 8, intervalMs: 240, delayMs: 3000 },
       ],
     },
     {
       name: "Moreias Gêmeas",
       groups: [
         { enemyId: "moray", count: 2, intervalMs: 1200, delayMs: 0 },
-        { enemyId: "swimmer", count: 8, intervalMs: 700, delayMs: 2000 },
-        { enemyId: "needlefish", count: 6, intervalMs: 600, delayMs: 6000 },
+        { enemyId: "swimmer", count: 6, intervalMs: 700, delayMs: 2000 },
+        { enemyId: "needlefish", count: 4, intervalMs: 600, delayMs: 6000 },
       ],
     },
     {
       name: "Quebra-Marés Cruzado",
       groups: [
-        { enemyId: "tidebreaker", count: 1, intervalMs: 1000, delayMs: 0 },
-        { enemyId: "shellback", count: 4, intervalMs: 1400, delayMs: 3000 },
-        { enemyId: "moray", count: 1, intervalMs: 1000, delayMs: 9000 },
-        { enemyId: "minnow", count: 12, intervalMs: 230, delayMs: 11000 },
+        { enemyId: "shellback", count: 3, intervalMs: 1400, delayMs: 0 },
+        { enemyId: "moray", count: 1, intervalMs: 1000, delayMs: 4000 },
+        { enemyId: "minnow", count: 8, intervalMs: 230, delayMs: 7000 },
+        { enemyId: "tidebreaker", count: 1, intervalMs: 1000, delayMs: 10000 },
       ],
     },
   ],

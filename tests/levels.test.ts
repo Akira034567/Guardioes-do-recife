@@ -96,7 +96,8 @@ describe("level registry", () => {
       expect(lastWave.groups.some((group) => ENEMIES[group.enemyId].isBoss)).toBe(true);
       const cheapestPair = GUARDIANS["pistol-shrimp"].cost + GUARDIANS["reef-crab"].cost;
       expect(level.startingPearls).toBeGreaterThanOrEqual(cheapestPair);
-      expect(level.startingPearls).toBeLessThan(cheapestPair + GUARDIANS["pistol-shrimp"].cost + 20);
+      // Fases avançadas abrem com mais pérolas, mas nunca com um exército pronto.
+      expect(level.startingPearls).toBeLessThanOrEqual(cheapestPair * 2);
       expect(level.reefHealth).toBeGreaterThan(ENEMIES.tidebreaker.reefDamage);
     });
   });

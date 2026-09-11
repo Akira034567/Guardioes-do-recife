@@ -1,15 +1,18 @@
 # Assets de runtime
 
 - `levels/recife-one/background.png`: fundo jogável do Recife 1.
-- `guardians/pistol-shrimp/level-0`: aparência base do Camarão (em uso pelo código).
-- `guardians/pistol-shrimp/level-1`: aparência depois do primeiro upgrade (em uso pelo código).
-- `guardians/pistol-shrimp/level-2`: aparência depois do segundo upgrade (em uso pelo código).
+- `guardians/<id>/<variante>/`: arte dos cinco Guardiões recortada das tabelas de upgrade (abaixo). É o que o
+  jogo usa: `idle`/`attack` no mapa, `projectile` como projétil (Camarão) ou como desenho da habilidade
+  (raio, pulso, jato, giro), `impact` no ponto de acerto e `portrait` no card do Guardião selecionado.
+- `guardians/pistol-shrimp/level-0..2`: arte antiga do Camarão, linear por nível. Não é mais carregada;
+  fica só como referência e pode ser removida.
 
-Cada nível possui exatamente uma imagem `idle`, uma imagem `attack` e uma imagem `projectile`. O movimento passivo é feito por transformação, sem alternar imagens de níveis diferentes.
+O registro de chaves, caminhos, escala e estilo de habilidade de cada variante fica em
+`src/game/assets/guardianArt.ts`. A variante visual é `base` até o primeiro upgrade e depois a do ramo e
+nível escolhidos (ex.: `perfuracao-2`). As imagens de um mesmo Guardião preservam a célula da tabela, então
+uma única escala por Guardião mantém a proporção entre variantes.
 
-As chaves, caminhos e animações são registrados em `src/game/assets/recifeOneAssets.ts`.
-
-## Árvore de upgrades do Camarão-Pistola (ainda não plugada no código)
+## Árvore de upgrades do Camarão-Pistola
 
 Recortes da tabela `art/guardians/pistol-shrimp/upgrade-sheet.png`, gerados por `scripts/slice-upgrade-sheet.py`. Uma pasta por variante, seguindo a árvore de `GUARDIANS["pistol-shrimp"].branches`:
 
@@ -35,13 +38,13 @@ Em `impacto-2/impact.png` fica um buraco no formato do rótulo "4. IMPACTO", que
 cima das pedras. O script imprime, para cada arquivo, em quais bordas o sprite encosta (T/B/L/R) e
 aceita `SLICE_PREVIEW=<arquivo.png>` para gerar uma prancha de conferência.
 
-## Árvores de upgrade dos outros guardiões (corte bruto, ainda não plugadas no código)
+## Árvores de upgrade dos outros guardiões
 
 Recortes das tabelas `art/guardians/<guardiao>/upgrade-sheet.png`, gerados por
 `scripts/slice-upgrade-cells.py`. Diferente do camarão, aqui cada PNG é o retângulo interno inteiro da
 célula, só sem a moldura: nada foi reposicionado nem recortado no bbox, então todas as células de uma
-coluna têm o mesmo tamanho e os sprites mantêm posição e proporção da prancha. Rótulos ("1. IDLE"),
-tiras azul-marinho e textos dos retratos ficam nos arquivos para ajuste manual.
+coluna têm o mesmo tamanho e os sprites mantêm posição e proporção da prancha. Rótulos e tiras foram
+limpos à mão depois do corte; os retratos mantêm o painel de texto da tabela e funcionam como card.
 
 | Guardião | Pastas | Ramos na tabela |
 | --- | --- | --- |

@@ -1,5 +1,5 @@
 import Phaser from "phaser";
-import { SHRIMP_LEVEL_TEXTURES, shrimpProjectileTextureForLevel } from "../assets/recifeOneAssets";
+import { artTextureKey, artVariant, GUARDIAN_ART, hasGuardianArt, type AbilityStyle } from "../assets/guardianArt";
 import { DEPTH, GAME_HEIGHT, GAME_WIDTH, HUD_BOTTOM, HUD_TOP } from "../constants";
 import { AbilityCooldown } from "../core/AbilityCooldown";
 import { resolveAura, type AuraSource } from "../core/Auras";
@@ -16,6 +16,7 @@ import { EventBus, Events } from "../EventBus";
 import { Enemy } from "../objects/Enemy";
 import { Guardian } from "../objects/Guardian";
 import { Projectile } from "../objects/Projectile";
+import { ArtEffects } from "../systems/ArtEffects";
 import { AudioManager } from "../systems/AudioManager";
 import { DebugOverlay } from "../systems/DebugOverlay";
 import { drawLevelBackdrop } from "../systems/LevelBackdrop";
@@ -64,6 +65,8 @@ interface ElectricFieldView {
   slowDurationMs: number;
   damageDealt: Map<string, number>;
   graphic: Phaser.GameObjects.Graphics;
+  /** Anel elétrico da tabela de upgrade, quando a arte está carregada. */
+  image: Phaser.GameObjects.Image | null;
 }
 
 interface InkCloudView {
@@ -76,6 +79,8 @@ interface InkCloudView {
   slowFactor: number;
   vulnerabilityMultiplier: number;
   graphic: Phaser.GameObjects.Graphics;
+  /** Redemoinho de tinta da tabela de upgrade, quando a arte está carregada. */
+  image: Phaser.GameObjects.Image | null;
 }
 
 interface DamageOptions {
@@ -97,6 +102,7 @@ export class GameScene extends Phaser.Scene {
   private economy!: Economy;
   private scheduler!: WaveScheduler;
   private audio!: AudioManager;
+  private effects!: ArtEffects;
   private debugOverlay!: DebugOverlay;
   private selectionGraphic!: Phaser.GameObjects.Graphics;
   private placementGuideGraphic!: Phaser.GameObjects.Graphics;
@@ -181,6 +187,7 @@ export class GameScene extends Phaser.Scene {
       Number.isFinite(startWave) ? startWave : 0,
     );
     this.audio = new AudioManager();
+    this.effects = new ArtEffects(this);
     this.debugFlags = {
       enabled: debugFromQuery,
       route: true,
@@ -254,7 +261,10 @@ export class GameScene extends Phaser.Scene {
 
     for (const projectile of this.projectiles) {
       const result = projectile.tick(safeDelta, this.level.currents, this.currentReversed, this.enemies);
-      result.hits.forEach((hit) => this.damageEnemy(hit.enemy, hit.damage, { sound: !hit.splash }));
+      result.hits.forEach((hit) => {
+        this.damageEnemy(hit.enemy, hit.damage, { sound: !hit.splash });
+        if (!hit.splash) this.effects.burst(projectile.impactKey, hit.enemy.x, hit.enemy.y, { scale: projectile.impactScale });
+      });
       if (result.expired) projectile.destroy();
     }
 
@@ -582,11 +592,13 @@ export class GameScene extends Phaser.Scene {
     this.electricFields = this.electricFields.filter((field) => {
       if (field.ownerId !== guardian.instanceId) return true;
       field.graphic.destroy();
+      field.image?.destroy();
       return false;
     });
     this.inkClouds = this.inkClouds.filter((cloud) => {
       if (cloud.ownerId !== guardian.instanceId) return true;
       cloud.graphic.destroy();
+      cloud.image?.destroy();
       return false;
     });
     this.abilityCooldowns.delete(guardian.instanceId);
@@ -623,6 +635,7 @@ export class GameScene extends Phaser.Scene {
     const originX = guardian.x + 22;
     const originY = guardian.y;
     const shrimpBalance = GUARDIAN_BALANCE["pistol-shrimp"];
+    const profile = GUARDIAN_ART[guardian.definition.id];
     this.projectiles.push(
       new Projectile(
         this,
@@ -640,7 +653,12 @@ export class GameScene extends Phaser.Scene {
           lifetimeMs: 2200,
           bounds: { minX: -80, maxX: GAME_WIDTH + 80, minY: -80, maxY: GAME_HEIGHT + 80 },
         },
-        guardian.definition.id === "pistol-shrimp" ? shrimpProjectileTextureForLevel(guardian.upgradeLevel) : null,
+        {
+          textureKey: guardian.artTexture("projectile"),
+          scale: profile.effectScale,
+          impactKey: guardian.artTexture("impact"),
+          impactScale: profile.effectScale * 0.9,
+        },
       ),
     );
     this.audio.play("shot");
@@ -664,19 +682,22 @@ export class GameScene extends Phaser.Scene {
         this.shockwave(target.x, target.y, 0xfff27a, 26);
       }
     }
-    this.lightningEffect(guardian, candidates);
+    this.chainEffect(guardian, candidates);
     if (guardian.electricField) this.createElectricField(guardian, target.x, target.y);
     this.audio.play("zap");
   }
 
   private resolvePulse(guardian: Guardian): void {
     const slowFactor = guardian.slowFactor;
-    this.enemies
-      .filter((enemy) => !enemy.dead && !enemy.reachedGoal && enemy.distanceTo(guardian.x, guardian.y) <= guardian.range)
-      .forEach((enemy) => {
-        this.damageEnemy(enemy, guardian.damage);
-        if (slowFactor !== null) enemy.applySlow(slowFactor, guardian.slowDurationMs, this.simulationTimeMs);
-      });
+    const affected = this.enemies.filter(
+      (enemy) => !enemy.dead && !enemy.reachedGoal && enemy.distanceTo(guardian.x, guardian.y) <= guardian.range,
+    );
+    affected.forEach((enemy) => {
+      this.damageEnemy(enemy, guardian.damage);
+      if (slowFactor !== null) enemy.applySlow(slowFactor, guardian.slowDurationMs, this.simulationTimeMs);
+    });
+    this.effects.ring(this.abilityKeyFor(guardian, "ring"), guardian.x, guardian.y + 8, guardian.range * 2);
+    affected.slice(0, 4).forEach((enemy) => this.impactBurst(guardian, enemy.x, enemy.y, 0.7));
     this.shockwave(guardian.x, guardian.y, guardian.definition.accent, guardian.range);
     this.audio.play("pulse");
   }
@@ -694,6 +715,16 @@ export class GameScene extends Phaser.Scene {
       this.damageEnemy(enemy, damage, { armorPiercing: guardian.armorPiercing });
       if (vulnerability) enemy.applyVulnerability(vulnerability.multiplier, vulnerability.durationMs, this.simulationTimeMs);
     });
+    if (guardian.areaAttack || spinning) {
+      this.effects.ring(this.abilityKeyFor(guardian, "ring"), guardian.x, guardian.y + 8, radius * 2, { spin: spinning });
+    } else {
+      const profile = GUARDIAN_ART[guardian.definition.id];
+      this.effects.burst(this.abilityKeyFor(guardian, "burst"), target.x, target.y, {
+        scale: profile.effectScale,
+        rotation: Math.atan2(target.y - guardian.y, target.x - guardian.x),
+      });
+    }
+    targets.slice(0, 4).forEach((enemy) => this.impactBurst(guardian, enemy.x, enemy.y, enemy === target ? 1 : 0.7));
     this.shockwave(guardian.x, guardian.y, guardian.definition.accent, spinning ? radius : 30);
     this.audio.play(spinning ? "pulse" : "impact");
   }
@@ -710,9 +741,58 @@ export class GameScene extends Phaser.Scene {
       this.damageEnemy(enemy, enemy === target ? guardian.damage : Math.ceil(guardian.damage * 0.5), { sound: enemy === target });
       if (vulnerability) enemy.applyVulnerability(vulnerability.multiplier, vulnerability.durationMs, this.simulationTimeMs);
     });
-    this.inkSplash(guardian, target);
+    const jet = this.effects.beam(this.abilityKeyFor(guardian, "beam"), guardian.x + 14, guardian.y - 6, target.x, target.y, 0.5);
+    if (!jet) this.inkSplash(guardian, target);
+    // Ramo Maré Aliada: o desenho da habilidade é a onda de buff, exibida como pulso no próprio Polvo.
+    if (artVariant(guardian.definition.id, guardian.progress).ability === "ring" && !guardian.inkCloud) {
+      this.effects.ring(this.abilityKeyFor(guardian, "ring"), guardian.x, guardian.y + 8, guardian.range * 2, { alpha: 0.6 });
+    }
+    this.impactBurst(guardian, target.x, target.y);
     if (guardian.inkCloud) this.createInkCloud(guardian, target.x, target.y);
     this.audio.play("zap");
+  }
+
+  /**
+   * Imagem "Habilidade" da variante atual quando ela é exibida no estilo pedido; senão, a do primeiro
+   * nível abaixo que seja (por exemplo, o raio do Elétrico I serve à descarga do Elétrico II, cujo
+   * desenho é o anel do Campo Elétrico).
+   */
+  private abilityKeyFor(guardian: Guardian, style: AbilityStyle): string | null {
+    for (let level = guardian.upgradeLevel; level >= 0; level -= 1) {
+      const variant = artVariant(guardian.definition.id, { branchId: guardian.branchId, upgradeLevel: level });
+      if (variant.ability === style) return artTextureKey(guardian.definition.id, variant, "projectile");
+    }
+    return null;
+  }
+
+  private impactBurst(guardian: Guardian, x: number, y: number, factor = 1): void {
+    const profile = GUARDIAN_ART[guardian.definition.id];
+    this.effects.burst(guardian.artTexture("impact"), x, y, { scale: profile.effectScale * 0.9 * factor });
+  }
+
+  /** Descarga da Água-viva: raio esticado até cada alvo em sequência, ou espiral sobre os alvos. */
+  private chainEffect(guardian: Guardian, targets: readonly Enemy[]): void {
+    const beamKey = this.abilityKeyFor(guardian, "beam");
+    const burstKey = this.abilityKeyFor(guardian, "burst");
+    let drawn = false;
+    if (targets.length > 0 && this.effects.has(beamKey)) {
+      let fromX = guardian.x;
+      let fromY = guardian.y - 10;
+      targets.forEach((target, index) => {
+        this.effects.beam(beamKey, fromX, fromY, target.x, target.y, index === 0 ? 0.55 : 0.4);
+        fromX = target.x;
+        fromY = target.y;
+      });
+      drawn = true;
+    } else if (this.effects.has(burstKey)) {
+      const profile = GUARDIAN_ART[guardian.definition.id];
+      targets.forEach((target, index) => {
+        this.effects.burst(burstKey, target.x, target.y, { scale: profile.effectScale * (index === 0 ? 1 : 0.7), spin: true });
+      });
+      drawn = targets.length > 0;
+    }
+    if (!drawn) this.lightningEffect(guardian, targets);
+    targets.forEach((target, index) => this.impactBurst(guardian, target.x, target.y, index === 0 ? 1 : 0.7));
   }
 
   private damageEnemy(enemy: Enemy, damage: number, options: DamageOptions = {}): void {
@@ -810,16 +890,21 @@ export class GameScene extends Phaser.Scene {
     this.electricFields = this.electricFields.filter((field) => {
       if (field.ownerId !== guardian.instanceId) return true;
       field.graphic.destroy();
+      field.image?.destroy();
       return false;
     });
+    const image = this.effects.persistent(this.abilityKeyFor(guardian, "ring"), x, y, definition.radius * 2);
     const graphic = this.add.graphics().setDepth(DEPTH.effects - 1);
-    graphic.fillStyle(0x9e65ff, 0.13);
+    graphic.fillStyle(0x9e65ff, image ? 0.08 : 0.13);
     graphic.fillCircle(x, y, definition.radius);
-    graphic.lineStyle(3, 0x7deaff, 0.72);
+    graphic.lineStyle(3, 0x7deaff, image ? 0.35 : 0.72);
     graphic.strokeCircle(x, y, definition.radius);
-    graphic.lineStyle(1, 0xe5d3ff, 0.65);
-    graphic.strokeCircle(x, y, definition.radius * 0.58);
+    if (!image) {
+      graphic.lineStyle(1, 0xe5d3ff, 0.65);
+      graphic.strokeCircle(x, y, definition.radius * 0.58);
+    }
     this.electricFields.push({
+      image,
       ownerId: guardian.instanceId,
       x,
       y,
@@ -841,10 +926,12 @@ export class GameScene extends Phaser.Scene {
     this.electricFields = this.electricFields.filter((field) => {
       if (this.simulationTimeMs >= field.expiresAt) {
         field.graphic.destroy();
+        field.image?.destroy();
         return false;
       }
       const remaining = (field.expiresAt - this.simulationTimeMs) / field.durationMs;
       field.graphic.setAlpha(Math.max(0.18, Math.min(1, remaining)));
+      field.image?.setAlpha(Math.max(0.2, Math.min(0.85, remaining)));
       if (this.simulationTimeMs >= field.nextPulseAt) {
         field.nextPulseAt += field.pulseIntervalMs;
         const affected = this.enemies.filter(
@@ -875,16 +962,21 @@ export class GameScene extends Phaser.Scene {
     this.inkClouds = this.inkClouds.filter((cloud) => {
       if (cloud.ownerId !== guardian.instanceId) return true;
       cloud.graphic.destroy();
+      cloud.image?.destroy();
       return false;
     });
+    const image = this.effects.persistent(this.abilityKeyFor(guardian, "ring"), x, y, definition.radius * 2);
     const graphic = this.add.graphics().setDepth(DEPTH.effects - 1);
-    graphic.fillStyle(0x2a1a4a, 0.45);
+    graphic.fillStyle(0x2a1a4a, image ? 0.2 : 0.45);
     graphic.fillCircle(x, y, definition.radius);
-    graphic.fillStyle(0x6b5bd6, 0.25);
-    graphic.fillCircle(x - definition.radius * 0.25, y - definition.radius * 0.2, definition.radius * 0.6);
-    graphic.lineStyle(2, 0xd58cff, 0.6);
+    if (!image) {
+      graphic.fillStyle(0x6b5bd6, 0.25);
+      graphic.fillCircle(x - definition.radius * 0.25, y - definition.radius * 0.2, definition.radius * 0.6);
+    }
+    graphic.lineStyle(2, 0xd58cff, image ? 0.35 : 0.6);
     graphic.strokeCircle(x, y, definition.radius);
     this.inkClouds.push({
+      image,
       ownerId: guardian.instanceId,
       x,
       y,
@@ -901,10 +993,12 @@ export class GameScene extends Phaser.Scene {
     this.inkClouds = this.inkClouds.filter((cloud) => {
       if (this.simulationTimeMs >= cloud.expiresAt) {
         cloud.graphic.destroy();
+        cloud.image?.destroy();
         return false;
       }
       const remaining = (cloud.expiresAt - this.simulationTimeMs) / cloud.durationMs;
       cloud.graphic.setAlpha(Math.max(0.25, Math.min(1, remaining + 0.2)));
+      cloud.image?.setAlpha(Math.max(0.25, Math.min(0.85, remaining + 0.15)));
       this.enemies
         .filter((enemy) => !enemy.dead && !enemy.reachedGoal && enemy.distanceTo(cloud.x, cloud.y) <= cloud.radius)
         .forEach((enemy) => {
@@ -1066,6 +1160,7 @@ export class GameScene extends Phaser.Scene {
             branchId: selected.branchId,
             branchName: selected.branch?.name ?? null,
             branchColor: selected.branch?.color ?? null,
+            artVariant: selected.artVariantFolder,
             options: selected.options,
             invested: selected.invested,
             sellValue: selected.sellValueAt(ECONOMY.sellRefundRate),
@@ -1093,7 +1188,7 @@ export class GameScene extends Phaser.Scene {
     dataset.debug = String(this.debugFlags.enabled);
     dataset.paused = String(this.paused);
     const shrimp = this.guardians.find((guardian) => guardian.definition.id === "pistol-shrimp");
-    dataset.shrimpAssets = String(this.textures.exists(SHRIMP_LEVEL_TEXTURES[0].idle));
+    dataset.shrimpAssets = String(hasGuardianArt(this, "pistol-shrimp"));
     dataset.shrimpArt = String(shrimp?.usesSpriteArt ?? false);
     dataset.shrimpVisual = shrimp?.currentVisualKey ?? "";
     dataset.shrimpTexture = shrimp?.currentTextureKey ?? "";

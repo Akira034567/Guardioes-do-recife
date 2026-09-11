@@ -47,7 +47,12 @@ Peixinho (cardume), Peixe Invasor, Peixe-Flecha, Peixe-Agulha, Cascudo (armadura
 
 ## Balanceamento
 
-Critério de vencibilidade: toda fase deve ser vencível perdendo poucas vidas com builds diversas, sem ficar fácil demais. `npm run test:balance` joga a fase 1 inteira com quatro builds diferentes (referência, perfuração + controle, contenção, suporte), exige vitória com um piso de vidas e imprime `[balance] … vidas X/20 · pérolas Y` para cada uma; uma quinta sonda confirma que duas unidades cruas não vencem sem perder vidas. Adicione builds em `tests/e2e/balance.spec.ts` quando um Guardião ou ramo mudar.
+Critério de vencibilidade: toda fase deve ser vencível perdendo poucas vidas com builds diversas, sem ficar fácil demais. Os roteiros de compra ficam em `tests/balance-builds.ts` (dois ou mais por fase) e são verificados de duas formas:
+
+- `npm test` roda `tests/balance-sim.test.ts`, uma simulação headless da partida (`src/game/core/Simulation.ts`, mesmas regras da `GameScene`, sem Phaser) que termina em segundos e imprime `[sim] … vidas X/20 · pérolas Y · vazou: …` por build. `tests/balance-lab.test.ts` imprime rota, cobertura de cada plataforma e vida/renda por onda de cada fase.
+- `npm run test:balance` joga os mesmos roteiros no jogo real via Playwright (`tests/e2e/balance.spec.ts`), mais lento; a simulação tende a ser 2 a 4 vidas mais otimista que a partida real.
+
+Cada fase controla sua dificuldade em `enemyScaling` (vida, velocidade, recompensa), `enemyOverrides` (ex.: chefe mais fraco) e na composição das ondas; a razão vida-total ÷ (pérolas iniciais + renda) sobe suavemente de ~2,7 na fase 1 para ~5,7 na fase 5.
 
 Todos os números vivem em `src/game/data/balance.ts`: economia (pérolas iniciais, reembolso, bônus de onda e de fase), custos e habilidades dos Guardiões e a ficha de referência dos inimigos. `guardians.ts` e `enemies.ts` só adicionam nomes, cores e textos; as fases em `src/game/data/levels/` definem geometria e ondas.
 

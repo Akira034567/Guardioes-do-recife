@@ -9,11 +9,12 @@ export const RECIFE_TWO: LevelDefinition = {
   name: "Canal das Algas",
   subtitle: "Cardumes e os primeiros Cascudos",
   theme: { water: 0x0d6b62, sand: 0x8bbf9a, path: 0xb6ecd4, rock: 0x2c5546 },
-  startingPearls: ECONOMY.startingPearls + 20,
+  startingPearls: ECONOMY.startingPearls + 40,
   reefHealth: ECONOMY.reefHealth,
   initialWaveDelayMs: 10_000,
   betweenWaveDelayMs: 8_000,
-  enemyScaling: { health: 1, speed: 1, reward: 1 },
+  enemyScaling: { health: 0.85, speed: 1, reward: 1.2 },
+  enemyOverrides: { tidebreaker: { maxHealth: 420 } },
   waypoints: [
     { x: 1320, y: 190 },
     { x: 1190, y: 195 },
@@ -55,46 +56,46 @@ export const RECIFE_TWO: LevelDefinition = {
     {
       name: "Reconhecimento",
       groups: [
-        { enemyId: "swimmer", count: 6, intervalMs: 900, delayMs: 0 },
-        { enemyId: "dartfish", count: 3, intervalMs: 900, delayMs: 3500 },
+        { enemyId: "swimmer", count: 5, intervalMs: 900, delayMs: 0 },
+        { enemyId: "dartfish", count: 2, intervalMs: 900, delayMs: 3500 },
       ],
     },
     {
       name: "Cardume",
       groups: [
-        { enemyId: "minnow", count: 12, intervalMs: 260, delayMs: 0 },
-        { enemyId: "swimmer", count: 4, intervalMs: 900, delayMs: 4000 },
+        { enemyId: "minnow", count: 8, intervalMs: 260, delayMs: 0 },
+        { enemyId: "swimmer", count: 3, intervalMs: 900, delayMs: 3000 },
       ],
     },
     {
       name: "Cascos Duros",
       groups: [
-        { enemyId: "shellback", count: 3, intervalMs: 1800, delayMs: 0 },
-        { enemyId: "swimmer", count: 6, intervalMs: 800, delayMs: 1500 },
+        { enemyId: "shellback", count: 2, intervalMs: 1800, delayMs: 0 },
+        { enemyId: "swimmer", count: 5, intervalMs: 800, delayMs: 1500 },
       ],
     },
     {
       name: "Enxurrada",
       groups: [
-        { enemyId: "minnow", count: 10, intervalMs: 250, delayMs: 0 },
-        { enemyId: "dartfish", count: 6, intervalMs: 700, delayMs: 2600 },
+        { enemyId: "minnow", count: 8, intervalMs: 250, delayMs: 0 },
+        { enemyId: "dartfish", count: 4, intervalMs: 700, delayMs: 2600 },
         { enemyId: "shellback", count: 2, intervalMs: 2000, delayMs: 5000 },
       ],
     },
     {
       name: "Maré Cheia",
       groups: [
-        { enemyId: "swimmer", count: 8, intervalMs: 750, delayMs: 0 },
-        { enemyId: "minnow", count: 12, intervalMs: 240, delayMs: 3000 },
-        { enemyId: "dartfish", count: 6, intervalMs: 650, delayMs: 6500 },
+        { enemyId: "swimmer", count: 6, intervalMs: 750, delayMs: 0 },
+        { enemyId: "minnow", count: 8, intervalMs: 240, delayMs: 3000 },
+        { enemyId: "dartfish", count: 4, intervalMs: 650, delayMs: 6500 },
       ],
     },
     {
       name: "Quebra-Marés Blindado",
       groups: [
-        { enemyId: "shellback", count: 3, intervalMs: 1500, delayMs: 0 },
-        { enemyId: "tidebreaker", count: 1, intervalMs: 1000, delayMs: 3500 },
-        { enemyId: "minnow", count: 10, intervalMs: 260, delayMs: 9000 },
+        { enemyId: "shellback", count: 2, intervalMs: 1500, delayMs: 0 },
+        { enemyId: "minnow", count: 8, intervalMs: 260, delayMs: 3000 },
+        { enemyId: "tidebreaker", count: 1, intervalMs: 1000, delayMs: 7000 },
       ],
     },
   ],

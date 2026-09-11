@@ -19,6 +19,8 @@ async function openGame(page: Page, query = "level=recife-1") {
   await page.goto(`/?${query}`);
   const canvas = page.locator("canvas");
   await expect(canvas).toBeVisible();
+  // O boot carrega toda a arte dos Guardiões; cliques antes da cena do jogo existir seriam perdidos.
+  await expect(canvas).toHaveAttribute("data-screen", /game|menu/, { timeout: 15_000 });
   const box = await canvas.boundingBox();
   if (!box) throw new Error("Canvas bounds unavailable");
   const clickGame = (x: number, y: number) => page.mouse.click(box.x + (x * box.width) / 1280, box.y + (y * box.height) / 720);
@@ -37,8 +39,8 @@ test("loads a level directly and places a shrimp on a platform", async ({ page }
   await expect(canvas).toHaveAttribute("data-guardians", "1");
   await expect(canvas).toHaveAttribute("data-pearls", "100");
   await expect(canvas).toHaveAttribute("data-shrimp-art", "true");
-  await expect(canvas).toHaveAttribute("data-shrimp-visual", "shrimp-level-0-idle");
-  await expect(canvas).toHaveAttribute("data-shrimp-texture", "shrimp-level-0-idle");
+  await expect(canvas).toHaveAttribute("data-shrimp-visual", "pistol-shrimp-base-idle");
+  await expect(canvas).toHaveAttribute("data-shrimp-texture", "pistol-shrimp-base-idle");
   await expect(canvas).toHaveAttribute("data-selected", "G1");
   await expect(canvas).toHaveAttribute("data-selected-options", "2");
   await expect(canvas).toHaveAttribute("data-sell-value", "20");
@@ -94,8 +96,8 @@ test("locks a unit into one upgrade branch, pauses and restarts without stale st
   await expect(canvas).toHaveAttribute("data-selected-branch", "a");
   await expect(canvas).toHaveAttribute("data-selected-options", "1");
   await expect(canvas).toHaveAttribute("data-sell-value", "37");
-  await expect(canvas).toHaveAttribute("data-shrimp-visual", "shrimp-level-1-idle");
-  await expect(canvas).toHaveAttribute("data-shrimp-texture", "shrimp-level-1-idle");
+  await expect(canvas).toHaveAttribute("data-shrimp-visual", "pistol-shrimp-perfuracao-1-idle");
+  await expect(canvas).toHaveAttribute("data-shrimp-texture", "pistol-shrimp-perfuracao-1-idle");
 
   // O segundo botão fica oculto após a escolha do ramo: clicar ali não compra nada.
   await clickGame(OPTION_B.x, OPTION_B.y);

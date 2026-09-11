@@ -1,5 +1,5 @@
 import Phaser from "phaser";
-import { SHRIMP_LEVEL_TEXTURES } from "../assets/recifeOneAssets";
+import { artTextureKey, artTextureKeyForFolder, GUARDIAN_ART, solidBounds } from "../assets/guardianArt";
 import { GAME_HEIGHT, GAME_WIDTH, HUD_BOTTOM, HUD_TOP } from "../constants";
 import { GUARDIANS, GUARDIAN_ORDER } from "../data/guardians";
 import { EventBus, Events } from "../EventBus";
@@ -58,6 +58,8 @@ export class UIScene extends Phaser.Scene {
   private cards: GuardianCard[] = [];
   private upgradeTitle!: Phaser.GameObjects.Text;
   private upgradeDescription!: Phaser.GameObjects.Text;
+  /** Card de retrato da variante atual do Guardião selecionado, acima do painel de upgrade. */
+  private portraitCard: Phaser.GameObjects.Image | null = null;
   private optionButtons: OptionButton[] = [];
   private sellButton!: Phaser.GameObjects.Rectangle;
   private sellButtonText!: Phaser.GameObjects.Text;
@@ -168,9 +170,9 @@ export class UIScene extends Phaser.Scene {
         .setStrokeStyle(2, definition.color, 0.78)
         .setInteractive({ useHandCursor: true });
       background.on("pointerdown", () => EventBus.emit(Events.selectGuardian, id));
-      const icon = id === "pistol-shrimp" && this.textures.exists(SHRIMP_LEVEL_TEXTURES[0].idle)
-        ? this.add.image(x - 34, centerY + 6, SHRIMP_LEVEL_TEXTURES[0].idle).setScale(0.36)
-        : this.add.circle(x - 34, centerY + 6, 13, definition.color, 1).setStrokeStyle(3, definition.accent, 1);
+      const icon =
+        this.artIcon(artTextureKey(id, GUARDIAN_ART[id].base, "idle"), x - 34, centerY + 6, 42, 48) ??
+        this.add.circle(x - 34, centerY + 6, 13, definition.color, 1).setStrokeStyle(3, definition.accent, 1);
       icon.setData("guardian", id);
       const name = this.add.text(x - 17, centerY - 20, definition.shortName, {
         fontFamily: "Arial, sans-serif",
@@ -373,6 +375,7 @@ export class UIScene extends Phaser.Scene {
 
   private renderUpgradePanel(snapshot: HudSnapshot): void {
     const selected = snapshot.selectedPlacedGuardian;
+    this.renderPortraitCard(selected);
     if (!selected) {
       this.upgradeTitle.setText("Selecione um Guardião posicionado");
       this.upgradeTitle.setColor("#d9f8ff");
@@ -418,6 +421,43 @@ export class UIScene extends Phaser.Scene {
     this.sellButtonText.setText(`VENDER\n◉ ${selected.sellValue}`);
     this.sellButton.setVisible(true);
     this.sellButtonText.setVisible(true);
+  }
+
+  /**
+   * Retrato da variante atual, encostado no canto superior direito logo abaixo do HUD de cima (longe das
+   * plataformas e do painel de upgrade). Não recebe input, então toques no mapa atrás dele funcionam.
+   */
+  private renderPortraitCard(selected: HudSnapshot["selectedPlacedGuardian"]): void {
+    const key = selected ? artTextureKeyForFolder(selected.guardianId, selected.artVariant, "portrait") : null;
+    if (!key || !this.textures.exists(key)) {
+      this.portraitCard?.setVisible(false);
+      return;
+    }
+    if (!this.portraitCard) {
+      this.portraitCard = this.add.image(0, 0, key).setOrigin(1, 0).setAlpha(0.96);
+    } else if (this.portraitCard.texture.key !== key) {
+      this.portraitCard.setTexture(key);
+    }
+    const frame = this.textures.getFrame(key);
+    const scale = Math.min(84 / frame.height, 280 / frame.width);
+    this.portraitCard.setScale(scale).setPosition(GAME_WIDTH - 10, HUD_TOP + 8).setVisible(true);
+  }
+
+  /**
+   * Ícone da carta: a imagem `idle` da base recortada aos pixels visíveis e ajustada à caixa pedida.
+   * `setCrop` mantém a posição do quadro inteiro, então o deslocamento centraliza só a parte visível.
+   */
+  private artIcon(key: string, centerX: number, centerY: number, boxWidth: number, boxHeight: number): Phaser.GameObjects.Image | null {
+    const bounds = solidBounds(this, key);
+    if (!bounds) return null;
+    const frame = this.textures.getFrame(key);
+    const scale = Math.min(boxWidth / bounds.width, boxHeight / bounds.height);
+    const offsetX = (bounds.x + bounds.width / 2 - frame.width / 2) * scale;
+    const offsetY = (bounds.y + bounds.height / 2 - frame.height / 2) * scale;
+    return this.add
+      .image(centerX - offsetX, centerY - offsetY, key)
+      .setScale(scale)
+      .setCrop(bounds.x, bounds.y, bounds.width, bounds.height);
   }
 
   private renderDebugState(debug: DebugFlags): void {

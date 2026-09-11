@@ -255,6 +255,8 @@ export interface SelectedGuardianInfo {
   branchId: BranchId | null;
   branchName: string | null;
   branchColor: number | null;
+  /** Pasta da variante visual atual (`base`, `perfuracao-1`, ...), ver `assets/guardianArt.ts`. */
+  artVariant: string;
   options: UpgradeOption[];
   invested: number;
   sellValue: number;

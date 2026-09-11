@@ -11,10 +11,23 @@ export interface ProjectileHitResult {
   splash: boolean;
 }
 
+export interface ProjectileArt {
+  /** Imagem do projétil (aponta para a direita) ou `null` para o círculo vetorial. */
+  textureKey: string | null;
+  scale: number;
+  /** Imagem exibida no ponto de acerto, ou `null`. */
+  impactKey: string | null;
+  impactScale: number;
+}
+
+const DEFAULT_ART: ProjectileArt = { textureKey: null, scale: 0.5, impactKey: null, impactScale: 0.4 };
+
 /** Casca Phaser do projétil: a física e as regras de acerto vivem em `ProjectileCore`. */
 export class Projectile extends Phaser.GameObjects.Container {
   readonly radius: number;
   readonly textureKey: string | null;
+  readonly impactKey: string | null;
+  readonly impactScale: number;
   readonly core: ProjectileCore;
 
   constructor(
@@ -23,17 +36,19 @@ export class Projectile extends Phaser.GameObjects.Container {
     y: number,
     target: Enemy,
     config: ProjectileConfig,
-    textureKey: string | null,
+    art: ProjectileArt = DEFAULT_ART,
   ) {
     super(scene, x, y);
     this.radius = config.radius;
     this.core = new ProjectileCore({ x, y }, Projectile.snapshot(target), config);
+    this.impactKey = art.impactKey && scene.textures.exists(art.impactKey) ? art.impactKey : null;
+    this.impactScale = art.impactScale;
 
-    if (textureKey && scene.textures.exists(textureKey)) {
-      const sprite = new Phaser.GameObjects.Image(scene, 0, 0, textureKey);
-      sprite.setScale(0.5);
+    if (art.textureKey && scene.textures.exists(art.textureKey)) {
+      const sprite = new Phaser.GameObjects.Image(scene, 0, 0, art.textureKey);
+      sprite.setScale(art.scale);
       this.add(sprite);
-      this.textureKey = textureKey;
+      this.textureKey = art.textureKey;
     } else {
       const fallback = new Phaser.GameObjects.Arc(scene, 0, 0, config.radius, 0, 360, false, 0x5ae8ff, 1);
       fallback.setStrokeStyle(2, 0xd8fbff, 1);
