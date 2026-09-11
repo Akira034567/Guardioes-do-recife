@@ -16,10 +16,10 @@ export const RECIFE_ONE: LevelDefinition = {
   reefHealth: ECONOMY.reefHealth,
   initialWaveDelayMs: 10_000,
   betweenWaveDelayMs: 8_000,
-  /** Fase de aprendizado: inimigos com 85% da vida de referência e 20% mais pérolas por abate. */
-  enemyScaling: { health: 0.85, speed: 1, reward: 1.2 },
-  /** Primeiro chefe: 400 de vida de base (340 após a escala) para que qualquer build razoável o derrube. */
-  enemyOverrides: { tidebreaker: { maxHealth: 400 } },
+  /** Fase de aprendizado: inimigos com 75% da vida de referência e 20% mais pérolas por abate. */
+  enemyScaling: { health: 0.75, speed: 1, reward: 1.2 },
+  /** Primeiro chefe: 360 de vida de base (270 após a escala) para que qualquer build razoável o derrube. */
+  enemyOverrides: { tidebreaker: { maxHealth: 360 } },
   waypoints: [
     { x: -40, y: 315 },
     { x: 100, y: 310 },
@@ -85,8 +85,8 @@ export const RECIFE_ONE: LevelDefinition = {
     {
       name: "Pressão",
       groups: [
-        { enemyId: "dartfish", count: 6, intervalMs: 750, delayMs: 0 },
-        { enemyId: "swimmer", count: 7, intervalMs: 850, delayMs: 3000 },
+        { enemyId: "dartfish", count: 5, intervalMs: 800, delayMs: 0 },
+        { enemyId: "swimmer", count: 6, intervalMs: 900, delayMs: 3000 },
       ],
     },
     {

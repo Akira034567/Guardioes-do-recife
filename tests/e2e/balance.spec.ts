@@ -55,26 +55,29 @@ const BUILDS: Build[] = [
     name: "contenção com baiacu",
     level: "recife-1",
     minReef: 6,
+    // Baiacu segura inimigos dentro do alcance do Camarão; Caranguejo cobre a subida.
     steps: [
-      { waitPearls: 0, place: "shrimp", at: [925, 500] },
-      { waitPearls: 110, place: "pufferfish", at: [860, 372] },
-      { waitPearls: 90, place: "crab", at: [330, 388] },
-      { waitPearls: 90, upgrade: [860, 372], branch: "b" },
-      { waitPearls: 70, upgrade: [925, 500], branch: "b" },
-      { waitPearls: 80, upgrade: [330, 388], branch: "a" },
+      { waitPearls: 0, place: "shrimp", at: [375, 245] },
+      { waitPearls: 110, place: "pufferfish", at: [330, 388] },
+      { waitPearls: 90, place: "crab", at: [505, 325] },
+      { waitPearls: 90, upgrade: [330, 388], branch: "a" },
+      { waitPearls: 70, upgrade: [375, 245], branch: "b" },
+      { waitPearls: 80, upgrade: [505, 325], branch: "a" },
     ],
   },
   {
     name: "suporte com polvo (tinta)",
     level: "recife-1",
-    minReef: 6,
+    // Polvo é peça de fim de jogo; na fase 1 basta vencer sem colapsar. Há variação de ±2 vidas entre execuções.
+    minReef: 4,
+    // Polvo na pedra norte debilita quem o Caranguejo golpeia; upgrade anti-chefe primeiro.
     steps: [
       { waitPearls: 0, place: "shrimp", at: [925, 500] },
       { waitPearls: 0, place: "crab", at: [350, 389] },
       { waitPearls: 120, place: "octopus", at: [375, 245] },
+      { waitPearls: 70, upgrade: [925, 500], branch: "b" },
       { waitPearls: 80, upgrade: [350, 389], branch: "a" },
       { waitPearls: 100, upgrade: [375, 245], branch: "a" },
-      { waitPearls: 70, upgrade: [925, 500], branch: "b" },
     ],
   },
 ];

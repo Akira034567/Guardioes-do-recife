@@ -34,3 +34,22 @@ corta o desenho na moldura (patas embaixo, brilho dos impactos nas laterais), o 
 Em `impacto-2/impact.png` fica um buraco no formato do rótulo "4. IMPACTO", que na tabela está por
 cima das pedras. O script imprime, para cada arquivo, em quais bordas o sprite encosta (T/B/L/R) e
 aceita `SLICE_PREVIEW=<arquivo.png>` para gerar uma prancha de conferência.
+
+## Árvores de upgrade dos outros guardiões (corte bruto, ainda não plugadas no código)
+
+Recortes das tabelas `art/guardians/<guardiao>/upgrade-sheet.png`, gerados por
+`scripts/slice-upgrade-cells.py`. Diferente do camarão, aqui cada PNG é o retângulo interno inteiro da
+célula, só sem a moldura: nada foi reposicionado nem recortado no bbox, então todas as células de uma
+coluna têm o mesmo tamanho e os sprites mantêm posição e proporção da prancha. Rótulos ("1. IDLE"),
+tiras azul-marinho e textos dos retratos ficam nos arquivos para ajuste manual.
+
+| Guardião | Pastas | Ramos na tabela |
+| --- | --- | --- |
+| `guardians/jellyfish` | `base`, `eletrico-1`, `eletrico-2`, `controle-1`, `controle-2` | Elétrico, Controle |
+| `guardians/pufferfish` | `base`, `perfuracao-1`, `perfuracao-2`, `pulso-1`, `pulso-2` | Perfuração, Pulso |
+| `guardians/ink-octopus` | `base`, `debuff-1`, `debuff-2`, `buff-1`, `buff-2` | Debuff, Buff |
+| `guardians/reef-crab` | `base`, `quebra-casco-1`, `quebra-casco-2`, `area-1`, `area-2` | Quebra-Casco, Área |
+
+Os nomes das pastas seguem a tabela, não `GUARDIANS[...].branches` (que chama os ramos de Fortaleza,
+Tinta/Maré Aliada e Varredura). Cada pasta tem `portrait.png`, `idle.png`, `attack.png`,
+`projectile.png` (coluna "Habilidade") e `impact.png`.

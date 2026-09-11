@@ -53,8 +53,8 @@ describe("balance sheet", () => {
     expect(scaled.speed).toBe(61);
     expect(scaled.reward).toBe(5);
     expect(ENEMIES.swimmer.maxHealth).toBe(55);
-    const softened = scaleEnemy(ENEMIES.tidebreaker, { health: 0.85, speed: 1, reward: 1.2 }, { maxHealth: 400 });
-    expect(softened).toMatchObject({ maxHealth: 340, reward: 72, armor: 3, reefDamage: 10, isBoss: true });
+    const softened = scaleEnemy(ENEMIES.tidebreaker, { health: 0.75, speed: 1, reward: 1.2 }, { maxHealth: 360 });
+    expect(softened).toMatchObject({ maxHealth: 270, reward: 72, armor: 3, reefDamage: 10, isBoss: true });
   });
 
   it("matches the agreed damage profile for the first version", () => {
