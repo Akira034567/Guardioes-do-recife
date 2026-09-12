@@ -8,8 +8,11 @@ import type { MatchGuardian } from "../core/match/MatchGuardian";
 import type { GuardianView } from "../objects/GuardianView";
 import type { ProjectileView } from "../objects/ProjectileView";
 import type { GuardianId } from "../types";
+import { DamageAggregator, type DamageTone, type FloatingDamage } from "../core/DamageAggregator";
+import type { DamageCause } from "../core/match/MatchEvents";
 import type { ArtEffects } from "./ArtEffects";
 import type { AudioManager } from "./AudioManager";
+import { FloatingTextPool } from "./FloatingTextPool";
 import { getSettings } from "./settings";
 
 export interface MatchEffectsHost {
@@ -26,12 +29,68 @@ export interface MatchEffectsHost {
  * Tradução de eventos do motor em efeitos visuais, sons e mensagens. É a única camada que sabe de
  * áudio e de arte; o motor nunca chama nada daqui. Toda regra continua em `core/match`.
  */
+/** Cor de cada tipo de número que sobe. */
+const TONE_STYLE: Record<DamageTone, { color: string }> = {
+  hit: { color: "#ffffff" },
+  poison: { color: "#a8f58a" },
+  area: { color: "#8fe3ff" },
+  reward: { color: "#ffe69a" },
+};
+
+/** Veneno e dano em área ganham cor própria; o resto é acerto direto. */
+const TONE_FOR_CAUSE: Partial<Record<DamageCause, DamageTone>> = {
+  poison: "poison",
+  splash: "area",
+  field: "area",
+  pulse: "area",
+  trap: "area",
+  spin: "area",
+  inkSecondary: "area",
+};
+
 export class MatchEffects {
-  constructor(private readonly host: MatchEffectsHost) {}
+  private readonly damageNumbers = new DamageAggregator();
+  private readonly floatingText: FloatingTextPool;
+
+  constructor(private readonly host: MatchEffectsHost) {
+    this.floatingText = new FloatingTextPool(host.scene);
+  }
 
   /** "Efeitos reduzidos" (item 36) tira as partículas decorativas e mantém a leitura do combate. */
   private get reduced(): boolean {
     return getSettings().reducedEffects;
+  }
+
+  /** Números de dano acumulados na janela do agregador (item 33). Chamado a cada quadro. */
+  update(now: number): void {
+    if (!getSettings().damageNumbers) {
+      if (this.damageNumbers.pendingCount > 0) this.damageNumbers.clear();
+      return;
+    }
+    for (const entry of this.damageNumbers.flush(now)) this.showDamage(entry);
+  }
+
+  /** Recolhe os números pendentes (reinício, troca de fase). */
+  resetFloatingText(): void {
+    this.damageNumbers.clear();
+    this.floatingText.reset();
+  }
+
+  destroy(): void {
+    this.damageNumbers.clear();
+    this.floatingText.destroy();
+  }
+
+  private showDamage(entry: FloatingDamage): void {
+    const rounded = Math.round(entry.amount);
+    if (rounded <= 0) return;
+    const heavy = entry.share >= 0.22;
+    this.floatingText.spawn(entry.x, entry.y - 12, entry.tone === "reward" ? `+${rounded}` : `-${rounded}`, {
+      color: TONE_STYLE[entry.tone].color,
+      size: heavy ? 21 : 15,
+      rise: heavy ? 34 : 24,
+      durationMs: heavy ? 720 : 560,
+    });
   }
 
   handle(event: MatchEvent): void {
@@ -40,7 +99,20 @@ export class MatchEffects {
       case "enemyDamaged":
         if (["projectile", "chain", "pulse", "melee", "spin", "ink", "sonar"].includes(event.cause)) audio.play("impact");
         if (event.cause === "poison") this.poisonPuff(event.x, event.y);
+        if (getSettings().damageNumbers) {
+          const share = event.maxHealth > 0 ? event.amount / event.maxHealth : 0;
+          this.damageNumbers.add(event.id, event.x, event.y, event.amount, event.now, TONE_FOR_CAUSE[event.cause] ?? "hit", share);
+        }
         return;
+      case "enemyKilled": {
+        if (!getSettings().damageNumbers) return;
+        const pending = this.damageNumbers.take(event.id);
+        if (pending) this.showDamage({ ...pending, x: event.x, y: event.y });
+        if (event.reward > 0) {
+          this.showDamage({ key: `reward:${event.id}`, x: event.x + 14, y: event.y - 14, amount: event.reward, share: 0, tone: "reward" });
+        }
+        return;
+      }
       case "enemyReachedGoal":
         audio.play("warning");
         // Um baque curto quando o coral leva dano; desligável nas configurações.

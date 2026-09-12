@@ -8,10 +8,12 @@ import {
   artTextureKey,
   GUARDIAN_ART,
   GUARDIAN_ART_ASSETS,
+  GUARDIAN_BASE_ART_ASSETS,
+  guardianUpgradeArtAssets,
 } from "../src/game/assets/guardianArt";
 import { RECIFE_ONE_BACKGROUND_KEY, RECIFE_ONE_IMAGE_ASSETS } from "../src/game/assets/recifeOneAssets";
-import { GUARDIAN_ORDER } from "../src/game/data/guardians";
 import type { GuardianId } from "../src/game/types";
+import { GUARDIAN_ORDER } from "../src/game/data/guardians";
 
 // Arquivos existentes em `public/assets/guardians/<pasta>/<variante>/` (PNGs e os `.gitkeep` das pastas vazias),
 // enumerados pelo Vite no momento da transformação.
@@ -95,6 +97,20 @@ describe("guardian art registry", () => {
     const keys = RECIFE_ONE_IMAGE_ASSETS.map((asset) => asset.key);
     expect(keys).toContain(RECIFE_ONE_BACKGROUND_KEY);
     expect(new Set(keys).size).toBe(keys.length);
-    expect(RECIFE_ONE_IMAGE_ASSETS).toHaveLength(GUARDIAN_ART_ASSETS.length + 1);
+    // Dieta do boot (item 45): só a forma base de cada Guardião entra antes do menu.
+    expect(RECIFE_ONE_IMAGE_ASSETS).toHaveLength(GUARDIAN_BASE_ART_ASSETS.length + 1);
+    expect(GUARDIAN_BASE_ART_ASSETS.length).toBeLessThan(GUARDIAN_ART_ASSETS.length / 4);
+  });
+
+  it("splits the base art from the upgrade art without losing an image", () => {
+    const squad: GuardianId[] = ["pistol-shrimp", "jellyfish", "pufferfish", "reef-crab", "ink-octopus"];
+    const upgrades = guardianUpgradeArtAssets(squad);
+    // Nenhuma imagem do esquadrão fica de fora entre boot e partida, e nada é carregado duas vezes.
+    const squadArt = GUARDIAN_ART_ASSETS.filter((asset) => squad.includes(asset.guardianId));
+    const squadBase = GUARDIAN_BASE_ART_ASSETS.filter((asset) => squad.includes(asset.guardianId));
+    expect(upgrades.length + squadBase.length).toBe(squadArt.length);
+    expect(upgrades.some((asset) => squadBase.some((base) => base.key === asset.key))).toBe(false);
+    // Guardião fora do esquadrão não entra na partida.
+    expect(upgrades.some((asset) => asset.key.startsWith("shark-"))).toBe(false);
   });
 });

@@ -703,5 +703,17 @@ export interface HudSnapshot {
   muted: boolean;
   debug: DebugFlags;
   message: string;
+  /** Dica do tutorial em curso (item 30); null quando não há nada a ensinar. */
+  tutorial: TutorialHint | null;
   gameOver: "victory" | "defeat" | null;
+}
+
+/** Passo do tutorial pronto para desenhar. */
+export interface TutorialHint {
+  id: string;
+  text: string;
+  /** Nome do controle destacado no HUD (`UiRegistry`), quando a dica fala de um botão. */
+  highlight: string | null;
+  step: number;
+  total: number;
 }

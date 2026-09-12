@@ -10,6 +10,8 @@ export interface MatchLaunchConfig {
   loadout: GuardianId[];
   /** O esquadrão veio de `?guardians=`: não conta como escolha do jogador. */
   loadoutOverride: boolean;
+  /** Dicas do tutorial ligadas; `?tutorial=0` desliga (testes e e2e). */
+  tutorial: boolean;
   debug: { enabled: boolean; startWave: number };
 }
 
@@ -33,6 +35,7 @@ export function launchConfigFromUrl(search: URLSearchParams, context: LaunchCont
     difficulty: difficultyOf(search.get("difficulty") ?? context.lastDifficulty).id,
     loadout: resolveLoadout(guardiansParam, { unlocked: context.unlockedGuardians, fallback: context.lastLoadout }),
     loadoutOverride: Boolean(guardiansParam),
+    tutorial: search.get("tutorial") !== "0",
     debug: { enabled: debugEnabled, startWave: debugEnabled && Number.isFinite(wave) ? Math.max(0, wave) : 0 },
   };
 }
@@ -44,6 +47,7 @@ export function launchConfigFor(level: LevelDefinition, difficulty: DifficultyId
     difficulty,
     loadout: [...loadout],
     loadoutOverride: false,
+    tutorial: true,
     debug: { enabled: false, startWave: 0 },
   };
 }

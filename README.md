@@ -40,6 +40,15 @@ Menus são HTML por cima do canvas (`src/game/ui/dom`), alinhados ao jogo e esca
 - **Configurações**: volumes, silenciar, efeitos reduzidos, tremor de tela e escala da interface. Tudo grava no save na hora.
 - **Menu de pause**: o botão Ⅱ pausa e abre continuar, configurações, reiniciar e sair para o mapa.
 
+## UX da partida
+
+- **Posicionamento**: a carta escolhida mostra a criatura em transparência sob o cursor, com o alcance na forma certa, o custo e o motivo quando a posição não vale. ESC ou o botão direito cancelam.
+- **Painel de contexto**: sem unidade selecionada, o painel de baixo vira a ficha da carta escolhida (papel, ataque, alcance, custo e para onde vão as duas evoluções). Com unidade selecionada, mostra a árvore, os dois botões de ramo e a venda. O retrato flutuante sobre o mapa saiu de cena.
+- **Números de dano**: `core/DamageAggregator.ts` soma os acertos de um mesmo alvo numa janela curta e `systems/FloatingTextPool.ts` reaproveita os textos. Golpe forte sai maior; veneno e área têm cor própria; a recompensa da morte sobe em dourado. Desligável nas configurações.
+- **Tutorial**: `core/tutorial/TutorialDirector.ts` decide o passo (lógica pura, testada) e a `UIScene` desenha uma faixa acima das cartas com contorno no botão citado. Nada bloqueia o jogo, PULAR encerra de vez e `?tutorial=0` desliga.
+- **Registro do HUD**: `ui/UiRegistry.ts` guarda a posição de cada controle por nome (`pause`, `speed:2`, `card:first`, `upgrade:a`, ...). O tutorial usa para destacar e os testes e2e para achar um botão sem coordenada escrita à mão (`window.__grUi`).
+- **Carga de arte**: o boot traz só a forma base dos nove Guardiões; as evoluções entram na `GameScene`, apenas para o esquadrão da partida.
+
 ## Guardiões
 
 | Guardião | Posição | Papel | Ramo A | Ramo B |

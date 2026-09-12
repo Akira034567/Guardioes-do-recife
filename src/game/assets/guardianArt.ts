@@ -269,6 +269,28 @@ export function preloadGuardianArt(scene: Phaser.Scene): void {
   GUARDIAN_ART_ASSETS.forEach(({ key, path }) => scene.load.image(key, path));
 }
 
+/**
+ * Só as formas base dos nove Guardiões (item 45). É o que o menu, as cartas e o fantasma de
+ * posicionamento precisam; as formas evoluídas entram quando a fase abre, pelo esquadrão escolhido.
+ */
+export const GUARDIAN_BASE_ART_ASSETS: ReadonlyArray<{ key: string; path: string; guardianId: GuardianId }> = GUARDIAN_ART_ASSETS.filter(
+  ({ guardianId, key }) => key.startsWith(`${guardianId}-${GUARDIAN_ART[guardianId].base.folder}-`),
+);
+
+/** Imagens das variantes evoluídas de um esquadrão: o que falta depois da dieta do boot. */
+export function guardianUpgradeArtAssets(guardianIds: readonly GuardianId[]): ReadonlyArray<{ key: string; path: string }> {
+  const wanted = new Set(guardianIds);
+  const baseKeys = new Set(GUARDIAN_BASE_ART_ASSETS.map((asset) => asset.key));
+  return GUARDIAN_ART_ASSETS.filter((asset) => wanted.has(asset.guardianId) && !baseKeys.has(asset.key));
+}
+
+/** Carrega as formas evoluídas do esquadrão desta partida. */
+export function preloadGuardianUpgradeArt(scene: Phaser.Scene, guardianIds: readonly GuardianId[]): void {
+  guardianUpgradeArtAssets(guardianIds).forEach(({ key, path }) => {
+    if (!scene.textures.exists(key)) scene.load.image(key, path);
+  });
+}
+
 /** A arte está disponível quando ao menos o idle da base carregou. */
 export function hasGuardianArt(scene: Phaser.Scene, guardianId: GuardianId): boolean {
   return scene.textures.exists(artTextureKey(guardianId, GUARDIAN_ART[guardianId].base, "idle"));

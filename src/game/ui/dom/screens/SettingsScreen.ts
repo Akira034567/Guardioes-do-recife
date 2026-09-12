@@ -32,6 +32,7 @@ export function settingsScreen(onBack: () => void): Screen {
           toggle("Silenciar tudo", "settings-mute", settings.muted, (value) => apply({ muted: value })),
           toggle("Efeitos reduzidos", "settings-reduced", settings.reducedEffects, (value) => apply({ reducedEffects: value })),
           toggle("Tremor de tela", "settings-shake", settings.screenShake, (value) => apply({ screenShake: value })),
+          toggle("Números de dano", "settings-damage", settings.damageNumbers, (value) => apply({ damageNumbers: value })),
           h(
             "div",
             { class: "gr-row", testId: "settings-ui-scale", dataValue: settings.uiScale },
@@ -44,7 +45,7 @@ export function settingsScreen(onBack: () => void): Screen {
               ),
             ),
           ),
-          h("p", { class: "gr-hint", text: "Números de dano e trilha sonora chegam com a próxima etapa." }),
+          h("p", { class: "gr-hint", text: "A trilha sonora chega com a próxima etapa." }),
           h("div", { class: "gr-actions" }, button("VOLTAR", onBack, { testId: "settings-back", variant: "primary" })),
         );
       };

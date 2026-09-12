@@ -53,6 +53,9 @@ export class GuardianView extends Phaser.GameObjects.Container {
     });
     scene.add.existing(this);
     this.applyStateVisual();
+    // Entrada curta: a unidade "assenta" no lugar em vez de aparecer do nada (item 32).
+    this.setScale(0.72);
+    scene.tweens.add({ targets: this, scale: 1, duration: 220, ease: "Back.Out" });
   }
 
   get id(): string {

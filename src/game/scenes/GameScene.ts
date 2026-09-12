@@ -1,5 +1,5 @@
 import Phaser from "phaser";
-import { GUARDIAN_ART, hasGuardianArt } from "../assets/guardianArt";
+import { GUARDIAN_ART, hasGuardianArt, preloadGuardianUpgradeArt } from "../assets/guardianArt";
 import { preloadLevelBackground } from "../assets/levelBackgrounds";
 import { DEPTH, GAME_HEIGHT, GAME_WIDTH, HUD_BOTTOM, HUD_TOP } from "../constants";
 import type { LevelProgressApi } from "../core/LevelProgress";
@@ -32,8 +32,13 @@ import { DebugOverlay } from "../systems/DebugOverlay";
 import { isDebugAllowed } from "../systems/debugGate";
 import { drawLevelBackdrop } from "../systems/LevelBackdrop";
 import { MatchEffects } from "../systems/MatchEffects";
-import { createLevelProgress } from "../systems/ProgressStore";
-import type { BranchId, DebugFlags, GuardianId, HudSnapshot, LevelDefinition, PlacementDefinition, Vec2, WavePreviewChip } from "../types";
+import { PlacementGhost } from "../objects/PlacementGhost";
+import type { MatchSnapshot } from "../core/match/MatchSnapshot";
+import { TutorialDirector } from "../core/tutorial/TutorialDirector";
+import { createLevelProgress, getSaveManager } from "../systems/ProgressStore";
+import type { BranchId, DebugFlags, GuardianId, HudSnapshot, LevelDefinition, PlacementDefinition, TutorialHint, Vec2, WavePreviewChip } from "../types";
+
+const preventContextMenu = (event: Event): void => event.preventDefault();
 
 interface PlatformZone {
   definition: PlacementDefinition;
@@ -59,8 +64,7 @@ export class GameScene extends Phaser.Scene {
   private debugOverlay!: DebugOverlay;
   private selectionGraphic!: Phaser.GameObjects.Graphics;
   private placementGuideGraphic!: Phaser.GameObjects.Graphics;
-  private placementPreviewGraphic!: Phaser.GameObjects.Graphics;
-  private placementPreviewText!: Phaser.GameObjects.Text;
+  private ghost!: PlacementGhost;
   private debugFlags!: DebugFlags;
   private platforms: PlatformZone[] = [];
   private readonly enemyViews = new Map<string, EnemyView>();
@@ -81,6 +85,8 @@ export class GameScene extends Phaser.Scene {
   private messageUntilMs = 5_000;
   private hudAccumulatorMs = 0;
   private debugAccumulatorMs = 0;
+  private tutorial: TutorialDirector | null = null;
+  private tutorialSaved = "";
   private readonly unlockAudio = (): void => this.audio?.unlock();
 
   constructor() {
@@ -104,6 +110,8 @@ export class GameScene extends Phaser.Scene {
 
   preload(): void {
     preloadLevelBackground(this, this.level.backgroundKey);
+    // O boot traz só as formas base; as evoluções chegam aqui, apenas para o esquadrão desta partida.
+    preloadGuardianUpgradeArt(this, this.launch.loadout);
   }
 
   create(): void {
@@ -135,6 +143,8 @@ export class GameScene extends Phaser.Scene {
     this.debugAllowed = isDebugAllowed(new URLSearchParams(window.location.search));
     this.match = new Match(this.resolvedLevel, { startWaveIndex: this.launch.debug.startWave });
     this.match.setListener((event) => this.pendingEvents.push(event));
+    this.tutorial = this.launch.tutorial ? new TutorialDirector(getSaveManager().progress.tutorial) : null;
+    this.tutorialSaved = "";
 
     this.audio = new AudioManager();
     this.artEffects = new ArtEffects(this);
@@ -164,19 +174,7 @@ export class GameScene extends Phaser.Scene {
     this.createPlatforms();
     this.selectionGraphic = this.add.graphics().setDepth(DEPTH.effects);
     this.placementGuideGraphic = this.add.graphics().setDepth(DEPTH.effects - 1);
-    this.placementPreviewGraphic = this.add.graphics().setDepth(DEPTH.effects + 1);
-    this.placementPreviewText = this.add
-      .text(0, 0, "", {
-        fontFamily: "Arial, sans-serif",
-        fontSize: "11px",
-        fontStyle: "bold",
-        color: "#ffffff",
-        backgroundColor: "rgba(0, 20, 31, .9)",
-        padding: { x: 5, y: 3 },
-      })
-      .setOrigin(0.5, 1)
-      .setDepth(DEPTH.effects + 2)
-      .setVisible(false);
+    this.ghost = new PlacementGhost(this);
     this.debugOverlay = new DebugOverlay(this, this.match.route);
     this.registerEvents();
     this.game.canvas.addEventListener("pointerdown", this.unlockAudio, { passive: true });
@@ -194,6 +192,7 @@ export class GameScene extends Phaser.Scene {
     const ticks = this.clock.advance(delta, () => this.match.tick());
     this.drainEvents();
     if (ticks > 0) this.syncViews(ticks * this.match.dtMs);
+    this.effects.update(this.match.now);
     if (!this.clock.paused) this.updateCurrentMotes(Math.min(delta, 100) * this.clock.speed);
 
     this.debugAccumulatorMs += delta;
@@ -337,6 +336,7 @@ export class GameScene extends Phaser.Scene {
     EventBus.on(Events.restart, this.restartGame, this);
     EventBus.on(Events.skipCountdown, this.startNextWave, this);
     EventBus.on(Events.startNextWave, this.startNextWave, this);
+    EventBus.on(Events.skipTutorial, this.skipTutorial, this);
     EventBus.on(Events.toggleDebug, this.toggleDebug, this);
     EventBus.on(Events.toggleDebugFlag, this.toggleDebugFlag, this);
     EventBus.on(Events.debugCommand, this.runDebugCommand, this);
@@ -344,6 +344,10 @@ export class GameScene extends Phaser.Scene {
     EventBus.on(Events.openLevelSelect, this.openLevelSelect, this);
     this.input.on("pointermove", this.handleWorldPointerMove, this);
     this.input.on("pointerdown", this.handleWorldPointerDown, this);
+    // ESC desfaz a seleção; sem nada selecionado, abre o menu de pause.
+    this.input.keyboard?.on("keydown-ESC", this.handleEscape, this);
+    // O menu do navegador no botão direito atrapalha o cancelamento por clique.
+    this.game.canvas.addEventListener("contextmenu", preventContextMenu);
 
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
       EventBus.off(Events.selectGuardian, this.selectGuardian, this);
@@ -355,6 +359,7 @@ export class GameScene extends Phaser.Scene {
       EventBus.off(Events.restart, this.restartGame, this);
       EventBus.off(Events.skipCountdown, this.startNextWave, this);
       EventBus.off(Events.startNextWave, this.startNextWave, this);
+      EventBus.off(Events.skipTutorial, this.skipTutorial, this);
       EventBus.off(Events.toggleDebug, this.toggleDebug, this);
       EventBus.off(Events.toggleDebugFlag, this.toggleDebugFlag, this);
       EventBus.off(Events.debugCommand, this.runDebugCommand, this);
@@ -362,8 +367,12 @@ export class GameScene extends Phaser.Scene {
       EventBus.off(Events.openLevelSelect, this.openLevelSelect, this);
       this.input.off("pointermove", this.handleWorldPointerMove, this);
       this.input.off("pointerdown", this.handleWorldPointerDown, this);
+      this.input.keyboard?.off("keydown-ESC", this.handleEscape, this);
+      this.game.canvas.removeEventListener("contextmenu", preventContextMenu);
+      this.ghost.destroy();
       this.game.canvas.removeEventListener("pointerdown", this.unlockAudio);
       this.match.setListener(null);
+      this.effects.destroy();
       this.audio.destroy();
       this.debugOverlay.destroy();
     });
@@ -373,6 +382,7 @@ export class GameScene extends Phaser.Scene {
     if (this.match.status !== "running") return;
     this.selectedGuardianId = this.selectedGuardianId === id ? null : id;
     this.selectedPlacedGuardianId = null;
+    this.ghost.setGuardian(this.selectedGuardianId ? GUARDIANS[this.selectedGuardianId] : null);
     if (this.selectedGuardianId) {
       const definition = GUARDIANS[id];
       this.showMessage(`Toque em ${PLACEMENT_HINTS[definition.placementMode]} para posicionar ${definition.name}.`, 2200);
@@ -420,6 +430,8 @@ export class GameScene extends Phaser.Scene {
     }
     this.selectedGuardianId = null;
     this.selectedPlacedGuardianId = result.instanceId ?? null;
+    this.ghost.setGuardian(null);
+    this.ghost.hide();
     this.emitHud();
     this.renderPlacementState();
     return result;
@@ -444,6 +456,10 @@ export class GameScene extends Phaser.Scene {
 
   private handleWorldPointerDown(pointer: Phaser.Input.Pointer): void {
     if (this.match.status !== "running" || pointer.y <= HUD_TOP || pointer.y >= GAME_HEIGHT - HUD_BOTTOM) return;
+    if (pointer.rightButtonDown()) {
+      this.cancelPlacement();
+      return;
+    }
     if (!this.selectedGuardianId) {
       if (this.selectedPlacedGuardianId) this.clearPlacedSelection();
       return;
@@ -464,27 +480,62 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
+  /** Fantasma da unidade sob o cursor: onde ela cairia, o alcance que teria e quanto custa. */
   private handleWorldPointerMove(pointer: Phaser.Input.Pointer): void {
-    this.placementPreviewGraphic.clear();
-    this.placementPreviewText.setVisible(false);
-    if (!this.selectedGuardianId || pointer.y <= HUD_TOP || pointer.y >= GAME_HEIGHT - HUD_BOTTOM) return;
+    if (!this.selectedGuardianId || this.match.status !== "running" || pointer.y <= HUD_TOP || pointer.y >= GAME_HEIGHT - HUD_BOTTOM) {
+      this.ghost.hide();
+      return;
+    }
     const definition = GUARDIANS[this.selectedGuardianId];
-    if (definition.placementMode === "platform") return;
+    const affordable = this.match.pearls() >= definition.cost;
+    const cost = `◉ ${definition.cost}`;
+
+    if (definition.placementMode === "platform") {
+      // Na plataforma o fantasma encaixa no centro dela; longe de qualquer uma, segue o cursor em recusa.
+      const platform = this.platformNear(pointer.worldX, pointer.worldY);
+      const occupied = platform ? this.match.platformOccupant(platform.definition.id) !== null : false;
+      this.ghost.show({
+        x: platform?.definition.x ?? pointer.worldX,
+        y: platform?.definition.y ?? pointer.worldY,
+        valid: Boolean(platform) && !occupied,
+        affordable,
+        label: !platform ? "Precisa de uma plataforma" : occupied ? "Plataforma ocupada" : affordable ? cost : "Pérolas insuficientes",
+      });
+      return;
+    }
 
     const validation = validatePlacement(definition.placementMode, this.match.placementContext(), { x: pointer.worldX, y: pointer.worldY });
-    const label = validation.valid
-      ? definition.placementMode === "route"
-        ? "Ponto livre da correnteza"
-        : definition.placementMode === "margin"
-          ? "Beira da correnteza"
-          : "Posição válida"
-      : validation.reason;
+    this.ghost.show({
+      x: validation.x,
+      y: validation.y,
+      valid: validation.valid,
+      affordable,
+      label: !validation.valid ? validation.reason : affordable ? cost : "Pérolas insuficientes",
+    });
+  }
 
-    this.placementPreviewGraphic.fillStyle(validation.valid ? 0x67f2ac : 0xff6f79, 0.2);
-    this.placementPreviewGraphic.lineStyle(3, validation.valid ? 0x67f2ac : 0xff6f79, 0.95);
-    this.placementPreviewGraphic.fillCircle(validation.x, validation.y, 34);
-    this.placementPreviewGraphic.strokeCircle(validation.x, validation.y, 34);
-    this.placementPreviewText.setPosition(validation.x, validation.y - 42).setText(label).setVisible(true);
+  /** Plataforma sob o ponto (a zona de toque tem 94px de lado). */
+  private platformNear(x: number, y: number): PlatformZone | null {
+    return this.platforms.find((platform) => Math.abs(platform.definition.x - x) <= 47 && Math.abs(platform.definition.y - y) <= 47) ?? null;
+  }
+
+  private handleEscape(): void {
+    if (this.selectedGuardianId || this.selectedPlacedGuardianId) {
+      this.cancelPlacement();
+      return;
+    }
+    this.togglePause();
+  }
+
+  /** Desiste do posicionamento (ESC, botão direito ou clique fora). */
+  private cancelPlacement(): void {
+    if (!this.selectedGuardianId && !this.selectedPlacedGuardianId) return;
+    this.selectedGuardianId = null;
+    this.selectedPlacedGuardianId = null;
+    this.ghost.setGuardian(null);
+    this.ghost.hide();
+    this.emitHud();
+    this.renderPlacementState();
   }
 
   // -------------------------------------------------------- upgrade e venda
@@ -662,6 +713,44 @@ export class GameScene extends Phaser.Scene {
     this.emitHud();
   }
 
+  /**
+   * Passo do tutorial para o HUD. O diretor é puro; aqui só montamos o contexto e gravamos o que
+   * já foi aprendido (o save guarda os passos, então a dica não volta na próxima partida).
+   */
+  private tutorialHint(snapshot: MatchSnapshot): TutorialHint | null {
+    if (!this.tutorial || this.tutorial.isOver) return null;
+    const active = this.tutorial.update({
+      levelId: this.level.id,
+      waveIndex: snapshot.wave - 1,
+      waveRunning: snapshot.waveState === "spawning" || snapshot.waveState === "active",
+      pearls: snapshot.pearls,
+      guardiansPlaced: snapshot.guardianCount,
+      upgradesBought: snapshot.upgradeCount,
+      cardSelected: this.selectedGuardianId !== null,
+      unitSelected: this.selectedPlacedGuardianId !== null,
+      speed: this.clock.speed,
+    });
+    this.saveTutorialState();
+    return active ? { id: active.id, text: active.text, highlight: active.highlight, step: active.index + 1, total: active.total } : null;
+  }
+
+  private saveTutorialState(): void {
+    if (!this.tutorial) return;
+    const next = this.tutorial.state;
+    if (JSON.stringify(next) === this.tutorialSaved) return;
+    this.tutorialSaved = JSON.stringify(next);
+    getSaveManager().update((draft) => {
+      draft.tutorial = next;
+    });
+  }
+
+  /** "PULAR" na dica: encerra o tutorial de vez. */
+  private skipTutorial(): void {
+    this.tutorial?.skip();
+    this.saveTutorialState();
+    this.emitHud();
+  }
+
   /** Executa um comando de debug do painel (item 40). Só com o debug liberado. */
   private runDebugCommand(command: MatchCommand): void {
     if (!this.debugAllowed || this.match.status !== "running") return;
@@ -763,6 +852,7 @@ export class GameScene extends Phaser.Scene {
       muted: this.audio.isMuted,
       debug: { ...this.debugFlags },
       message: this.message,
+      tutorial: this.tutorialHint(snapshot),
       gameOver,
     };
     const dataset = this.game.canvas.dataset;
@@ -782,6 +872,7 @@ export class GameScene extends Phaser.Scene {
     dataset.loadout = this.loadout.join(",");
     dataset.debug = String(this.debugFlags.enabled);
     dataset.paused = String(this.clock.paused);
+    dataset.tutorial = hud.tutorial?.id ?? "";
     dataset.speed = String(this.clock.speed);
     dataset.difficulty = this.difficulty.id;
     dataset.nextWave = hud.nextWave ? hud.nextWave.chips.map((chip) => `${chip.enemyId}:${chip.count}${chip.isElite ? "+" : ""}`).join(",") : "";
@@ -858,8 +949,7 @@ export class GameScene extends Phaser.Scene {
       this.placementGuideGraphic.lineStyle(PLACEMENT.marginMin * 2, 0x031d2d, 0.12);
       this.strokeRoute(this.placementGuideGraphic);
     } else if (placementMode === null) {
-      this.placementPreviewGraphic.clear();
-      this.placementPreviewText.setVisible(false);
+      this.ghost.hide();
     }
     this.renderDebug();
   }

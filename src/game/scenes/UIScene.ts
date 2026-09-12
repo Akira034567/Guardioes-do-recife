@@ -3,10 +3,18 @@ import { artTextureKey, artTextureKeyForFolder, GUARDIAN_ART, solidBounds } from
 import { GAME_HEIGHT, GAME_WIDTH, HUD_BOTTOM, HUD_TOP } from "../constants";
 import { DEFAULT_LOADOUT, GUARDIANS } from "../data/guardians";
 import { EventBus, Events } from "../EventBus";
+import { PLACEMENT_HINTS } from "../core/PlacementRules";
 import { HUD_LAYOUT } from "../hudLayout";
+import { publishUiRegistry, UI_REGISTRY } from "../ui/UiRegistry";
 import type { BranchId, BranchStatus, DebugFlags, GuardianId, HudSnapshot, UpgradeOption } from "../types";
 
 export { HUD_LAYOUT };
+
+/** Largura da coluna do ícone dentro do painel de contexto. */
+const PANEL_ICON_COLUMN = 58;
+
+/** Faixa da dica do tutorial, acima das cartas. */
+const TUTORIAL_HINT = { x: 330, width: 560, skipX: 330 + 560 / 2 - 48 } as const;
 
 interface GuardianCard {
   id: GuardianId;
@@ -43,7 +51,12 @@ export class UIScene extends Phaser.Scene {
   private upgradeTree!: Phaser.GameObjects.Text;
   private loadout: GuardianId[] = [...DEFAULT_LOADOUT];
   /** Card de retrato da variante atual do Guardião selecionado, acima do painel de upgrade. */
-  private portraitCard: Phaser.GameObjects.Image | null = null;
+  private panelIcon: Phaser.GameObjects.Image | null = null;
+  private tutorialBox!: Phaser.GameObjects.Rectangle;
+  private tutorialText!: Phaser.GameObjects.Text;
+  private tutorialSkip!: Phaser.GameObjects.Rectangle;
+  private tutorialSkipText!: Phaser.GameObjects.Text;
+  private tutorialFocus!: Phaser.GameObjects.Graphics;
   private optionButtons: OptionButton[] = [];
   private sellButton!: Phaser.GameObjects.Rectangle;
   private sellButtonText!: Phaser.GameObjects.Text;
@@ -85,9 +98,12 @@ export class UIScene extends Phaser.Scene {
   }
 
   create(): void {
+    UI_REGISTRY.clear();
     this.createTopHud();
     this.createBottomHud();
+    this.createTutorialHint();
     this.createDebugPanel();
+    publishUiRegistry();
 
     EventBus.on(Events.hudUpdate, this.renderSnapshot, this);
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
@@ -130,14 +146,15 @@ export class UIScene extends Phaser.Scene {
     this.speedButtons = ([1, 2] as const).map((speed, index) => {
       const background = this.button(HUD_LAYOUT.speedButtonXs[index], HUD_LAYOUT.topButtonY, HUD_LAYOUT.speedButtonWidth, 42, `${speed}×`, () =>
         EventBus.emit(Events.setSpeed, speed),
+        `speed:${speed}`,
       );
       const label = background.getData("label") as Phaser.GameObjects.Text;
       label.setFontSize(13);
       return { speed, background, label };
     });
-    this.pauseButton = this.button(HUD_LAYOUT.pauseButtonX, HUD_LAYOUT.topButtonY, 48, 42, "Ⅱ", () => EventBus.emit(Events.togglePause));
+    this.pauseButton = this.button(HUD_LAYOUT.pauseButtonX, HUD_LAYOUT.topButtonY, 48, 42, "Ⅱ", () => EventBus.emit(Events.togglePause), "pause");
     this.pauseText = this.pauseButton.getData("label") as Phaser.GameObjects.Text;
-    this.muteButton = this.button(HUD_LAYOUT.muteButtonX, HUD_LAYOUT.topButtonY, 48, 42, "♪", () => EventBus.emit(Events.toggleMute));
+    this.muteButton = this.button(HUD_LAYOUT.muteButtonX, HUD_LAYOUT.topButtonY, 48, 42, "♪", () => EventBus.emit(Events.toggleMute), "mute");
     this.muteText = this.muteButton.getData("label") as Phaser.GameObjects.Text;
 
     // Prévia da próxima onda: discreta, encostada à direita, fora do caminho do mapa.
@@ -197,6 +214,9 @@ export class UIScene extends Phaser.Scene {
         .rectangle(x, centerY + 10, HUD_LAYOUT.cardWidth, 78, 0x0a3c53, 1)
         .setStrokeStyle(2, definition.color, 0.78)
         .setInteractive({ useHandCursor: true });
+      UI_REGISTRY.register(`card:${id}`, x, centerY + 10, HUD_LAYOUT.cardWidth, 78);
+      // Apelido da primeira carta: o tutorial aponta para ela sem saber qual é o esquadrão.
+      if (index === 0) UI_REGISTRY.register("card:first", x, centerY + 10, HUD_LAYOUT.cardWidth, 78);
       background.on("pointerdown", () => EventBus.emit(Events.selectGuardian, id));
       const icon =
         this.artIcon(artTextureKey(id, GUARDIAN_ART[id].base, "idle"), x - 34, centerY + 6, 42, 48) ??
@@ -224,7 +244,8 @@ export class UIScene extends Phaser.Scene {
     this.add
       .rectangle(HUD_LAYOUT.panelX, centerY + 4, HUD_LAYOUT.panelWidth, 100, 0x092f43, 1)
       .setStrokeStyle(2, 0x3da7bd, 0.6);
-    const panelLeft = HUD_LAYOUT.panelX - HUD_LAYOUT.panelWidth / 2 + 10;
+    // O ícone da unidade em foco ocupa a coluna da esquerda do painel; o texto começa depois dela.
+    const panelLeft = HUD_LAYOUT.panelX - HUD_LAYOUT.panelWidth / 2 + 10 + PANEL_ICON_COLUMN;
     this.upgradeTitle = this.add.text(panelLeft, GAME_HEIGHT - HUD_BOTTOM + 10, "Selecione um Guardião posicionado", {
       fontFamily: "Arial, sans-serif",
       fontSize: "13px",
@@ -251,7 +272,7 @@ export class UIScene extends Phaser.Scene {
         const option = this.optionButtons[index].option;
         // Ramo bloqueado ou completo: o clique vai à cena só para a mensagem explicativa.
         EventBus.emit(Events.upgradeGuardian, option?.branchId ?? slot);
-      });
+      }, `upgrade:${slot}`);
       const label = background.getData("label") as Phaser.GameObjects.Text;
       label.setFontSize(10);
       background.setVisible(false);
@@ -259,21 +280,27 @@ export class UIScene extends Phaser.Scene {
       return { slot, background, label, option: null };
     });
 
-    this.sellButton = this.button(HUD_LAYOUT.sellButtonX, HUD_LAYOUT.optionButtonY, 96, 34, "VENDER", () => EventBus.emit(Events.sellGuardian));
+    this.sellButton = this.button(HUD_LAYOUT.sellButtonX, HUD_LAYOUT.optionButtonY, 96, 34, "VENDER", () => EventBus.emit(Events.sellGuardian), "sell");
     this.sellButtonText = this.sellButton.getData("label") as Phaser.GameObjects.Text;
     this.sellButtonText.setFontSize(10);
     this.sellButton.setFillStyle(0x4a2a33, 1).setStrokeStyle(2, 0xff8290, 0.8);
     this.sellButton.setVisible(false);
     this.sellButtonText.setVisible(false);
 
-    this.skipButton = this.button(HUD_LAYOUT.skipButtonX, HUD_LAYOUT.skipButtonY, HUD_LAYOUT.skipButtonWidth, 34, "PRÓXIMA ONDA  ␣", () =>
-      EventBus.emit(Events.startNextWave),
+    this.skipButton = this.button(
+      HUD_LAYOUT.skipButtonX,
+      HUD_LAYOUT.skipButtonY,
+      HUD_LAYOUT.skipButtonWidth,
+      34,
+      "PRÓXIMA ONDA  ␣",
+      () => EventBus.emit(Events.startNextWave),
+      "nextWave",
     );
     this.skipButtonText = this.skipButton.getData("label") as Phaser.GameObjects.Text;
     this.skipButtonText.setFontSize(11);
 
-    this.button(HUD_LAYOUT.restartButtonX, HUD_LAYOUT.restartButtonY, 120, 34, "REINICIAR", () => EventBus.emit(Events.restart));
-    this.button(HUD_LAYOUT.menuButtonX, HUD_LAYOUT.menuButtonY, 120, 34, "FASES", () => EventBus.emit(Events.openLevelSelect));
+    this.button(HUD_LAYOUT.restartButtonX, HUD_LAYOUT.restartButtonY, 120, 34, "REINICIAR", () => EventBus.emit(Events.restart), "restart");
+    this.button(HUD_LAYOUT.menuButtonX, HUD_LAYOUT.menuButtonY, 120, 34, "FASES", () => EventBus.emit(Events.openLevelSelect), "levels");
     this.levelLabel = this.add
       .text(HUD_LAYOUT.restartButtonX, GAME_HEIGHT - HUD_BOTTOM + 8, "RECIFE 1", {
         fontFamily: "Arial, sans-serif",
@@ -381,6 +408,53 @@ export class UIScene extends Phaser.Scene {
     });
   }
 
+  /**
+   * Dica do tutorial: uma faixa acima do HUD de baixo, sem modal e sem travar nada. Só o botão
+   * PULAR recebe toque; o resto do jogo continua respondendo normalmente (item 30).
+   */
+  private createTutorialHint(): void {
+    const y = GAME_HEIGHT - HUD_BOTTOM - 34;
+    this.tutorialFocus = this.add.graphics();
+    this.tutorialBox = this.add.rectangle(TUTORIAL_HINT.x, y, TUTORIAL_HINT.width, 46, 0x062b3d, 0.94).setStrokeStyle(2, 0xffe580, 0.85).setVisible(false);
+    this.tutorialText = this.add
+      .text(TUTORIAL_HINT.x - TUTORIAL_HINT.width / 2 + 14, y, "", {
+        fontFamily: "Arial, sans-serif",
+        fontSize: "12px",
+        color: "#f3fbff",
+        wordWrap: { width: TUTORIAL_HINT.width - 110 },
+      })
+      .setOrigin(0, 0.5)
+      .setVisible(false);
+    this.tutorialSkip = this.add
+      .rectangle(TUTORIAL_HINT.skipX, y, 68, 26, 0x103e50, 1)
+      .setStrokeStyle(2, 0x348ba0, 0.9)
+      .setVisible(false)
+      .setInteractive({ useHandCursor: true });
+    UI_REGISTRY.register("tutorial:skip", TUTORIAL_HINT.skipX, y, 68, 26);
+    this.tutorialSkip.on("pointerdown", () => EventBus.emit(Events.skipTutorial));
+    this.tutorialSkipText = this.add
+      .text(TUTORIAL_HINT.skipX, y, "PULAR", { fontFamily: "Arial, sans-serif", fontSize: "11px", fontStyle: "bold", color: "#e9fbff" })
+      .setOrigin(0.5)
+      .setVisible(false);
+  }
+
+  private renderTutorial(snapshot: HudSnapshot): void {
+    const hint = snapshot.tutorial;
+    const visible = Boolean(hint) && !snapshot.gameOver;
+    this.tutorialBox.setVisible(visible);
+    this.tutorialText.setVisible(visible);
+    this.tutorialSkip.setVisible(visible);
+    this.tutorialSkipText.setVisible(visible);
+    this.tutorialFocus.clear();
+    if (!hint || !visible) return;
+    this.tutorialText.setText(`${hint.step}/${hint.total} · ${hint.text}`);
+    // Contorno no controle citado pela dica; o registro sabe onde cada botão está.
+    const target = hint.highlight ? UI_REGISTRY.get(hint.highlight) : undefined;
+    if (!target) return;
+    this.tutorialFocus.lineStyle(3, 0xffe580, 0.9);
+    this.tutorialFocus.strokeRoundedRect(target.x - target.width / 2 - 3, target.y - target.height / 2 - 3, target.width + 6, target.height + 6, 6);
+  }
+
   private renderSnapshot(snapshot: HudSnapshot): void {
     this.pearlText.setText(`◉ ${snapshot.pearls}`);
     this.healthText.setText(`RECIFE ♥ ${snapshot.reefHealth}/${snapshot.maxReefHealth}`);
@@ -397,6 +471,7 @@ export class UIScene extends Phaser.Scene {
     this.renderSpeed(snapshot);
     this.renderWavePreview(snapshot);
     this.renderBossBar(snapshot);
+    this.renderTutorial(snapshot);
     this.levelLabel.setText(`FASE ${snapshot.levelIndex + 1}/${snapshot.levelCount} · ${snapshot.levelName.toUpperCase()}`);
 
     this.cards.forEach((card) => {
@@ -455,13 +530,9 @@ export class UIScene extends Phaser.Scene {
 
   private renderUpgradePanel(snapshot: HudSnapshot): void {
     const selected = snapshot.selectedPlacedGuardian;
-    this.renderPortraitCard(selected);
+    this.renderPanelIcon(selected?.guardianId ?? snapshot.selectedGuardianId, selected?.artVariant ?? "base");
     if (!selected) {
-      this.upgradeTitle.setText("Selecione um Guardião posicionado");
-      this.upgradeTitle.setColor("#d9f8ff");
-      this.upgradeTree.setText("");
-      this.upgradeDescription.setPosition(this.upgradeDescription.x, GAME_HEIGHT - HUD_BOTTOM + 28);
-      this.upgradeDescription.setText("Toque em um Guardião no mapa para ver os ramos de upgrade e vender.");
+      this.renderBriefing(snapshot);
       this.optionButtons.forEach((button) => {
         button.option = null;
         button.background.setVisible(false);
@@ -471,6 +542,7 @@ export class UIScene extends Phaser.Scene {
       this.sellButtonText.setVisible(false);
       return;
     }
+
 
     const branchLabel = selected.branchName ? ` · ${selected.branchName}` : "";
     this.upgradeTitle.setText(`${selected.name} · nível ${selected.upgradeLevel}/${selected.maxUpgradeLevel}${branchLabel}`);
@@ -552,26 +624,55 @@ export class UIScene extends Phaser.Scene {
   }
 
   /**
-   * Retrato da variante atual, encostado no canto superior direito logo abaixo do HUD de cima (longe das
-   * plataformas e do painel de upgrade). Não recebe input, então toques no mapa atrás dele funcionam.
+   * Painel sem unidade selecionada. Com uma carta escolhida, vira a ficha dela: papel, ataque,
+   * alcance, custo e para onde vão as duas evoluções (item 32). Sem carta, a instrução de uso.
    */
-  private renderPortraitCard(selected: HudSnapshot["selectedPlacedGuardian"]): void {
-    const key = selected ? artTextureKeyForFolder(selected.guardianId, selected.artVariant, "portrait") : null;
-    if (!key || !this.textures.exists(key)) {
-      this.portraitCard?.setVisible(false);
+  private renderBriefing(snapshot: HudSnapshot): void {
+    this.upgradeDescription.setPosition(this.upgradeDescription.x, GAME_HEIGHT - HUD_BOTTOM + 52);
+    const guardianId = snapshot.selectedGuardianId;
+    if (!guardianId) {
+      this.upgradeTitle.setText("Selecione um Guardião posicionado");
+      this.upgradeTitle.setColor("#d9f8ff");
+      this.upgradeTree.setText("");
+      this.upgradeDescription.setPosition(this.upgradeDescription.x, GAME_HEIGHT - HUD_BOTTOM + 28);
+      this.upgradeDescription.setText("Toque em um Guardião no mapa para ver os ramos de upgrade e vender.");
       return;
     }
-    if (!this.portraitCard) {
-      this.portraitCard = this.add.image(0, 0, key).setOrigin(1, 0).setAlpha(0.96);
-    } else if (this.portraitCard.texture.key !== key) {
-      this.portraitCard.setTexture(key);
+    const definition = GUARDIANS[guardianId];
+    const affordable = snapshot.pearls >= definition.cost;
+    this.upgradeTitle.setText(`${definition.name} · ◉ ${definition.cost}${affordable ? "" : " (faltam pérolas)"}`);
+    this.upgradeTitle.setColor(affordable ? "#d9f8ff" : "#ffc2c7");
+    this.upgradeTree.setText(
+      definition.branches.map((branch, index) => `${index === 0 ? "BASE ─┬─ " : "     └─ "}${branch.name.toUpperCase()}: ${branch.tagline}`).join("\n"),
+    );
+    const attack = `${definition.damage} de dano a cada ${(definition.cooldownMs / 1000).toFixed(1)}s`;
+    const reach = definition.placementMode === "route" ? "corpo a corpo na correnteza" : `alcance ${Math.round(definition.range)}`;
+    this.upgradeDescription.setText(`${definition.role} · ${attack} · ${reach}
+Posicione em ${PLACEMENT_HINTS[definition.placementMode]}.`);
+  }
+
+  /**
+   * Ícone da unidade em foco, no canto do painel. Fica dentro do HUD de baixo: nada de retrato
+   * flutuante por cima do mapa, que escondia plataformas e inimigos (item 32).
+   */
+  private renderPanelIcon(guardianId: GuardianId | null, variant: string): void {
+    const key = guardianId ? artTextureKeyForFolder(guardianId, variant, "idle") : null;
+    if (!key || !this.textures.exists(key)) {
+      this.panelIcon?.setVisible(false);
+      return;
     }
+    const bounds = solidBounds(this, key);
     const frame = this.textures.getFrame(key);
-    // Os cinco primeiros retratos são faixas largas (~290x105); os dos novos Guardiões são cards em pé
-    // (~200x250) e precisam de mais altura para o texto continuar legível.
-    const portraitOrientation = frame.height > frame.width;
-    const scale = portraitOrientation ? Math.min(150 / frame.height, 130 / frame.width) : Math.min(84 / frame.height, 280 / frame.width);
-    this.portraitCard.setScale(scale).setPosition(GAME_WIDTH - 10, HUD_TOP + 8).setVisible(true);
+    const box = PANEL_ICON_COLUMN - 12;
+    const scale = bounds ? Math.min(box / bounds.width, box / bounds.height) : Math.min(box / frame.width, box / frame.height);
+    const centerX = HUD_LAYOUT.panelX - HUD_LAYOUT.panelWidth / 2 + 10 + PANEL_ICON_COLUMN / 2;
+    const centerY = GAME_HEIGHT - HUD_BOTTOM + 48;
+    const offsetX = bounds ? (bounds.x + bounds.width / 2 - frame.width / 2) * scale : 0;
+    const offsetY = bounds ? (bounds.y + bounds.height / 2 - frame.height / 2) * scale : 0;
+    if (!this.panelIcon) this.panelIcon = this.add.image(0, 0, key).setOrigin(0.5);
+    else this.panelIcon.setTexture(key);
+    if (bounds) this.panelIcon.setCrop(bounds.x, bounds.y, bounds.width, bounds.height);
+    this.panelIcon.setScale(scale).setPosition(centerX - offsetX, centerY - offsetY).setAlpha(0.95).setVisible(true);
   }
 
   /**
@@ -633,7 +734,9 @@ export class UIScene extends Phaser.Scene {
     height: number,
     text: string,
     onClick: () => void,
+    name?: string,
   ): Phaser.GameObjects.Rectangle {
+    if (name) UI_REGISTRY.register(name, x, y, width, height);
     const background = this.add
       .rectangle(x, y, width, height, 0x103e50, 1)
       .setStrokeStyle(2, 0x348ba0, 0.75)

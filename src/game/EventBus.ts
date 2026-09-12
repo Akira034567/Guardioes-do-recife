@@ -16,6 +16,8 @@ export const Events = {
   startNextWave: "ui:start-next-wave",
   /** payload: 1 | 2 | 3 */
   setSpeed: "ui:set-speed",
+  /** "PULAR" na dica do tutorial. */
+  skipTutorial: "ui:skip-tutorial",
   toggleDebug: "ui:toggle-debug",
   toggleDebugFlag: "ui:toggle-debug-flag",
   /** payload: MatchCommand de debug (só funciona com o debug liberado). */

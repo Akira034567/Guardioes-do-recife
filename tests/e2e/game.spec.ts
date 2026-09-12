@@ -342,3 +342,28 @@ test("opens the reef album, the bestiary and the settings from the map", async (
   await expect(canvas).toHaveAttribute("data-overlay", "");
   expect(pageErrors).toEqual([]);
 });
+
+test("guides the first match with hints that never block the game", async ({ page }) => {
+  const { canvas, clickGame, pageErrors } = await openGame(page, "level=recife-1");
+  // O registro do HUD publica cada controle por nome: os testes não dependem de coordenadas soltas.
+  const names = await page.evaluate(() => window.__grUi?.names() ?? []);
+  expect(names).toEqual(expect.arrayContaining(["pause", "speed:2", "nextWave", "sell", "card:first", "tutorial:skip"]));
+
+  await expect(canvas).toHaveAttribute("data-tutorial", "pick-card");
+  await clickGame(CARD_X.shrimp, CARD_Y);
+  await expect(canvas).toHaveAttribute("data-tutorial", "place-guardian");
+  // A dica fica na tela e o jogo continua respondendo: o Guardião é posicionado normalmente.
+  await clickGame(375, 245);
+  await expect(canvas).toHaveAttribute("data-guardians", "1");
+  await expect(canvas).toHaveAttribute("data-tutorial", "wave-start");
+
+  const skip = await page.evaluate(() => window.__grUi?.bounds("tutorial:skip") ?? null);
+  if (!skip) throw new Error("Controle tutorial:skip não registrado");
+  await clickGame(skip.x, skip.y);
+  await expect(canvas).toHaveAttribute("data-tutorial", "");
+  // Pulado uma vez, o tutorial não volta na próxima partida.
+  await page.reload();
+  await expect(canvas).toHaveAttribute("data-screen", "game", { timeout: 30_000 });
+  await expect(canvas).toHaveAttribute("data-tutorial", "");
+  expect(pageErrors).toEqual([]);
+});

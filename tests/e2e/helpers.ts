@@ -47,3 +47,13 @@ export async function openGame(page: Page, query = "level=recife-1") {
   const clickGame = (x: number, y: number) => page.mouse.click(box.x + (x * box.width) / 1280, box.y + (y * box.height) / 720);
   return { canvas, clickGame, pageErrors };
 }
+
+declare global {
+  interface Window {
+    /** Posições dos controles do HUD publicadas por `UiRegistry` (somente leitura). */
+    __grUi?: {
+      bounds(name: string): { name: string; x: number; y: number; width: number; height: number; enabled: boolean } | null;
+      names(): string[];
+    };
+  }
+}
