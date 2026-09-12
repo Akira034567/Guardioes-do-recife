@@ -30,10 +30,27 @@ export interface BehaviorGuardian extends Vec2 {
   setAttackSpeedBonus(bonus: number): void;
 }
 
+/** Causa de um dano; a apresentação escolhe som/efeito por causa, o motor nunca sabe de áudio. */
+export type DamageCause =
+  | "projectile"
+  | "splash"
+  | "chain"
+  | "pulse"
+  | "melee"
+  | "spin"
+  | "ink"
+  | "inkSecondary"
+  | "sonar"
+  | "trap"
+  | "field"
+  | "contact"
+  | "poison";
+
 export interface DamageOptions {
   sourceId?: string;
   armorPiercing?: boolean;
   continuous?: boolean;
+  cause?: DamageCause;
 }
 
 export type BehaviorEvent =
@@ -179,7 +196,7 @@ export function updateTrap<E extends BehaviorEnemy>(guardian: BehaviorGuardian, 
     const multipliers = trapChargeMultipliers(trap, event.chargeBonus);
     const controlMultiplier = multipliers.control * guardian.stats.controlDurationMultiplier;
     for (const enemy of inRadius) {
-      if (trap.damage > 0) hooks.damage(enemy, trap.damage * multipliers.damage, { sourceId: guardian.id });
+      if (trap.damage > 0) hooks.damage(enemy, trap.damage * multipliers.damage, { sourceId: guardian.id, cause: "trap" });
       if (trap.poison) {
         applyPoisonTo(enemy, trap.poison, now, guardian.stats.debuffDurationMultiplier);
         hooks.emit?.({ type: "poisoned", enemyId: enemy.id });

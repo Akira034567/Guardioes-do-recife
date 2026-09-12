@@ -3,6 +3,11 @@ export interface Vec2 {
   y: number;
 }
 
+/** Identidade de um jogador na partida ("p1" hoje; coop futuro usa vários). */
+export type PlayerId = string;
+/** Time de um jogador: quem compartilha o Recife (vidas). */
+export type TeamId = string;
+
 export type GuardianId =
   | "pistol-shrimp"
   | "jellyfish"

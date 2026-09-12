@@ -1,5 +1,3 @@
-import { readdirSync, readFileSync, statSync } from "node:fs";
-import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { simulateLevel } from "../src/game/core/Simulation";
 import { getLevel } from "../src/game/data/levels";
@@ -11,16 +9,13 @@ import { BALANCE_BUILDS } from "./balance-builds";
  * pelo `Rng` semeado do motor, nunca por `Math.random` dentro de `src/game/core`.
  */
 
-function walk(dir: string): string[] {
-  return readdirSync(dir).flatMap((entry) => {
-    const path = join(dir, entry);
-    return statSync(path).isDirectory() ? walk(path) : path.endsWith(".ts") ? [path] : [];
-  });
-}
+const CORE_SOURCES = import.meta.glob("/src/game/core/**/*.ts", { query: "?raw", import: "default", eager: true }) as Record<string, string>;
 
 describe("determinism", () => {
   it("never uses Math.random inside the pure core", () => {
-    const offenders = walk(join(__dirname, "..", "src", "game", "core")).filter((file) => /Math\.random/.test(readFileSync(file, "utf8")));
+    const files = Object.keys(CORE_SOURCES);
+    expect(files.length).toBeGreaterThan(20);
+    const offenders = files.filter((file) => !file.endsWith("/Rng.ts") && /Math\.random\(/.test(CORE_SOURCES[file]));
     expect(offenders).toEqual([]);
   });
 
