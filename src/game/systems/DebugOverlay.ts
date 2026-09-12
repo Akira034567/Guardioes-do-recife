@@ -1,6 +1,7 @@
 import Phaser from "phaser";
 import { DEPTH } from "../constants";
 import { normalizedDirection } from "../core/CurrentField";
+import type { FlowField } from "../core/FlowField";
 import type { RoutePath } from "../core/RoutePath";
 import type { CurrentZoneDefinition, DebugFlags } from "../types";
 import type { Enemy } from "../objects/Enemy";
@@ -12,8 +13,15 @@ export interface PlacementDebugInfo {
   waterRouteClearance: number;
   waterSeparation: number;
   routePlacementClearance: number;
+  /** Faixa de margem (Tubarão): distâncias mínima e máxima da linha da rota. */
+  marginBand: { min: number; max: number };
   platforms: Array<{ x: number; y: number }>;
-  routeBlockers: Array<{ id: string; x: number; y: number }>;
+  routeBlockers: Array<{ id: string; x: number; y: number; label: string }>;
+}
+
+export interface ControlDebugInfo {
+  flowFields: readonly FlowField[];
+  now: number;
 }
 
 export class DebugOverlay {
@@ -33,6 +41,7 @@ export class DebugOverlay {
     currentReversed: boolean,
     selectedGuardianId: string | null,
     placementInfo: PlacementDebugInfo,
+    controls: ControlDebugInfo,
   ): void {
     this.graphics.clear();
     this.labels.forEach((label) => label.destroy());
@@ -42,6 +51,7 @@ export class DebugOverlay {
     if (flags.route) this.drawRoute();
     if (flags.current) this.drawCurrents(currents, currentReversed);
     if (flags.placements) this.drawPlacements(placementInfo, guardians);
+    if (flags.controls) this.drawControls(controls, guardians, enemies);
 
     if (flags.ranges) {
       guardians.forEach((guardian) => {
@@ -70,18 +80,32 @@ export class DebugOverlay {
 
     if (flags.states) {
       guardians.forEach((guardian) => {
+        const trap = guardian.currentTrapPhase ? ` · ${guardian.currentTrapPhase}` : "";
+        const frenzy = guardian.runtime.attackSpeedBonus > 0 ? ` · +${Math.round(guardian.runtime.attackSpeedBonus * 100)}%` : "";
+        const prey = guardian.runtime.preyId ? ` · presa ${guardian.runtime.preyId}` : "";
         this.addLabel(
           guardian.x,
           guardian.y - 55,
-          `${guardian.guardianState}${guardian.targetId ? ` → ${guardian.targetId}` : ""}`,
+          `${guardian.guardianState}${guardian.targetId ? ` → ${guardian.targetId}` : ""}${trap}${frenzy}${prey}`,
           0x9df2ff,
         );
       });
       enemies.forEach((enemy) => {
+        const now = controls.now;
+        const status = [
+          enemy.blockedById ? `BLOQ ${enemy.blockedById}` : "",
+          enemy.status.isStunned(now) ? "STUN" : "",
+          enemy.status.poisonStacks(now) > 0 ? `VEN×${enemy.status.poisonStacks(now)}` : "",
+          enemy.status.isMarked(now) ? `MARCA ${enemy.status.markedBy(now)}` : "",
+          enemy.status.isPriority(now) ? "PRIORIDADE" : "",
+          enemy.status.isControlImmune(now) ? "IMUNE CC" : "",
+        ]
+          .filter(Boolean)
+          .join(" · ");
         this.addLabel(
           enemy.x,
           enemy.y + enemy.definition.hitRadius + 10,
-          `HP ${Math.ceil(enemy.health)} · ${enemy.effectiveSpeed.toFixed(0)}px/s · ${(enemy.progress * 100).toFixed(0)}%${enemy.blockedById ? ` · BLOQ ${enemy.blockedById}` : ""}`,
+          `HP ${Math.ceil(enemy.health)} · ${enemy.effectiveSpeed.toFixed(0)}px/s · ${(enemy.progress * 100).toFixed(0)}%${status ? ` · ${status}` : ""}`,
           0xffd4db,
         );
       });
@@ -95,12 +119,7 @@ export class DebugOverlay {
 
   private drawRoute(): void {
     this.graphics.lineStyle(3, 0xff4df3, 0.9);
-    this.graphics.beginPath();
-    this.route.points.forEach((point, index) => {
-      if (index === 0) this.graphics.moveTo(point.x, point.y);
-      else this.graphics.lineTo(point.x, point.y);
-    });
-    this.graphics.strokePath();
+    this.strokeRoute();
 
     this.route.points.forEach((point, index) => {
       this.graphics.fillStyle(index === 0 ? 0x5cff91 : index === this.route.points.length - 1 ? 0xff5c67 : 0xff4df3, 1);
@@ -135,26 +154,50 @@ export class DebugOverlay {
     });
   }
 
+  /** Zonas de corrente das Tartarugas (setas contra a rota) e alvos coordenados pelo Sonar. */
+  private drawControls(controls: ControlDebugInfo, guardians: readonly Guardian[], enemies: readonly Enemy[]): void {
+    controls.flowFields.forEach((field) => {
+      this.graphics.lineStyle(2, 0x6fe3ff, 0.9);
+      this.graphics.strokeCircle(field.x, field.y, field.radius);
+      for (let index = 0; index < 6; index += 1) {
+        const angle = (Math.PI * 2 * index) / 6;
+        const x = field.x + Math.cos(angle) * field.radius * 0.6;
+        const y = field.y + Math.sin(angle) * field.radius * 0.6;
+        const tangent = this.route.getTangentAtDistance(this.route.getClosestPoint({ x, y }).routeDistance);
+        this.drawArrow(x, y, -tangent.x, -tangent.y, 0x6fe3ff);
+      }
+      this.addLabel(field.x, field.y - field.radius - 10, `${field.mode.toUpperCase()} ×${field.speedFactor.toFixed(2)} · ${field.ownerId}`, 0x9fefff);
+    });
+    guardians.forEach((guardian) => {
+      const preferred = guardian.runtime.preferredTargetId(controls.now);
+      const target = preferred ? enemies.find((enemy) => enemy.instanceId === preferred) : undefined;
+      if (target) {
+        this.graphics.lineStyle(2, 0x9b7bff, 0.8);
+        this.graphics.lineBetween(guardian.x, guardian.y, target.x, target.y);
+      }
+      if (guardian.stats.trap) {
+        this.graphics.lineStyle(1, 0xffd166, 0.8);
+        this.graphics.strokeCircle(guardian.x, guardian.y, guardian.stats.trap.triggerRadius);
+      }
+    });
+  }
+
   private drawPlacements(info: PlacementDebugInfo, guardians: readonly Guardian[]): void {
     this.graphics.fillStyle(0x4edff0, 0.035);
     this.graphics.fillRect(info.waterBounds.x, info.waterBounds.y, info.waterBounds.width, info.waterBounds.height);
     this.graphics.lineStyle(info.waterRouteClearance * 2, 0xff526d, 0.055);
-    this.graphics.beginPath();
-    this.route.points.forEach((point, index) => {
-      if (index === 0) this.graphics.moveTo(point.x, point.y);
-      else this.graphics.lineTo(point.x, point.y);
-    });
-    this.graphics.strokePath();
+    this.strokeRoute();
     this.graphics.lineStyle(1, 0x5feaff, 0.8);
     this.graphics.strokeRect(info.waterBounds.x, info.waterBounds.y, info.waterBounds.width, info.waterBounds.height);
 
+    // Faixa de margem (Tubarão), entre as duas linhas.
+    this.graphics.lineStyle(info.marginBand.max * 2, 0x67f2ac, 0.05);
+    this.strokeRoute();
+    this.graphics.lineStyle(info.marginBand.min * 2, 0x031d2d, 0.08);
+    this.strokeRoute();
+
     this.graphics.lineStyle(info.routePlacementClearance * 2, 0x74ff9a, 0.08);
-    this.graphics.beginPath();
-    this.route.points.forEach((point, index) => {
-      if (index === 0) this.graphics.moveTo(point.x, point.y);
-      else this.graphics.lineTo(point.x, point.y);
-    });
-    this.graphics.strokePath();
+    this.strokeRoute();
 
     this.graphics.lineStyle(1, 0xff7181, 0.75);
     info.platforms.forEach((platform) => this.graphics.strokeCircle(platform.x, platform.y, info.waterSeparation));
@@ -166,13 +209,17 @@ export class DebugOverlay {
       this.graphics.lineStyle(3, color, 0.95);
       this.graphics.fillCircle(placement.x, placement.y, 28);
       this.graphics.strokeCircle(placement.x, placement.y, 28);
-      this.addLabel(
-        placement.x,
-        placement.y - 36,
-        `BAIACU ${index + 1} · OCUPADO`,
-        color,
-      );
+      this.addLabel(placement.x, placement.y - 36, `${placement.label} ${index + 1} · OCUPADO`, color);
     });
+  }
+
+  private strokeRoute(): void {
+    this.graphics.beginPath();
+    this.route.points.forEach((point, index) => {
+      if (index === 0) this.graphics.moveTo(point.x, point.y);
+      else this.graphics.lineTo(point.x, point.y);
+    });
+    this.graphics.strokePath();
   }
 
   private drawArrow(x: number, y: number, dx: number, dy: number, color: number): void {

@@ -1,9 +1,12 @@
 import Phaser from "phaser";
 import { artTextureKey, artTextureKeyForFolder, GUARDIAN_ART, solidBounds } from "../assets/guardianArt";
 import { GAME_HEIGHT, GAME_WIDTH, HUD_BOTTOM, HUD_TOP } from "../constants";
-import { GUARDIANS, GUARDIAN_ORDER } from "../data/guardians";
+import { DEFAULT_LOADOUT, GUARDIANS } from "../data/guardians";
 import { EventBus, Events } from "../EventBus";
-import type { BranchId, DebugFlags, GuardianId, HudSnapshot, UpgradeOption } from "../types";
+import { HUD_LAYOUT } from "../hudLayout";
+import type { BranchId, BranchStatus, DebugFlags, GuardianId, HudSnapshot, UpgradeOption } from "../types";
+
+export { HUD_LAYOUT };
 
 interface GuardianCard {
   id: GuardianId;
@@ -20,34 +23,12 @@ interface DebugButton {
 }
 
 interface OptionButton {
+  /** Botão fixo por ramo: A à esquerda, B à direita. */
   slot: BranchId;
   background: Phaser.GameObjects.Rectangle;
   label: Phaser.GameObjects.Text;
   option: UpgradeOption | null;
 }
-
-/** Layout da fila de cartas e do painel de upgrade no HUD inferior. */
-export const HUD_LAYOUT = {
-  cardStartX: 62,
-  cardStep: 118,
-  cardWidth: 108,
-  panelX: 820,
-  panelWidth: 430,
-  optionButtonY: GAME_HEIGHT - 28,
-  optionButtonXs: [690, 800] as const,
-  sellButtonX: 980,
-  skipButtonX: 1078,
-  skipButtonY: 640,
-  debugButtonX: 1078,
-  debugButtonY: 684,
-  restartButtonX: 1190,
-  restartButtonY: 640,
-  menuButtonX: 1190,
-  menuButtonY: 684,
-  pauseButtonX: 1143,
-  muteButtonX: 1201,
-  topButtonY: 36,
-} as const;
 
 export class UIScene extends Phaser.Scene {
   private pearlText!: Phaser.GameObjects.Text;
@@ -58,6 +39,9 @@ export class UIScene extends Phaser.Scene {
   private cards: GuardianCard[] = [];
   private upgradeTitle!: Phaser.GameObjects.Text;
   private upgradeDescription!: Phaser.GameObjects.Text;
+  /** Árvore dos dois ramos: `BASE ─┬─ A I → A II` / `└─ B I 🔒`. */
+  private upgradeTree!: Phaser.GameObjects.Text;
+  private loadout: GuardianId[] = [...DEFAULT_LOADOUT];
   /** Card de retrato da variante atual do Guardião selecionado, acima do painel de upgrade. */
   private portraitCard: Phaser.GameObjects.Image | null = null;
   private optionButtons: OptionButton[] = [];
@@ -96,8 +80,9 @@ export class UIScene extends Phaser.Scene {
     super("UIScene");
   }
 
-  init(data: { debugFromQuery?: boolean }): void {
+  init(data: { debugFromQuery?: boolean; loadout?: GuardianId[] }): void {
     this.debugFromQuery = Boolean(data.debugFromQuery);
+    this.loadout = data.loadout && data.loadout.length > 0 ? [...data.loadout] : [...DEFAULT_LOADOUT];
   }
 
   create(): void {
@@ -162,7 +147,7 @@ export class UIScene extends Phaser.Scene {
       letterSpacing: 1,
     });
 
-    this.cards = GUARDIAN_ORDER.map((id, index) => {
+    this.cards = this.loadout.map((id, index) => {
       const definition = GUARDIANS[id];
       const x = HUD_LAYOUT.cardStartX + index * HUD_LAYOUT.cardStep;
       const background = this.add
@@ -203,18 +188,26 @@ export class UIScene extends Phaser.Scene {
       fontStyle: "bold",
       color: "#d9f8ff",
     });
-    this.upgradeDescription = this.add.text(panelLeft, GAME_HEIGHT - HUD_BOTTOM + 28, "Toque em um Guardião no mapa para ver os ramos de upgrade e vender.", {
+    this.upgradeTree = this.add.text(panelLeft, GAME_HEIGHT - HUD_BOTTOM + 27, "", {
+      fontFamily: "Consolas, monospace",
+      fontSize: "10px",
+      color: "#d9f8ff",
+      lineSpacing: 0,
+    });
+    this.upgradeDescription = this.add.text(panelLeft, GAME_HEIGHT - HUD_BOTTOM + 52, "Toque em um Guardião no mapa para ver os ramos de upgrade e vender.", {
       fontFamily: "Arial, sans-serif",
       fontSize: "10px",
       color: "#8dcbd8",
       wordWrap: { width: HUD_LAYOUT.panelWidth - 20 },
       lineSpacing: 1,
+      maxLines: 2,
     });
 
     this.optionButtons = (["a", "b"] as BranchId[]).map((slot, index) => {
       const background = this.button(HUD_LAYOUT.optionButtonXs[index], HUD_LAYOUT.optionButtonY, 104, 34, "", () => {
         const option = this.optionButtons[index].option;
-        if (option) EventBus.emit(Events.upgradeGuardian, option.branchId);
+        // Ramo bloqueado ou completo: o clique vai à cena só para a mensagem explicativa.
+        EventBus.emit(Events.upgradeGuardian, option?.branchId ?? slot);
       });
       const label = background.getData("label") as Phaser.GameObjects.Text;
       label.setFontSize(10);
@@ -273,6 +266,7 @@ export class UIScene extends Phaser.Scene {
       ["states", "ESTADOS"],
       ["targets", "ALVOS"],
       ["placements", "POSIÇÕES"],
+      ["controls", "CONTROLES"],
     ];
     this.debugButtons = definitions.map(([flag, text], index) => {
       const column = index % 2;
@@ -379,6 +373,8 @@ export class UIScene extends Phaser.Scene {
     if (!selected) {
       this.upgradeTitle.setText("Selecione um Guardião posicionado");
       this.upgradeTitle.setColor("#d9f8ff");
+      this.upgradeTree.setText("");
+      this.upgradeDescription.setPosition(this.upgradeDescription.x, GAME_HEIGHT - HUD_BOTTOM + 28);
       this.upgradeDescription.setText("Toque em um Guardião no mapa para ver os ramos de upgrade e vender.");
       this.optionButtons.forEach((button) => {
         button.option = null;
@@ -393,34 +389,80 @@ export class UIScene extends Phaser.Scene {
     const branchLabel = selected.branchName ? ` · ${selected.branchName}` : "";
     this.upgradeTitle.setText(`${selected.name} · nível ${selected.upgradeLevel}/${selected.maxUpgradeLevel}${branchLabel}`);
     this.upgradeTitle.setColor(selected.branchColor !== null ? `#${selected.branchColor.toString(16).padStart(6, "0")}` : "#d9f8ff");
+    this.upgradeTree.setText(this.treeText(selected.branches));
+    this.upgradeDescription.setPosition(this.upgradeDescription.x, GAME_HEIGHT - HUD_BOTTOM + 52);
 
     if (selected.options.length === 0) {
-      this.upgradeDescription.setText(`Todos os upgrades do ramo ${selected.branchName ?? ""} instalados. Investido: ◉ ${selected.invested}.`);
+      this.upgradeDescription.setText(`Ramo ${selected.branchName ?? ""} completo. Investido: ◉ ${selected.invested}.`);
     } else if (selected.options.length === 1) {
       const option = selected.options[0];
-      this.upgradeDescription.setText(`${option.name}: ${option.description}`);
+      const locked = selected.branches.find((branch) => branch.state === "locked");
+      this.upgradeDescription.setText(`${option.name}: ${option.description}${locked ? `  (${locked.name} bloqueado nesta unidade)` : ""}`);
     } else {
+      // Antes da escolha, a árvore acima já mostra os dois passos; aqui vai um resumo curto de cada ramo.
+      const definition = GUARDIANS[selected.guardianId];
       this.upgradeDescription.setText(
-        selected.options.map((option) => `${option.branchName.toUpperCase()} · ${option.name}: ${option.description}`).join("\n"),
+        selected.options
+          .map((option) => {
+            const tagline = definition.branches.find((branch) => branch.id === option.branchId)?.tagline ?? "";
+            return `${option.branchName.toUpperCase()} · ${option.name}: ${tagline}`;
+          })
+          .join("\n"),
       );
     }
 
-    this.optionButtons.forEach((button, index) => {
-      const option = selected.options[index] ?? null;
+    // Os dois botões ficam sempre visíveis, fixos por ramo; o ramo descartado aparece bloqueado.
+    this.optionButtons.forEach((button) => {
+      const status = selected.branches.find((branch) => branch.id === button.slot);
+      const option = selected.options.find((candidate) => candidate.branchId === button.slot) ?? null;
       button.option = option;
-      const visible = option !== null;
-      button.background.setVisible(visible);
-      button.label.setVisible(visible);
-      if (!option) return;
-      const affordable = snapshot.pearls >= option.cost;
-      button.label.setText(`${option.branchName.toUpperCase()} ${"I".repeat(option.level)}\n◉ ${option.cost}`);
-      button.background.setFillStyle(affordable ? 0x13728a : 0x563947, 1);
-      button.background.setStrokeStyle(2, option.branchColor, 0.95);
+      button.background.setVisible(true);
+      button.label.setVisible(true);
+      if (!status) return;
+      if (option) {
+        const affordable = snapshot.pearls >= option.cost;
+        button.label.setText(`${option.branchName.toUpperCase()} ${"I".repeat(option.level)}\n◉ ${option.cost}`);
+        button.label.setColor("#e9fbff");
+        button.background.setFillStyle(affordable ? 0x13728a : 0x563947, 1);
+        button.background.setStrokeStyle(2, option.branchColor, 0.95);
+        button.background.setAlpha(1);
+      } else if (status.state === "locked") {
+        button.label.setText(`${status.name.toUpperCase()}\n🔒 bloqueado`);
+        button.label.setColor("#7d8e96");
+        button.background.setFillStyle(0x1a2a31, 1);
+        button.background.setStrokeStyle(2, 0x3a4a52, 0.9);
+      } else {
+        button.label.setText(`${status.name.toUpperCase()}\n✓ completo`);
+        button.label.setColor("#cfeee0");
+        button.background.setFillStyle(0x0f4a3c, 1);
+        button.background.setStrokeStyle(2, status.color, 0.9);
+      }
     });
 
     this.sellButtonText.setText(`VENDER\n◉ ${selected.sellValue}`);
     this.sellButton.setVisible(true);
     this.sellButtonText.setVisible(true);
+  }
+
+  /**
+   * Duas linhas, uma por ramo: passos comprados com ✓, próximo passo com o custo, ramo bloqueado com 🔒.
+   * Ex.: `BASE ─┬─ FRENESI I ✓ → FRENESI II ◉150`
+   *      `     └─ CAÇADOR ALFA 🔒 bloqueado`
+   */
+  private treeText(branches: BranchStatus[]): string {
+    return branches
+      .map((branch, index) => {
+        const connector = index === 0 ? "BASE ─┬─ " : "     └─ ";
+        if (branch.state === "locked") return `${connector}${branch.name.toUpperCase()} 🔒 bloqueado`;
+        const steps = branch.steps.map((step, level) => {
+          const roman = level === 0 ? "I" : "II";
+          if (step.purchased) return `${branch.name.toUpperCase()} ${roman} ✓`;
+          const next = branch.steps.findIndex((candidate) => !candidate.purchased) === level;
+          return next && branch.state !== "complete" ? `${branch.name.toUpperCase()} ${roman} ◉${step.cost}` : `${branch.name.toUpperCase()} ${roman}`;
+        });
+        return `${connector}${steps.join(" → ")}`;
+      })
+      .join("\n");
   }
 
   /**

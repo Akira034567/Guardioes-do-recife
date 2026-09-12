@@ -36,8 +36,18 @@ Abra `http://localhost:5173`. O jogo usa mouse e touch em layout horizontal 16:9
 | Baiacu | correnteza, bloqueia | contenção | Fortaleza (2 → 3 presos, pausa chefes) | Pulso (25 → 40 em área, slow leve) |
 | Caranguejo-Recife | correnteza, não bloqueia | corpo a corpo | Quebra-Casco (ignora armadura, vulnerabilidade) | Varredura (área, giro a cada 4 ataques) |
 | Polvo-Tinteiro | plataforma | suporte | Tinta (vulnerabilidade em área, nuvem) | Maré Aliada (velocidade de ataque e alcance; não acumula) |
+| Tubarão — Instinto Predador | margem da rota | execução (investida curta, prioriza pouca vida) | Frenesi (velocidade contra feridos; +% por ferido) | Caçador Alfa (marca chefe/elite: +30% de dano, acumula por golpe) |
+| Tartaruga-Marinha — Guardiã do Recife | correnteza | controle de rota | Casco (segura 3 → 5 por tempo limitado, turbulência, Repulsa Ancestral) | Correnteza (zona de corrente contrária -25%, Corrente Forte empurra pela rota) |
+| Peixe-Pedra — Emboscador do Recife | correnteza (armadilha) | armadilha: enterra em 3 s, dispara ao ser pisado, carrega até +25% | Veneno (veneno por tempo, Jardim Tóxico) | Emboscada (stun em área, Fúria Abissal espera 3 inimigos e empurra) |
+| Golfinho — Mensageiro do Recife | água livre | suporte: pulso de sonar (revela, +5% dano recebido) | Coro (buff temporizado; +2% por espécie diferente; Coro II dá bônus temático) | Sonar (pulso maior, marca prioridade; Eco Perfeito coordena aliados) |
 
-- Cada unidade escolhe **um** ramo no primeiro upgrade e só pode seguir nele (dois upgrades por unidade). O anel colorido sob o Guardião mostra o ramo e os marcadores mostram o nível.
+- Cada unidade escolhe **um** ramo no primeiro upgrade e só pode seguir nele (dois upgrades por unidade). O anel colorido sob o Guardião mostra o ramo e os marcadores mostram o nível. O painel de upgrade mostra sempre os dois ramos: o escolhido com o próximo passo e o outro marcado como **bloqueado**.
+- As formas (base e quatro upgrades) são persistentes: o sprite só troca quando o upgrade é comprado; o idle apenas flutua.
+- O HUD leva **cinco** Guardiões por partida. Até existir a tela de seleção, `?guardians=shark,sea-turtle,stonefish,dolphin,pistol-shrimp` escolhe o esquadrão (ids: `pistol-shrimp`, `jellyfish`, `pufferfish`, `reef-crab`, `ink-octopus`, `shark`, `sea-turtle`, `stonefish`, `dolphin`).
+
+### Camada de controle
+
+Slow, stun, knockback, bloqueio, marca, veneno e vulnerabilidade passam por `src/game/core/CrowdControl.ts`, `EnemyStatus.ts`, `Blocking.ts` e `FlowField.ts`, usados igualmente pela cena e pela simulação. Elites e chefes têm retornos decrescentes configurados em `CROWD_CONTROL` (`balance.ts`): o primeiro controle forte vale 100%, o segundo 60%, o terceiro 30% e depois imunidade temporária. Knockback sempre desloca ao longo da rota; chefes nunca são empurrados (só sofrem slow). Posicionamento (correnteza, água, margem) está em `PLACEMENT` e `core/PlacementRules.ts`.
 - **Vender** devolve 25% de tudo investido (custo base + upgrades) e libera a posição.
 - Regra global do projétil do Camarão: um mesmo disparo nunca acerta o mesmo inimigo duas vezes.
 
@@ -72,6 +82,6 @@ Todos os números vivem em `src/game/data/balance.ts`: economia (pérolas inicia
 
 ## Como estender
 
-- Novo Guardião: entrada em `GUARDIAN_BALANCE`, em `GUARDIANS`, no tipo `GuardianId` e em `GUARDIAN_ORDER`.
+- Novo Guardião: entrada em `GUARDIAN_BALANCE`, em `GUARDIANS`, no tipo `GuardianId`, em `GUARDIAN_ORDER` e em `GUARDIAN_ART` (`assets/guardianArt.ts`, com `assetFolder`/`abilityFile` se as pastas seguirem outro nome); mecânicas novas entram como campos de `GuardianUpgrade` resolvidos em `GuardianStats.ts` e como funções em `core/GuardianBehaviors.ts`, para que cena e simulação compartilhem a lógica. Pastas de arte: `public/assets/guardians/<pasta>/<forma>/{idle,attack,ability,impact}.png`.
 - Novo inimigo: entrada em `ENEMY_BALANCE`, em `ENEMIES`, no tipo `EnemyId` (e um desenho em `Enemy.drawBody`, opcional).
 - Nova fase: arquivo em `src/game/data/levels/` e inclusão em `LEVELS`; os testes em `tests/levels.test.ts` validam rota, plataformas, correntes e ondas automaticamente.

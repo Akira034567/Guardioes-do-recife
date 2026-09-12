@@ -9,6 +9,10 @@ export class BootScene extends Phaser.Scene {
   }
 
   preload(): void {
+    // Arte dos Guardiões novos chega aos poucos: arquivos ausentes só deixam a unidade no desenho vetorial.
+    this.load.on(Phaser.Loader.Events.FILE_LOAD_ERROR, (file: Phaser.Loader.File) => {
+      if (!file.key.includes("-")) console.warn(`[assets] falha ao carregar ${file.key}`);
+    });
     preloadRecifeOneAssets(this);
   }
 

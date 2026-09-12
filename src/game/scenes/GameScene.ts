@@ -1,16 +1,30 @@
 import Phaser from "phaser";
 import { artTextureKey, artVariant, GUARDIAN_ART, hasGuardianArt, type AbilityStyle } from "../assets/guardianArt";
 import { DEPTH, GAME_HEIGHT, GAME_WIDTH, HUD_BOTTOM, HUD_TOP } from "../constants";
-import { AbilityCooldown } from "../core/AbilityCooldown";
 import { resolveAura, type AuraSource } from "../core/Auras";
-import { hasReachedBlockerContact } from "../core/Combat";
+import { BlockingSystem } from "../core/Blocking";
 import { Economy } from "../core/Economy";
+import type { FlowField } from "../core/FlowField";
+import {
+  flowFieldsFor,
+  registerSharkHit,
+  updateChorus,
+  updateFrenzy,
+  updateMark,
+  updatePushWave,
+  updateSonar,
+  updateTrap,
+  type BehaviorEvent,
+  type BehaviorHooks,
+  type DamageOptions as CoreDamageOptions,
+} from "../core/GuardianBehaviors";
 import type { LevelProgress } from "../core/LevelProgress";
+import { PLACEMENT_HINTS, validatePlacement, type PlacementContext } from "../core/PlacementRules";
 import { RoutePath } from "../core/RoutePath";
 import { WaveScheduler, type WaveSchedulerEvent } from "../core/WaveScheduler";
-import { BOSS_CURRENT, ECONOMY, GUARDIAN_BALANCE } from "../data/balance";
+import { BOSS_CURRENT, ECONOMY, GUARDIAN_BALANCE, PLACEMENT } from "../data/balance";
 import { ENEMIES, scaleEnemy } from "../data/enemies";
-import { GUARDIANS } from "../data/guardians";
+import { GUARDIANS, resolveLoadout } from "../data/guardians";
 import { getLevel, LEVELS, levelIndex, nextLevelId } from "../data/levels";
 import { EventBus, Events } from "../EventBus";
 import { Enemy } from "../objects/Enemy";
@@ -28,14 +42,10 @@ import type {
   HudSnapshot,
   LevelDefinition,
   PlacementDefinition,
-  PlacementMode,
+  PoisonEffect,
+  ToxicCloudEffect,
   Vec2,
 } from "../types";
-
-const ROUTE_PLACEMENT_CLEARANCE = 52;
-const ROUTE_UNIT_SEPARATION = 78;
-const WATER_ROUTE_CLEARANCE = 82;
-const WATER_SEPARATION = 78;
 
 interface PlacementView {
   definition: PlacementDefinition;
@@ -69,7 +79,8 @@ interface ElectricFieldView {
   image: Phaser.GameObjects.Image | null;
 }
 
-interface InkCloudView {
+/** Nuvem persistente: tinta do Polvo (slow + vulnerabilidade) ou jardim tóxico do Peixe-Pedra (veneno). */
+interface CloudView {
   ownerId: string;
   x: number;
   y: number;
@@ -78,22 +89,21 @@ interface InkCloudView {
   expiresAt: number;
   slowFactor: number;
   vulnerabilityMultiplier: number;
+  poison: PoisonEffect | null;
   graphic: Phaser.GameObjects.Graphics;
-  /** Redemoinho de tinta da tabela de upgrade, quando a arte está carregada. */
   image: Phaser.GameObjects.Image | null;
 }
 
-interface DamageOptions {
-  sound?: boolean;
-  continuous?: boolean;
-  armorPiercing?: boolean;
+/** Partículas da zona de corrente de uma Tartaruga: fluem em direção contrária à rota. */
+interface FlowFieldView {
+  ownerId: string;
+  ring: Phaser.GameObjects.Graphics;
+  motes: Phaser.GameObjects.Arc[];
 }
 
-const PLACEMENT_HINTS: Record<PlacementMode, string> = {
-  platform: "uma plataforma de pedra",
-  water: "uma área livre da água",
-  route: "qualquer ponto da correnteza",
-};
+interface DamageOptions extends CoreDamageOptions {
+  sound?: boolean;
+}
 
 export class GameScene extends Phaser.Scene {
   private level: LevelDefinition = LEVELS[0];
@@ -112,12 +122,15 @@ export class GameScene extends Phaser.Scene {
   private placements: PlacementView[] = [];
   private routePlacements: RoutePlacementView[] = [];
   private electricFields: ElectricFieldView[] = [];
-  private inkClouds: InkCloudView[] = [];
-  private abilityCooldowns = new Map<string, AbilityCooldown>();
+  private clouds: CloudView[] = [];
+  private flowViews: FlowFieldView[] = [];
+  private flowFields: FlowField[] = [];
+  private blocking = new BlockingSystem();
   private enemies: Enemy[] = [];
   private guardians: Guardian[] = [];
   private projectiles: Projectile[] = [];
   private currentMotes: Array<{ mote: Phaser.GameObjects.Arc; zoneIndex: number }> = [];
+  private loadout: GuardianId[] = [];
   private selectedGuardianId: GuardianId | null = null;
   private selectedPlacedGuardianId: string | null = null;
   private reefHealth: number = ECONOMY.reefHealth;
@@ -155,8 +168,10 @@ export class GameScene extends Phaser.Scene {
     this.placements = [];
     this.routePlacements = [];
     this.electricFields = [];
-    this.inkClouds = [];
-    this.abilityCooldowns = new Map();
+    this.clouds = [];
+    this.flowViews = [];
+    this.flowFields = [];
+    this.blocking = new BlockingSystem();
     this.selectedGuardianId = null;
     this.selectedPlacedGuardianId = null;
     this.reefHealth = this.level.reefHealth;
@@ -177,6 +192,8 @@ export class GameScene extends Phaser.Scene {
     this.route = new RoutePath(this.level.waypoints);
     this.economy = new Economy(this.level.startingPearls);
     const query = new URLSearchParams(window.location.search);
+    // Esquadrão da partida: `?guardians=shark,dolphin,...` (até a tela de seleção existir).
+    this.loadout = resolveLoadout(query.get("guardians"));
     const debugFromQuery = query.get("debug") === "1";
     // Atalho de debug: `?debug=1&wave=5` começa direto na onda indicada.
     const startWave = debugFromQuery ? Number(query.get("wave") ?? 1) - 1 : 0;
@@ -197,6 +214,7 @@ export class GameScene extends Phaser.Scene {
       states: true,
       targets: true,
       placements: true,
+      controls: true,
     };
 
     this.drawEnvironment();
@@ -222,7 +240,7 @@ export class GameScene extends Phaser.Scene {
     this.game.canvas.addEventListener("pointerdown", this.unlockAudio, { passive: true });
     this.game.canvas.dataset.screen = "game";
     this.game.canvas.dataset.level = this.level.id;
-    this.scene.launch("UIScene", { debugFromQuery });
+    this.scene.launch("UIScene", { debugFromQuery, loadout: this.loadout });
     this.emitHud();
   }
 
@@ -239,10 +257,12 @@ export class GameScene extends Phaser.Scene {
     const waveEvents = this.scheduler.tick(safeDelta, this.enemies.filter((enemy) => !enemy.dead && !enemy.reachedGoal).length);
     this.processWaveEvents(waveEvents);
 
+    this.flowFields = flowFieldsFor(this.guardians);
+    this.updateFlowVisuals(safeDelta);
     this.updateBlockers(safeDelta);
 
     for (const enemy of this.enemies) {
-      const result = enemy.tick(this.simulationTimeMs, safeDelta, this.level.currents, this.currentReversed);
+      const result = enemy.tick(this.simulationTimeMs, safeDelta, this.level.currents, this.currentReversed, this.flowFields);
       if (result.reachedGoal) {
         this.reefHealth = Math.max(0, this.reefHealth - enemy.definition.reefDamage);
         this.audio.play("warning");
@@ -250,14 +270,23 @@ export class GameScene extends Phaser.Scene {
         if (this.reefHealth <= 0) this.finishGame("defeat");
       }
     }
+    this.drainPoison();
 
+    const hooks = this.behaviorHooks();
+    for (const guardian of this.guardians) updateTrap(guardian, this.enemies, hooks);
     this.updateAuras();
     for (const guardian of this.guardians) {
+      updateFrenzy(guardian, this.enemies, this.simulationTimeMs);
+      updateMark(guardian, this.enemies, hooks);
       guardian.tick(this.simulationTimeMs, this.enemies, (attacker, target) => this.resolveGuardianAttack(attacker, target));
+    }
+    for (const guardian of this.guardians) {
+      updatePushWave(guardian, this.enemies, hooks);
+      updateSonar(guardian, this.enemies, this.guardians, hooks);
     }
 
     this.updateElectricFields();
-    this.updateInkClouds();
+    this.updateClouds();
 
     for (const projectile of this.projectiles) {
       const result = projectile.tick(safeDelta, this.level.currents, this.currentReversed, this.enemies);
@@ -333,6 +362,15 @@ export class GameScene extends Phaser.Scene {
 
   // ------------------------------------------------------------ posicionamento
 
+  private placementContext(): PlacementContext {
+    return {
+      route: this.route,
+      platforms: this.placements.map((placement) => placement.definition),
+      guardians: this.guardians,
+      routeUnits: this.routePlacements,
+    };
+  }
+
   private handlePlacement(placement: PlacementView): void {
     this.audio.unlock();
     if (this.gameOver) return;
@@ -381,9 +419,8 @@ export class GameScene extends Phaser.Scene {
       definition,
       x,
       y,
-      routePlacement
-        ? { routePlacementId: routePlacement.id, routeDistance: routePlacement.routeDistance }
-        : {},
+      routePlacement ? { routePlacementId: routePlacement.id, routeDistance: routePlacement.routeDistance } : {},
+      this.simulationTimeMs,
     );
     guardian.setSize(80, 80);
     guardian.setInteractive(new Phaser.Geom.Circle(40, 40, 40), Phaser.Geom.Circle.Contains);
@@ -434,37 +471,35 @@ export class GameScene extends Phaser.Scene {
       return;
     }
     const definition = GUARDIANS[this.selectedGuardianId];
-    if (definition.placementMode === "water") {
-      const validation = this.validateWaterPlacement(pointer.worldX, pointer.worldY);
-      if (!validation.valid) {
-        this.showMessage(validation.reason, 1500);
-        this.audio.play("warning");
-        return;
-      }
-      const guardian = this.placeGuardian(definition.id, pointer.worldX, pointer.worldY);
-      if (guardian) this.showMessage(`${definition.name} posicionada na água.`, 1500);
-    } else if (definition.placementMode === "route") {
-      const validation = this.validateRoutePlacement(pointer.worldX, pointer.worldY);
-      if (!validation.valid) {
-        this.showMessage(validation.reason, 1700);
-        this.audio.play("warning");
-        return;
-      }
+    if (definition.placementMode === "platform") return;
+    const validation = validatePlacement(definition.placementMode, this.placementContext(), { x: pointer.worldX, y: pointer.worldY });
+    if (!validation.valid) {
+      this.showMessage(validation.reason, 1700);
+      this.audio.play("warning");
+      return;
+    }
+    if (definition.placementMode === "route") {
       const placement: RoutePlacementView = {
         id: `rota-${++this.routeSerial}`,
         x: validation.x,
         y: validation.y,
-        routeDistance: validation.routeDistance,
+        routeDistance: validation.routeDistance ?? 0,
         progress: validation.progress,
         guardian: null,
       };
       const guardian = this.placeGuardian(definition.id, placement.x, placement.y, placement);
       if (guardian) {
-        this.showMessage(
-          definition.blocks ? `${definition.name} bloqueando a correnteza!` : `${definition.name} de guarda na correnteza!`,
-          1500,
-        );
+        const verb = guardian.stats.trap ? "enterrado na correnteza!" : guardian.blocks ? "bloqueando a correnteza!" : "de guarda na correnteza!";
+        this.showMessage(`${definition.name} ${verb}`, 1500);
       }
+      return;
+    }
+    const guardian = this.placeGuardian(definition.id, validation.x, validation.y);
+    if (guardian) {
+      this.showMessage(
+        definition.placementMode === "margin" ? `${definition.name} à espreita na beira da correnteza.` : `${definition.name} posicionado na água.`,
+        1500,
+      );
     }
   }
 
@@ -475,76 +510,20 @@ export class GameScene extends Phaser.Scene {
     const definition = GUARDIANS[this.selectedGuardianId];
     if (definition.placementMode === "platform") return;
 
-    let x = pointer.worldX;
-    let y = pointer.worldY;
-    let valid = false;
-    let label = "";
-    if (definition.placementMode === "water") {
-      const validation = this.validateWaterPlacement(x, y);
-      valid = validation.valid;
-      label = validation.valid ? "Posição válida" : validation.reason;
-    } else {
-      const validation = this.validateRoutePlacement(x, y);
-      x = validation.x;
-      y = validation.y;
-      valid = validation.valid;
-      label = validation.valid ? "Ponto livre da correnteza" : validation.reason;
-    }
+    const validation = validatePlacement(definition.placementMode, this.placementContext(), { x: pointer.worldX, y: pointer.worldY });
+    const label = validation.valid
+      ? definition.placementMode === "route"
+        ? "Ponto livre da correnteza"
+        : definition.placementMode === "margin"
+          ? "Beira da correnteza"
+          : "Posição válida"
+      : validation.reason;
 
-    this.placementPreviewGraphic.fillStyle(valid ? 0x67f2ac : 0xff6f79, 0.2);
-    this.placementPreviewGraphic.lineStyle(3, valid ? 0x67f2ac : 0xff6f79, 0.95);
-    this.placementPreviewGraphic.fillCircle(x, y, 34);
-    this.placementPreviewGraphic.strokeCircle(x, y, 34);
-    this.placementPreviewText.setPosition(x, y - 42).setText(label).setVisible(true);
-  }
-
-  private validateWaterPlacement(x: number, y: number): { valid: boolean; reason: string } {
-    if (x < 44 || x > GAME_WIDTH - 44 || y < HUD_TOP + 38 || y > GAME_HEIGHT - HUD_BOTTOM - 38) {
-      return { valid: false, reason: "Fora da área jogável" };
-    }
-    if (this.route.getClosestPoint({ x, y }).distance < WATER_ROUTE_CLEARANCE) {
-      return { valid: false, reason: "Muito perto da rota" };
-    }
-    if (this.placements.some((placement) => Math.hypot(x - placement.definition.x, y - placement.definition.y) < WATER_SEPARATION)) {
-      return { valid: false, reason: "Plataforma ocupa este espaço" };
-    }
-    if (this.guardians.some((guardian) => Math.hypot(x - guardian.x, y - guardian.y) < WATER_SEPARATION)) {
-      return { valid: false, reason: "Muito perto de outro Guardião" };
-    }
-    return { valid: true, reason: "Posição válida" };
-  }
-
-  private validateRoutePlacement(x: number, y: number): {
-    valid: boolean;
-    reason: string;
-    x: number;
-    y: number;
-    routeDistance: number;
-    progress: number;
-  } {
-    const closest = this.route.getClosestPoint({ x, y });
-    const result = {
-      valid: true,
-      reason: "Posição válida",
-      x: closest.point.x,
-      y: closest.point.y,
-      routeDistance: closest.routeDistance,
-      progress: closest.progress,
-    };
-    if (closest.distance > ROUTE_PLACEMENT_CLEARANCE) {
-      return { ...result, valid: false, reason: "Toque dentro da correnteza" };
-    }
-    if (closest.routeDistance < 60 || closest.routeDistance > this.route.totalLength - 60) {
-      return { ...result, valid: false, reason: "Muito perto da entrada ou do Recife" };
-    }
-    if (
-      this.routePlacements.some(
-        (placement) => Math.hypot(result.x - placement.x, result.y - placement.y) < ROUTE_UNIT_SEPARATION,
-      )
-    ) {
-      return { ...result, valid: false, reason: "Muito perto de outro Guardião da correnteza" };
-    }
-    return result;
+    this.placementPreviewGraphic.fillStyle(validation.valid ? 0x67f2ac : 0xff6f79, 0.2);
+    this.placementPreviewGraphic.lineStyle(3, validation.valid ? 0x67f2ac : 0xff6f79, 0.95);
+    this.placementPreviewGraphic.fillCircle(validation.x, validation.y, 34);
+    this.placementPreviewGraphic.strokeCircle(validation.x, validation.y, 34);
+    this.placementPreviewText.setPosition(validation.x, validation.y - 42).setText(label).setVisible(true);
   }
 
   // -------------------------------------------------------- upgrade e venda
@@ -554,13 +533,17 @@ export class GameScene extends Phaser.Scene {
     const guardian = this.guardians.find((candidate) => candidate.instanceId === this.selectedPlacedGuardianId);
     if (!guardian) return;
     const option = guardian.options.find((candidate) => candidate.branchId === branchId);
-    if (!option) return;
+    if (!option) {
+      const locked = guardian.branchStatuses.find((status) => status.id === branchId);
+      if (locked?.state === "locked") this.showMessage(`Ramo ${locked.name} bloqueado: esta unidade seguiu ${guardian.branch?.name ?? "outro ramo"}.`, 1900);
+      return;
+    }
     if (!this.economy.canAfford(option.cost)) {
       this.showMessage("Pérolas insuficientes para este upgrade.", 1700);
       this.audio.play("warning");
       return;
     }
-    if (!guardian.applyUpgrade(branchId)) return;
+    if (!guardian.applyUpgrade(branchId, this.simulationTimeMs)) return;
     this.economy.spend(option.cost);
     this.audio.play("upgrade");
     this.showMessage(`${option.name} adquirido! Ramo ${option.branchName}.`, 1900);
@@ -595,15 +578,25 @@ export class GameScene extends Phaser.Scene {
       field.image?.destroy();
       return false;
     });
-    this.inkClouds = this.inkClouds.filter((cloud) => {
+    this.clouds = this.clouds.filter((cloud) => {
       if (cloud.ownerId !== guardian.instanceId) return true;
       cloud.graphic.destroy();
       cloud.image?.destroy();
       return false;
     });
-    this.abilityCooldowns.delete(guardian.instanceId);
+    this.flowViews = this.flowViews.filter((view) => {
+      if (view.ownerId !== guardian.instanceId) return true;
+      view.ring.destroy();
+      view.motes.forEach((mote) => mote.destroy());
+      return false;
+    });
+    this.blocking.forget(guardian.instanceId);
     this.enemies.forEach((enemy) => {
       if (enemy.blockedById === guardian.instanceId) enemy.clearBlocked();
+      if (enemy.status.markedBy(this.simulationTimeMs) === guardian.instanceId) enemy.status.clearMark();
+    });
+    this.guardians.forEach((other) => {
+      if (other.runtime.preferredTarget && guardian.runtime.sonar) other.runtime.preferredTarget = null;
     });
     guardian.destroy();
   }
@@ -611,8 +604,8 @@ export class GameScene extends Phaser.Scene {
   // -------------------------------------------------------------- combate
 
   private resolveGuardianAttack(guardian: Guardian, target: Enemy): void {
-    const definition = guardian.definition;
-    switch (definition.attackKind) {
+    const kind = guardian.definition.attackKind;
+    switch (kind) {
       case "projectile":
         this.fireProjectile(guardian, target);
         return;
@@ -625,9 +618,18 @@ export class GameScene extends Phaser.Scene {
       case "ink":
         this.resolveInk(guardian, target);
         return;
+      case "sonar":
+        this.resolveSonarHit(guardian, target);
+        return;
       case "area":
-      default:
         this.resolvePulse(guardian);
+        return;
+      case "trap":
+        return;
+      default: {
+        const exhaustive: never = kind;
+        throw new Error(`attackKind desconhecido: ${String(exhaustive)}`);
+      }
     }
   }
 
@@ -636,6 +638,7 @@ export class GameScene extends Phaser.Scene {
     const originY = guardian.y;
     const shrimpBalance = GUARDIAN_BALANCE["pistol-shrimp"];
     const profile = GUARDIAN_ART[guardian.definition.id];
+    const stats = guardian.stats;
     this.projectiles.push(
       new Projectile(
         this,
@@ -643,12 +646,12 @@ export class GameScene extends Phaser.Scene {
         originY,
         target,
         {
-          speed: guardian.projectileSpeed,
-          damages: guardian.pierceDamages,
-          predictiveAim: guardian.predictiveAim,
-          straightRicochet: guardian.straightRicochet,
+          speed: stats.projectileSpeed,
+          damages: stats.pierceDamages,
+          predictiveAim: stats.predictiveAim,
+          straightRicochet: stats.straightRicochet,
           ricochetRange: shrimpBalance.ricochetRange,
-          splash: guardian.splash ?? undefined,
+          splash: stats.splash ?? undefined,
           radius: 6,
           lifetimeMs: 2200,
           bounds: { minX: -80, maxX: GAME_WIDTH + 80, minY: -80, maxY: GAME_HEIGHT + 80 },
@@ -666,35 +669,37 @@ export class GameScene extends Phaser.Scene {
   }
 
   private resolveChain(guardian: Guardian, target: Enemy): void {
-    const damages = guardian.chainDamages;
+    const stats = guardian.stats;
+    const damages = stats.chainDamages;
     const candidates = this.enemies
       .filter((enemy) => !enemy.dead && !enemy.reachedGoal && enemy.distanceTo(guardian.x, guardian.y) <= guardian.range)
       .sort((a, b) => b.progress - a.progress)
       .slice(0, damages.length);
-    const slowFactor = guardian.slowFactor;
+    const slowFactor = stats.slowFactor;
     candidates.forEach((enemy, index) => {
-      this.damageEnemy(enemy, damages[index] ?? damages[damages.length - 1]);
-      if (slowFactor !== null) enemy.applySlow(slowFactor, guardian.slowDurationMs, this.simulationTimeMs);
+      this.damageEnemy(enemy, damages[index] ?? damages[damages.length - 1], { sourceId: guardian.instanceId });
+      if (slowFactor !== null) enemy.applySlow(slowFactor, stats.slowDurationMs, this.simulationTimeMs);
     });
-    const stun = guardian.stun;
+    const stun = stats.stun;
     if (stun && !target.dead) {
       if (target.tryStun(stun.durationMs, stun.immunityMs, this.simulationTimeMs)) {
         this.shockwave(target.x, target.y, 0xfff27a, 26);
       }
     }
     this.chainEffect(guardian, candidates);
-    if (guardian.electricField) this.createElectricField(guardian, target.x, target.y);
+    if (stats.electricField) this.createElectricField(guardian, target.x, target.y);
     this.audio.play("zap");
   }
 
   private resolvePulse(guardian: Guardian): void {
-    const slowFactor = guardian.slowFactor;
+    const stats = guardian.stats;
+    const slowFactor = stats.slowFactor;
     const affected = this.enemies.filter(
       (enemy) => !enemy.dead && !enemy.reachedGoal && enemy.distanceTo(guardian.x, guardian.y) <= guardian.range,
     );
     affected.forEach((enemy) => {
-      this.damageEnemy(enemy, guardian.damage);
-      if (slowFactor !== null) enemy.applySlow(slowFactor, guardian.slowDurationMs, this.simulationTimeMs);
+      this.damageEnemy(enemy, stats.damage, { sourceId: guardian.instanceId });
+      if (slowFactor !== null) enemy.applySlow(slowFactor, stats.slowDurationMs, this.simulationTimeMs);
     });
     this.effects.ring(this.abilityKeyFor(guardian, "ring"), guardian.x, guardian.y + 8, guardian.range * 2);
     affected.slice(0, 4).forEach((enemy) => this.impactBurst(guardian, enemy.x, enemy.y, 0.7));
@@ -703,19 +708,22 @@ export class GameScene extends Phaser.Scene {
   }
 
   private resolveMelee(guardian: Guardian, target: Enemy): void {
-    const spin = guardian.spin;
+    const stats = guardian.stats;
+    const spin = stats.spin;
     const spinning = spin !== null && guardian.attacksPerformed % spin.everyAttacks === 0;
-    const radius = spinning ? guardian.range * spin.radiusMultiplier : guardian.range;
-    const damage = spinning ? spin.damage : guardian.damage;
-    const targets = guardian.areaAttack || spinning
+    const radius = spinning && spin ? guardian.range * spin.radiusMultiplier : guardian.range;
+    const damage = spinning && spin ? spin.damage : stats.damage;
+    const targets = stats.areaAttack || spinning
       ? this.enemies.filter((enemy) => !enemy.dead && !enemy.reachedGoal && enemy.distanceTo(guardian.x, guardian.y) <= radius)
       : [target];
-    const vulnerability = guardian.vulnerability;
+    const vulnerability = stats.vulnerability;
+    if (stats.mark) registerSharkHit(guardian, target, this.simulationTimeMs);
     targets.forEach((enemy) => {
-      this.damageEnemy(enemy, damage, { armorPiercing: guardian.armorPiercing });
+      this.damageEnemy(enemy, damage, { armorPiercing: stats.armorPiercing, sourceId: guardian.instanceId });
       if (vulnerability) enemy.applyVulnerability(vulnerability.multiplier, vulnerability.durationMs, this.simulationTimeMs);
+      if (stats.slowFactor !== null) enemy.applySlow(stats.slowFactor, stats.slowDurationMs, this.simulationTimeMs);
     });
-    if (guardian.areaAttack || spinning) {
+    if (stats.areaAttack || spinning) {
       this.effects.ring(this.abilityKeyFor(guardian, "ring"), guardian.x, guardian.y + 8, radius * 2, { spin: spinning });
     } else {
       const profile = GUARDIAN_ART[guardian.definition.id];
@@ -724,13 +732,15 @@ export class GameScene extends Phaser.Scene {
         rotation: Math.atan2(target.y - guardian.y, target.x - guardian.x),
       });
     }
+    if (stats.dash) this.dashTrail(guardian, target);
     targets.slice(0, 4).forEach((enemy) => this.impactBurst(guardian, enemy.x, enemy.y, enemy === target ? 1 : 0.7));
     this.shockwave(guardian.x, guardian.y, guardian.definition.accent, spinning ? radius : 30);
     this.audio.play(spinning ? "pulse" : "impact");
   }
 
   private resolveInk(guardian: Guardian, target: Enemy): void {
-    const vulnerability = guardian.vulnerability;
+    const stats = guardian.stats;
+    const vulnerability = stats.vulnerability;
     const affected = vulnerability?.radius
       ? this.enemies.filter(
           (enemy) => !enemy.dead && !enemy.reachedGoal && enemy.distanceTo(target.x, target.y) <= (vulnerability.radius ?? 0),
@@ -738,17 +748,36 @@ export class GameScene extends Phaser.Scene {
       : [target];
     if (!affected.includes(target)) affected.push(target);
     affected.forEach((enemy) => {
-      this.damageEnemy(enemy, enemy === target ? guardian.damage : Math.ceil(guardian.damage * 0.5), { sound: enemy === target });
+      this.damageEnemy(enemy, enemy === target ? stats.damage : Math.ceil(stats.damage * 0.5), {
+        sound: enemy === target,
+        sourceId: guardian.instanceId,
+      });
       if (vulnerability) enemy.applyVulnerability(vulnerability.multiplier, vulnerability.durationMs, this.simulationTimeMs);
     });
     const jet = this.effects.beam(this.abilityKeyFor(guardian, "beam"), guardian.x + 14, guardian.y - 6, target.x, target.y, 0.5);
     if (!jet) this.inkSplash(guardian, target);
     // Ramo Maré Aliada: o desenho da habilidade é a onda de buff, exibida como pulso no próprio Polvo.
-    if (artVariant(guardian.definition.id, guardian.progress).ability === "ring" && !guardian.inkCloud) {
+    if (artVariant(guardian.definition.id, guardian.progress).ability === "ring" && !stats.inkCloud) {
       this.effects.ring(this.abilityKeyFor(guardian, "ring"), guardian.x, guardian.y + 8, guardian.range * 2, { alpha: 0.6 });
     }
     this.impactBurst(guardian, target.x, target.y);
-    if (guardian.inkCloud) this.createInkCloud(guardian, target.x, target.y);
+    if (stats.inkCloud) this.createInkCloud(guardian, target.x, target.y);
+    this.audio.play("zap");
+  }
+
+  /** Golpe base do Golfinho: pulso sonoro fraco em um alvo (o sonar de área é a habilidade periódica). */
+  private resolveSonarHit(guardian: Guardian, target: Enemy): void {
+    this.damageEnemy(target, guardian.stats.damage, { sourceId: guardian.instanceId });
+    const beam = this.effects.beam(this.abilityKeyFor(guardian, "beam"), guardian.x + 12, guardian.y - 4, target.x, target.y, 0.4);
+    if (!beam) {
+      const graphics = this.add.graphics().setDepth(DEPTH.effects);
+      graphics.lineStyle(2, guardian.definition.accent, 0.8);
+      graphics.lineBetween(guardian.x, guardian.y - 6, target.x, target.y);
+      graphics.lineStyle(1, guardian.definition.accent, 0.5);
+      graphics.strokeCircle(target.x, target.y, 10);
+      this.tweens.add({ targets: graphics, alpha: 0, duration: 200, onComplete: () => graphics.destroy() });
+    }
+    this.impactBurst(guardian, target.x, target.y, 0.7);
     this.audio.play("zap");
   }
 
@@ -797,8 +826,8 @@ export class GameScene extends Phaser.Scene {
 
   private damageEnemy(enemy: Enemy, damage: number, options: DamageOptions = {}): void {
     const killed = options.continuous
-      ? enemy.takeContinuousDamage(damage)
-      : enemy.takeDamage(damage, { armorPiercing: options.armorPiercing });
+      ? enemy.takeContinuousDamage(damage, options)
+      : enemy.takeDamage(damage, { armorPiercing: options.armorPiercing, sourceId: options.sourceId });
     if (options.sound ?? true) this.audio.play("impact");
     if (killed) {
       this.economy.earn(enemy.definition.reward);
@@ -809,84 +838,152 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
-  private updateBlockers(deltaMs: number): void {
-    const blockers = this.guardians.filter((guardian) => guardian.blocks && guardian.routeDistance !== null);
-    const blockerIds = new Set(blockers.map((guardian) => guardian.instanceId));
-    this.enemies.forEach((enemy) => {
-      if (enemy.blockedById && !blockerIds.has(enemy.blockedById)) enemy.clearBlocked();
-    });
-
-    for (const blocker of blockers) {
-      const anchor = blocker.routeDistance as number;
-      const alreadyBlocked = this.enemies
-        .filter((enemy) => enemy.blockedById === blocker.instanceId && !enemy.dead && !enemy.reachedGoal)
-        .slice(0, blocker.blockCapacity);
-      this.enemies
-        .filter((enemy) => enemy.blockedById === blocker.instanceId && !alreadyBlocked.includes(enemy))
-        .forEach((enemy) => enemy.clearBlocked());
-
-      const inContact = this.enemies.filter(
-        (enemy) =>
-          !enemy.dead &&
-          !enemy.reachedGoal &&
-          !enemy.blockedById &&
-          hasReachedBlockerContact(enemy.pathDistance, anchor, 28 + enemy.definition.hitRadius),
-      );
-      const candidates = inContact
-        .filter((enemy) => enemy.isBlockable)
-        .sort((first, second) => second.pathDistance - first.pathDistance);
-      const blocked = [...alreadyBlocked, ...candidates.slice(0, Math.max(0, blocker.blockCapacity - alreadyBlocked.length))];
-      blocked.forEach((enemy) => {
-        enemy.setBlocked(blocker.instanceId, enemy.pathDistance);
-        if (blocker.contactDamagePerSecond > 0) {
-          this.damageEnemy(enemy, blocker.contactDamagePerSecond * (deltaMs / 1000), { sound: false, continuous: true });
-        }
-      });
-
-      // Chefes não são bloqueados; a Fortaleza pode pausá-los por pouco tempo.
-      const bossHold = blocker.bossHold;
-      inContact
-        .filter((enemy) => !enemy.isBlockable)
-        .forEach((enemy) => {
-          if (bossHold && enemy.tryHold(bossHold.durationMs, bossHold.immunityMs, this.simulationTimeMs)) {
-            this.showMessage(`${blocker.definition.name} segurou ${enemy.definition.name} por um instante!`, 1500);
-            this.shockwave(enemy.x, enemy.y, 0xffe082, 50);
-          }
-          if (enemy.status.isHeld(this.simulationTimeMs) && blocker.contactDamagePerSecond > 0) {
-            this.damageEnemy(enemy, blocker.contactDamagePerSecond * (deltaMs / 1000), { sound: false, continuous: true });
-          }
-        });
+  private drainPoison(): void {
+    for (const enemy of this.enemies) {
+      if (enemy.dead || enemy.reachedGoal) continue;
+      const owed = enemy.status.drainPoison(this.simulationTimeMs);
+      if (owed > 0) {
+        this.damageEnemy(enemy, owed, { continuous: true, sound: false });
+        this.poisonPuff(enemy.x, enemy.y);
+      }
     }
+  }
+
+  private behaviorHooks(): BehaviorHooks<Enemy> {
+    return {
+      now: this.simulationTimeMs,
+      damage: (enemy, amount, options) => this.damageEnemy(enemy, amount, { ...options, sound: false }),
+      spawnCloud: (ownerId, x, y, cloud) => this.createToxicCloud(ownerId, x, y, cloud),
+      onEscaped: (blockerId, enemyId) => {
+        const blocker = this.guardians.find((guardian) => guardian.instanceId === blockerId);
+        this.blocking.notifyEscaped(blockerId, enemyId, this.simulationTimeMs, blocker?.stats.blockHold?.releaseCooldownMs ?? 500);
+      },
+      emit: (event) => this.handleBehaviorEvent(event),
+    };
+  }
+
+  /** Visual e áudio dos comportamentos compartilhados (a simulação ignora estes eventos). */
+  private handleBehaviorEvent(event: BehaviorEvent): void {
+    const guardian = "guardianId" in event ? this.guardians.find((candidate) => candidate.instanceId === event.guardianId) : undefined;
+    switch (event.type) {
+      case "trapPhase":
+        guardian?.setTrapPhase(event.phase);
+        if (event.phase === "armed" && guardian) this.shockwave(guardian.x, guardian.y, 0xffd166, 22);
+        return;
+      case "trapTrigger": {
+        if (!guardian) return;
+        const key = this.abilityKeyFor(guardian, "ring");
+        if (!this.effects.ring(key, event.x, event.y + 6, event.radius * 2.4, { durationMs: 420 })) {
+          const graphics = this.add.graphics().setDepth(DEPTH.effects);
+          graphics.fillStyle(0xd9b36b, 0.55);
+          graphics.fillCircle(event.x, event.y, event.radius);
+          graphics.lineStyle(3, 0xffd166, 0.9);
+          graphics.strokeCircle(event.x, event.y, event.radius);
+          this.tweens.add({ targets: graphics, alpha: 0, scale: 1.3, duration: 380, onComplete: () => graphics.destroy() });
+        }
+        event.targetIds.forEach((id) => {
+          const enemy = this.enemies.find((candidate) => candidate.instanceId === id);
+          if (enemy) this.impactBurst(guardian, enemy.x, enemy.y, 0.8);
+        });
+        this.shockwave(event.x, event.y, 0xffd166, event.radius * 1.4);
+        this.audio.play("pulse");
+        return;
+      }
+      case "mark": {
+        const enemy = this.enemies.find((candidate) => candidate.instanceId === event.enemyId);
+        if (enemy) this.shockwave(enemy.x, enemy.y, 0xff4d5e, 30);
+        return;
+      }
+      case "pushWave": {
+        if (!guardian) return;
+        const key = this.abilityKeyFor(guardian, "ring");
+        this.effects.ring(key, event.x, event.y + 6, event.radius * 2, { durationMs: event.visualMs, alpha: 0.8 });
+        const surge = this.add.circle(event.x, event.y, event.radius * 0.4).setStrokeStyle(4, 0x6fe3ff, 0.85).setDepth(DEPTH.effects);
+        this.tweens.add({
+          targets: surge,
+          radius: event.radius,
+          alpha: 0,
+          duration: event.visualMs,
+          ease: "Quad.Out",
+          onComplete: () => surge.destroy(),
+        });
+        event.pushedIds.forEach((id) => {
+          const enemy = this.enemies.find((candidate) => candidate.instanceId === id);
+          if (enemy) this.shockwave(enemy.x, enemy.y, 0x9fefff, 18);
+        });
+        this.audio.play("pulse");
+        return;
+      }
+      case "sonarWave": {
+        const color = event.wave.coordinate ? 0x9b7bff : event.wave.vulnerability ? 0xb59cff : 0x6fd6ff;
+        const circle = this.add.circle(event.x, event.y, 12).setStrokeStyle(3, color, 0.85).setDepth(DEPTH.effects);
+        this.tweens.add({
+          targets: circle,
+          radius: event.radius,
+          alpha: 0,
+          duration: 520,
+          ease: "Sine.Out",
+          onComplete: () => circle.destroy(),
+        });
+        if (guardian) this.effects.ring(this.abilityKeyFor(guardian, "ring"), event.x, event.y + 6, event.radius * 2, { alpha: 0.45, durationMs: 520 });
+        if (event.wave.index === 0) this.audio.play("zap");
+        return;
+      }
+      case "coordinate": {
+        const target = this.enemies.find((candidate) => candidate.instanceId === event.targetId);
+        if (target) this.shockwave(target.x, target.y, 0x9b7bff, 44);
+        if (guardian) this.showMessage(`${guardian.definition.name} coordena o cardume contra ${target?.definition.name ?? "a ameaça"}!`, 1500);
+        return;
+      }
+      case "chorusStart": {
+        if (!guardian) return;
+        this.effects.ring(this.abilityKeyFor(guardian, "ring"), guardian.x, guardian.y + 6, event.radius * 2, { alpha: 0.7, durationMs: 600 });
+        const notes = this.add.graphics().setDepth(DEPTH.effects);
+        notes.lineStyle(3, 0xffd76a, 0.9);
+        notes.strokeCircle(guardian.x, guardian.y, 20);
+        notes.strokeCircle(guardian.x, guardian.y, 36);
+        this.tweens.add({ targets: notes, alpha: 0, duration: event.durationMs * 0.4, onComplete: () => notes.destroy() });
+        this.audio.play("upgrade");
+        return;
+      }
+      case "stunned": {
+        const enemy = this.enemies.find((candidate) => candidate.instanceId === event.enemyId);
+        if (enemy) this.shockwave(enemy.x, enemy.y, 0xfff27a, 26);
+        return;
+      }
+      case "poisoned":
+        return;
+    }
+  }
+
+  private updateBlockers(deltaMs: number): void {
+    this.blocking.update(this.guardians, this.enemies, this.simulationTimeMs, deltaMs, {
+      damage: (enemy, amount) => this.damageEnemy(enemy, amount, { sound: false, continuous: true }),
+      onBossHeld: (blocker, enemy) => {
+        this.showMessage(`${blocker.definition.name} segurou ${enemy.definition.name} por um instante!`, 1500);
+        this.shockwave(enemy.x, enemy.y, 0xffe082, 50);
+      },
+      onReleased: (_blocker, enemy) => this.shockwave(enemy.x, enemy.y, 0x8cd98a, 20),
+    });
   }
 
   private updateAuras(): void {
-    const sources: AuraSource[] = this.guardians
-      .filter((guardian) => guardian.providedAura)
-      .map((guardian) => ({
-        id: guardian.instanceId,
-        x: guardian.x,
-        y: guardian.y,
-        range: guardian.range,
-        aura: guardian.providedAura!,
-      }));
+    const sources: AuraSource[] = [];
+    for (const guardian of this.guardians) {
+      const provided = guardian.providedAura;
+      if (provided) sources.push({ id: guardian.instanceId, x: guardian.x, y: guardian.y, range: guardian.range, aura: provided });
+      const chorus = updateChorus(guardian, this.guardians, this.simulationTimeMs, (event) => this.handleBehaviorEvent(event));
+      if (chorus) sources.push(chorus);
+    }
     this.guardians.forEach((guardian) => {
-      guardian.setAura(resolveAura({ id: guardian.instanceId, x: guardian.x, y: guardian.y }, sources));
+      guardian.setAura(resolveAura({ id: guardian.instanceId, guardianId: guardian.definition.id, x: guardian.x, y: guardian.y }, sources));
     });
   }
 
-  private cooldownFor(guardianId: string): AbilityCooldown {
-    let cooldown = this.abilityCooldowns.get(guardianId);
-    if (!cooldown) {
-      cooldown = new AbilityCooldown();
-      this.abilityCooldowns.set(guardianId, cooldown);
-    }
-    return cooldown;
-  }
-
   private createElectricField(guardian: Guardian, x: number, y: number): void {
-    const definition = guardian.electricField;
+    const definition = guardian.stats.electricField;
     if (!definition) return;
-    if (!this.cooldownFor(guardian.instanceId).tryActivate(this.simulationTimeMs, definition.cooldownMs)) return;
+    if (!guardian.runtime.cooldown("electricField").tryActivate(this.simulationTimeMs, definition.cooldownMs * guardian.stats.abilityCooldownMultiplier)) return;
     this.electricFields = this.electricFields.filter((field) => {
       if (field.ownerId !== guardian.instanceId) return true;
       field.graphic.destroy();
@@ -956,15 +1053,9 @@ export class GameScene extends Phaser.Scene {
   }
 
   private createInkCloud(guardian: Guardian, x: number, y: number): void {
-    const definition = guardian.inkCloud;
+    const definition = guardian.stats.inkCloud;
     if (!definition) return;
-    if (!this.cooldownFor(guardian.instanceId).tryActivate(this.simulationTimeMs, definition.cooldownMs)) return;
-    this.inkClouds = this.inkClouds.filter((cloud) => {
-      if (cloud.ownerId !== guardian.instanceId) return true;
-      cloud.graphic.destroy();
-      cloud.image?.destroy();
-      return false;
-    });
+    if (!guardian.runtime.cooldown("inkCloud").tryActivate(this.simulationTimeMs, definition.cooldownMs * guardian.stats.abilityCooldownMultiplier)) return;
     const image = this.effects.persistent(this.abilityKeyFor(guardian, "ring"), x, y, definition.radius * 2);
     const graphic = this.add.graphics().setDepth(DEPTH.effects - 1);
     graphic.fillStyle(0x2a1a4a, image ? 0.2 : 0.45);
@@ -975,7 +1066,7 @@ export class GameScene extends Phaser.Scene {
     }
     graphic.lineStyle(2, 0xd58cff, image ? 0.35 : 0.6);
     graphic.strokeCircle(x, y, definition.radius);
-    this.inkClouds.push({
+    this.replaceCloud({
       image,
       ownerId: guardian.instanceId,
       x,
@@ -985,12 +1076,49 @@ export class GameScene extends Phaser.Scene {
       expiresAt: this.simulationTimeMs + definition.durationMs,
       slowFactor: definition.slowFactor,
       vulnerabilityMultiplier: definition.vulnerabilityMultiplier,
+      poison: null,
       graphic,
     });
   }
 
-  private updateInkClouds(): void {
-    this.inkClouds = this.inkClouds.filter((cloud) => {
+  /** Jardim Tóxico do Peixe-Pedra: nuvem verde que envenena quem passa. */
+  private createToxicCloud(ownerId: string, x: number, y: number, cloud: ToxicCloudEffect): void {
+    const owner = this.guardians.find((guardian) => guardian.instanceId === ownerId);
+    const image = owner ? this.effects.persistent(this.abilityKeyFor(owner, "ring"), x, y, cloud.radius * 2) : null;
+    const graphic = this.add.graphics().setDepth(DEPTH.effects - 1);
+    graphic.fillStyle(0x4f8a2f, image ? 0.18 : 0.4);
+    graphic.fillCircle(x, y, cloud.radius);
+    graphic.fillStyle(0x8ef26b, 0.2);
+    graphic.fillCircle(x + cloud.radius * 0.2, y - cloud.radius * 0.25, cloud.radius * 0.55);
+    graphic.lineStyle(2, 0xa4f26b, 0.6);
+    graphic.strokeCircle(x, y, cloud.radius);
+    this.replaceCloud({
+      image,
+      ownerId,
+      x,
+      y,
+      radius: cloud.radius,
+      durationMs: cloud.durationMs,
+      expiresAt: this.simulationTimeMs + cloud.durationMs,
+      slowFactor: 1,
+      vulnerabilityMultiplier: 1,
+      poison: cloud.poison,
+      graphic,
+    });
+  }
+
+  private replaceCloud(cloud: CloudView): void {
+    this.clouds = this.clouds.filter((existing) => {
+      if (existing.ownerId !== cloud.ownerId) return true;
+      existing.graphic.destroy();
+      existing.image?.destroy();
+      return false;
+    });
+    this.clouds.push(cloud);
+  }
+
+  private updateClouds(): void {
+    this.clouds = this.clouds.filter((cloud) => {
       if (this.simulationTimeMs >= cloud.expiresAt) {
         cloud.graphic.destroy();
         cloud.image?.destroy();
@@ -1002,11 +1130,58 @@ export class GameScene extends Phaser.Scene {
       this.enemies
         .filter((enemy) => !enemy.dead && !enemy.reachedGoal && enemy.distanceTo(cloud.x, cloud.y) <= cloud.radius)
         .forEach((enemy) => {
-          enemy.applySlow(cloud.slowFactor, 320, this.simulationTimeMs);
-          enemy.applyVulnerability(cloud.vulnerabilityMultiplier, 320, this.simulationTimeMs);
+          if (cloud.slowFactor < 1) enemy.applySlow(cloud.slowFactor, 320, this.simulationTimeMs);
+          if (cloud.vulnerabilityMultiplier > 1) enemy.applyVulnerability(cloud.vulnerabilityMultiplier, 320, this.simulationTimeMs);
+          if (cloud.poison && !enemy.status.isPoisoned(this.simulationTimeMs)) enemy.status.applyPoison(cloud.poison, this.simulationTimeMs);
         });
       return true;
     });
+  }
+
+  /** Zonas de corrente da Tartaruga: anel na água e partículas fluindo contra a rota. */
+  private updateFlowVisuals(deltaMs: number): void {
+    const active = new Set(this.flowFields.map((field) => field.ownerId));
+    this.flowViews = this.flowViews.filter((view) => {
+      if (active.has(view.ownerId)) return true;
+      view.ring.destroy();
+      view.motes.forEach((mote) => mote.destroy());
+      return false;
+    });
+    for (const field of this.flowFields) {
+      let view = this.flowViews.find((candidate) => candidate.ownerId === field.ownerId);
+      if (!view) {
+        const ring = this.add.graphics().setDepth(DEPTH.current + 1);
+        const motes: Phaser.GameObjects.Arc[] = [];
+        for (let index = 0; index < 12; index += 1) {
+          const angle = (Math.PI * 2 * index) / 12;
+          const distance = field.radius * (0.35 + ((index * 37) % 60) / 100);
+          motes.push(
+            this.add
+              .circle(field.x + Math.cos(angle) * distance, field.y + Math.sin(angle) * distance, 2 + (index % 3), 0x9fefff, 0.45)
+              .setDepth(DEPTH.current + 2),
+          );
+        }
+        view = { ownerId: field.ownerId, ring, motes };
+        this.flowViews.push(view);
+      }
+      view.ring.clear();
+      view.ring.fillStyle(0x4fd6ff, field.speedFactor < 0.85 ? 0.08 : 0.05);
+      view.ring.fillCircle(field.x, field.y, field.radius);
+      view.ring.lineStyle(2, 0x6fe3ff, 0.45);
+      view.ring.strokeCircle(field.x, field.y, field.radius);
+      // Partículas correm contra o sentido da rota no ponto onde estão: a água "empurra de volta".
+      view.motes.forEach((mote, index) => {
+        const tangent = this.route.getTangentAtDistance(this.route.getClosestPoint(mote).routeDistance);
+        const speed = (30 + (index % 4) * 10) * (1.2 - field.speedFactor);
+        mote.x -= tangent.x * speed * (deltaMs / 1000);
+        mote.y -= tangent.y * speed * (deltaMs / 1000);
+        if (Math.hypot(mote.x - field.x, mote.y - field.y) > field.radius) {
+          const angle = Math.atan2(mote.y - field.y, mote.x - field.x) + Math.PI + (index % 5) * 0.2;
+          mote.x = field.x + Math.cos(angle) * field.radius * 0.9;
+          mote.y = field.y + Math.sin(angle) * field.radius * 0.9;
+        }
+      });
+    }
   }
 
   private cleanupEnemies(): void {
@@ -1149,6 +1324,7 @@ export class GameScene extends Phaser.Scene {
       waveState: this.scheduler.state,
       countdownSeconds: this.scheduler.countdownSeconds,
       canSkipCountdown: this.scheduler.state === "countdown",
+      loadout: [...this.loadout],
       selectedGuardianId: this.selectedGuardianId,
       selectedPlacedGuardian: selected
         ? {
@@ -1162,6 +1338,7 @@ export class GameScene extends Phaser.Scene {
             branchColor: selected.branch?.color ?? null,
             artVariant: selected.artVariantFolder,
             options: selected.options,
+            branches: selected.branchStatuses,
             invested: selected.invested,
             sellValue: selected.sellValueAt(ECONOMY.sellRefundRate),
           }
@@ -1184,7 +1361,9 @@ export class GameScene extends Phaser.Scene {
     dataset.selected = this.selectedPlacedGuardianId ?? "";
     dataset.selectedBranch = selected?.branchId ?? "";
     dataset.selectedOptions = selected ? String(selected.options.length) : "";
+    dataset.selectedVariant = selected?.artVariantFolder ?? "";
     dataset.sellValue = selected ? String(selected.sellValueAt(ECONOMY.sellRefundRate)) : "";
+    dataset.loadout = this.loadout.join(",");
     dataset.debug = String(this.debugFlags.enabled);
     dataset.paused = String(this.paused);
     const shrimp = this.guardians.find((guardian) => guardian.definition.id === "pistol-shrimp");
@@ -1198,6 +1377,8 @@ export class GameScene extends Phaser.Scene {
       ? `${boss.x.toFixed(0)},${boss.y.toFixed(0)},${boss.effectiveSpeed.toFixed(1)},${Math.ceil(boss.health)},${boss.blockedById ?? "-"}`
       : "";
     dataset.enemies = String(this.enemies.filter((enemy) => !enemy.dead && !enemy.reachedGoal).length);
+    const trap = this.guardians.find((guardian) => guardian.currentTrapPhase !== null);
+    dataset.trapPhase = trap?.currentTrapPhase ?? "";
     EventBus.emit(Events.hudUpdate, snapshot);
   }
 
@@ -1217,9 +1398,10 @@ export class GameScene extends Phaser.Scene {
           width: GAME_WIDTH - 88,
           height: GAME_HEIGHT - HUD_BOTTOM - HUD_TOP - 76,
         },
-        waterRouteClearance: WATER_ROUTE_CLEARANCE,
-        waterSeparation: WATER_SEPARATION,
-        routePlacementClearance: ROUTE_PLACEMENT_CLEARANCE,
+        waterRouteClearance: PLACEMENT.waterRouteClearance,
+        waterSeparation: PLACEMENT.separation,
+        routePlacementClearance: PLACEMENT.routeClearance,
+        marginBand: { min: PLACEMENT.marginMin, max: PLACEMENT.marginMax },
         platforms: this.placements.map((placement) => ({
           x: placement.definition.x,
           y: placement.definition.y,
@@ -1228,8 +1410,10 @@ export class GameScene extends Phaser.Scene {
           id: placement.id,
           x: placement.x,
           y: placement.y,
+          label: placement.guardian?.definition.shortName.toUpperCase() ?? "ROTA",
         })),
       },
+      { flowFields: this.flowFields, now: this.simulationTimeMs },
     );
   }
 
@@ -1251,11 +1435,26 @@ export class GameScene extends Phaser.Scene {
         this.placementGuideGraphic.lineStyle(2, placement.guardian ? 0xff8290 : 0xa5f6d2, placement.guardian ? 0.42 : 0.72);
         this.placementGuideGraphic.strokeCircle(placement.definition.x, placement.definition.y, 38);
       });
+    } else if (placementMode === "margin") {
+      // Faixa da margem: duas linhas paralelas à rota mostram onde o Tubarão pode ficar.
+      this.placementGuideGraphic.lineStyle(PLACEMENT.marginMax * 2, 0x67f2ac, 0.06);
+      this.strokeRoute(this.placementGuideGraphic);
+      this.placementGuideGraphic.lineStyle(PLACEMENT.marginMin * 2, 0x031d2d, 0.12);
+      this.strokeRoute(this.placementGuideGraphic);
     } else if (placementMode === null) {
       this.placementPreviewGraphic.clear();
       this.placementPreviewText.setVisible(false);
     }
     this.renderDebug();
+  }
+
+  private strokeRoute(graphics: Phaser.GameObjects.Graphics): void {
+    graphics.beginPath();
+    this.level.waypoints.forEach((point, index) => {
+      if (index === 0) graphics.moveTo(point.x, point.y);
+      else graphics.lineTo(point.x, point.y);
+    });
+    graphics.strokePath();
   }
 
   // -------------------------------------------------------------- ambiente
@@ -1347,6 +1546,26 @@ export class GameScene extends Phaser.Scene {
       ease: "Quad.Out",
       onComplete: () => circle.destroy(),
     });
+  }
+
+  /** Rastro da investida do Tubarão: afterimages entre a margem e o alvo (mais vermelhas no Frenesi). */
+  private dashTrail(guardian: Guardian, target: Enemy): void {
+    const frenzy = guardian.stats.frenzy !== null;
+    const color = frenzy ? 0xff4d5e : 0x9fc9ff;
+    const steps = frenzy ? 4 : 2;
+    for (let index = 1; index <= steps; index += 1) {
+      const t = index / (steps + 1);
+      const x = guardian.x + (target.x - guardian.x) * t;
+      const y = guardian.y + (target.y - guardian.y) * t;
+      const ghost = this.add.ellipse(x, y, 40, 14, color, 0.28 - index * 0.04).setDepth(DEPTH.effects - 1);
+      ghost.setRotation(Math.atan2(target.y - guardian.y, target.x - guardian.x));
+      this.tweens.add({ targets: ghost, alpha: 0, scaleX: 0.6, duration: 260 + index * 40, onComplete: () => ghost.destroy() });
+    }
+  }
+
+  private poisonPuff(x: number, y: number): void {
+    const puff = this.add.circle(x + 6, y - 10, 4, 0x8ef26b, 0.7).setDepth(DEPTH.effects);
+    this.tweens.add({ targets: puff, y: y - 26, alpha: 0, duration: 420, onComplete: () => puff.destroy() });
   }
 
   private lightningEffect(guardian: Guardian, targets: readonly Enemy[]): void {

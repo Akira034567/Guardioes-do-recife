@@ -1,4 +1,4 @@
-import type { BranchId, GuardianDefinition, GuardianUpgrade, UpgradeBranch, UpgradeOption } from "../types";
+import type { BranchId, BranchStatus, GuardianDefinition, GuardianUpgrade, UpgradeBranch, UpgradeOption } from "../types";
 
 export const MAX_UPGRADE_LEVEL = 2;
 
@@ -38,6 +38,31 @@ export function upgradeOptions(definition: GuardianDefinition, progress: Upgrade
       name: upgrade.name,
       description: upgrade.description,
       cost: upgrade.cost,
+    };
+  });
+}
+
+/**
+ * Estado dos dois ramos para o painel: `available` antes da escolha, `chosen` no ramo em curso,
+ * `complete` quando os dois passos foram comprados e `locked` no ramo descartado.
+ */
+export function branchStatuses(definition: GuardianDefinition, progress: UpgradeProgress): BranchStatus[] {
+  return definition.branches.map((branch) => {
+    const chosen = progress.branchId === branch.id;
+    const purchased = chosen ? Math.min(MAX_UPGRADE_LEVEL, progress.upgradeLevel) : 0;
+    const state = !progress.branchId
+      ? "available"
+      : !chosen
+        ? "locked"
+        : purchased >= MAX_UPGRADE_LEVEL
+          ? "complete"
+          : "chosen";
+    return {
+      id: branch.id,
+      name: branch.name,
+      color: branch.color,
+      state,
+      steps: branch.upgrades.map((upgrade, index) => ({ name: upgrade.name, purchased: index < purchased, cost: upgrade.cost })),
     };
   });
 }

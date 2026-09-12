@@ -2,12 +2,15 @@ import type Phaser from "phaser";
 import type { BranchId, GuardianId } from "../types";
 
 /**
- * Arte dos Guardiões recortada das tabelas de upgrade (`public/assets/guardians/<id>/<variante>/`).
+ * Arte dos Guardiões por forma (`public/assets/guardians/<pasta>/<variante>/`).
  *
  * Cada Guardião tem cinco variantes visuais: `base` e uma por upgrade de cada ramo. Cada variante tem
- * cinco imagens: `idle`, `attack`, `projectile` (a coluna "Habilidade" da tabela), `impact` e `portrait`.
+ * até cinco imagens: `idle`, `attack`, `projectile` (a coluna "Habilidade" da tabela), `impact` e `portrait`.
  * As imagens de um mesmo Guardião preservam a posição e a proporção da célula da tabela, então uma única
  * escala por Guardião mantém o tamanho relativo entre variantes (a base pequena cresce com os upgrades).
+ *
+ * As formas são persistentes: a imagem só troca quando o jogador compra o upgrade; o idle nunca alterna
+ * entre variantes.
  */
 export type ArtKind = "idle" | "attack" | "projectile" | "impact" | "portrait";
 export const ART_KINDS: readonly ArtKind[] = ["idle", "attack", "projectile", "impact", "portrait"];
@@ -20,7 +23,7 @@ export type AbilityStyle =
   | "ring"; // surge centrada no Guardião, do tamanho do alcance (pulso, giro, aura)
 
 export interface ArtVariant {
-  /** Nome da pasta em `public/assets/guardians/<id>/`. */
+  /** Nome da pasta em `public/assets/guardians/<pasta do Guardião>/`. */
   folder: string;
   ability: AbilityStyle;
 }
@@ -32,6 +35,12 @@ export interface GuardianArtProfile {
   effectScale: number;
   base: ArtVariant;
   branches: Record<BranchId, [ArtVariant, ArtVariant]>;
+  /** Pasta do Guardião em `public/assets/guardians/` (padrão: o próprio id). */
+  assetFolder?: string;
+  /** Nome do arquivo da coluna "Habilidade" (padrão `projectile`; os novos usam `ability`). */
+  abilityFile?: string;
+  /** `false` quando a variante não tem `portrait.png` (o card do HUD fica oculto). */
+  hasPortrait?: boolean;
 }
 
 export const GUARDIAN_ART: Record<GuardianId, GuardianArtProfile> = {
@@ -112,6 +121,77 @@ export const GUARDIAN_ART: Record<GuardianId, GuardianArtProfile> = {
       ],
     },
   },
+  // Novos Guardiões: pastas exatamente como na especificação; arquivos idle/attack/ability/impact/portrait
+  // (recortes de `scripts/slice-neon-sheet.py`).
+  shark: {
+    scale: 0.72,
+    effectScale: 0.55,
+    assetFolder: "tubarao",
+    abilityFile: "ability",
+    base: { folder: "base", ability: "burst" },
+    branches: {
+      a: [
+        { folder: "frenesi_1", ability: "burst" },
+        { folder: "frenesi_2", ability: "burst" },
+      ],
+      b: [
+        { folder: "alfa_1", ability: "burst" },
+        { folder: "alfa_2", ability: "burst" },
+      ],
+    },
+  },
+  "sea-turtle": {
+    scale: 0.72,
+    effectScale: 0.55,
+    assetFolder: "tartaruga",
+    abilityFile: "ability",
+    base: { folder: "base", ability: "burst" },
+    branches: {
+      a: [
+        { folder: "casco_1", ability: "ring" },
+        { folder: "casco_2", ability: "ring" },
+      ],
+      b: [
+        { folder: "corrente_1", ability: "ring" },
+        { folder: "corrente_2", ability: "ring" },
+      ],
+    },
+  },
+  stonefish: {
+    scale: 0.72,
+    effectScale: 0.55,
+    assetFolder: "peixe_pedra",
+    abilityFile: "ability",
+    // `idle` = enterrado (só olhos e espinhos), `attack` = emergido; `ability` = explosão/nuvem.
+    base: { folder: "base", ability: "ring" },
+    branches: {
+      a: [
+        { folder: "veneno_1", ability: "ring" },
+        { folder: "veneno_2", ability: "ring" },
+      ],
+      b: [
+        { folder: "emboscada_1", ability: "ring" },
+        { folder: "emboscada_2", ability: "ring" },
+      ],
+    },
+  },
+  dolphin: {
+    scale: 0.72,
+    effectScale: 0.55,
+    assetFolder: "golfinho",
+    abilityFile: "ability",
+    base: { folder: "base", ability: "ring" },
+    branches: {
+      a: [
+        { folder: "coro_1", ability: "ring" },
+        { folder: "coro_2", ability: "ring" },
+      ],
+      b: [
+        { folder: "sonar_1", ability: "ring" },
+        { folder: "sonar_2", ability: "ring" },
+      ],
+    },
+  },
 };
 
 export interface ArtProgress {
@@ -145,8 +225,25 @@ export function artTextureFor(guardianId: GuardianId, progress: ArtProgress, kin
   return artTextureKey(guardianId, artVariant(guardianId, progress), kind);
 }
 
+/** Pasta do Guardião em `public/assets/guardians/`. */
+export function artFolder(guardianId: GuardianId): string {
+  return GUARDIAN_ART[guardianId].assetFolder ?? guardianId;
+}
+
+/** Nome do arquivo (sem extensão) de um tipo de imagem para este Guardião. */
+export function artFileName(guardianId: GuardianId, kind: ArtKind): string {
+  if (kind === "projectile") return GUARDIAN_ART[guardianId].abilityFile ?? "projectile";
+  return kind;
+}
+
+/** Tipos de imagem que este Guardião possui (os novos não têm retrato). */
+export function artKindsFor(guardianId: GuardianId): ArtKind[] {
+  const profile = GUARDIAN_ART[guardianId];
+  return ART_KINDS.filter((kind) => kind !== "portrait" || profile.hasPortrait !== false);
+}
+
 export function artPath(guardianId: GuardianId, variant: ArtVariant, kind: ArtKind): string {
-  return `assets/guardians/${guardianId}/${variant.folder}/${kind}.png`;
+  return `assets/guardians/${artFolder(guardianId)}/${variant.folder}/${artFileName(guardianId, kind)}.png`;
 }
 
 export function allArtVariants(guardianId: GuardianId): ArtVariant[] {
@@ -155,11 +252,11 @@ export function allArtVariants(guardianId: GuardianId): ArtVariant[] {
 }
 
 /** Todas as imagens registradas: uma entrada por Guardião × variante × tipo. */
-export const GUARDIAN_ART_ASSETS: ReadonlyArray<{ key: string; path: string }> = (
+export const GUARDIAN_ART_ASSETS: ReadonlyArray<{ key: string; path: string; guardianId: GuardianId }> = (
   Object.keys(GUARDIAN_ART) as GuardianId[]
 ).flatMap((guardianId) =>
   allArtVariants(guardianId).flatMap((variant) =>
-    ART_KINDS.map((kind) => ({ key: artTextureKey(guardianId, variant, kind), path: artPath(guardianId, variant, kind) })),
+    artKindsFor(guardianId).map((kind) => ({ key: artTextureKey(guardianId, variant, kind), path: artPath(guardianId, variant, kind), guardianId })),
   ),
 );
 

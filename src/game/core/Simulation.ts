@@ -1,18 +1,46 @@
-import { GAME_HEIGHT, GAME_WIDTH, HUD_BOTTOM, HUD_TOP } from "../constants";
-import { BOSS_CURRENT, ECONOMY, GUARDIAN_BALANCE } from "../data/balance";
+import { GAME_HEIGHT, GAME_WIDTH } from "../constants";
+import { BOSS_CURRENT, ECONOMY, GUARDIAN_BALANCE, PLACEMENT } from "../data/balance";
 import { ENEMIES, scaleEnemy } from "../data/enemies";
 import { GUARDIANS } from "../data/guardians";
-import type { AuraEffect, BranchId, EnemyDefinition, EnemyId, GuardianDefinition, GuardianId, LevelDefinition, Vec2 } from "../types";
-import { AbilityCooldown } from "./AbilityCooldown";
+import type {
+  BranchId,
+  EnemyDefinition,
+  EnemyId,
+  GuardianDefinition,
+  GuardianId,
+  LevelDefinition,
+  PoisonEffect,
+  ResolvedAura,
+  ToxicCloudEffect,
+  Vec2,
+} from "../types";
 import { NEUTRAL_AURA, resolveAura, sameAura, type AuraSource } from "./Auras";
-import { hasReachedBlockerContact, mitigatedDamage, selectLeadingTarget } from "./Combat";
+import { BlockingSystem } from "./Blocking";
+import { mitigatedDamage } from "./Combat";
 import { containsPoint, enemySpeedMultiplier, projectileDrift } from "./CurrentField";
 import { Economy } from "./Economy";
 import { EnemyStatus } from "./EnemyStatus";
+import { flowSpeedMultiplier, type FlowField } from "./FlowField";
+import {
+  flowFieldsFor,
+  registerSharkHit,
+  targetPolicyFor,
+  updateChorus,
+  updateFrenzy,
+  updateMark,
+  updatePushWave,
+  updateSonar,
+  updateTrap,
+  type BehaviorHooks,
+  type DamageOptions,
+} from "./GuardianBehaviors";
+import { GuardianRuntime } from "./GuardianRuntime";
 import { GuardianStateMachine } from "./GuardianStateMachine";
 import { resolveGuardianStats, scaledTimings, type GuardianStats } from "./GuardianStats";
+import { validatePlacement } from "./PlacementRules";
 import { ProjectileCore, type ProjectileTarget } from "./ProjectileCore";
 import { RoutePath } from "./RoutePath";
+import { selectTarget } from "./Targeting";
 import { applyUpgrade, upgradeOptions, type UpgradeProgress } from "./UpgradeTree";
 import { WaveScheduler } from "./WaveScheduler";
 
@@ -44,12 +72,6 @@ export interface SimResult {
   leaks: Partial<Record<EnemyId, number>>;
   stepsExecuted: number;
 }
-
-const ROUTE_PLACEMENT_CLEARANCE = 52;
-const ROUTE_UNIT_SEPARATION = 78;
-const WATER_ROUTE_CLEARANCE = 82;
-const WATER_SEPARATION = 78;
-const PLATFORM_HIT_RADIUS = 47;
 
 class SimEnemy {
   x: number;
@@ -92,10 +114,7 @@ class SimEnemy {
 
   setBlocked(blockerId: string, stopDistance: number): void {
     this.blockedById = blockerId;
-    this.pathDistance = Math.max(0, stopDistance);
-    const point = this.route.getPointAtDistance(this.pathDistance);
-    this.x = point.x;
-    this.y = point.y;
+    this.setPathDistance(stopDistance);
     this.effectiveSpeed = 0;
   }
 
@@ -103,7 +122,15 @@ class SimEnemy {
     this.blockedById = null;
   }
 
-  tick(now: number, deltaMs: number, currents: LevelDefinition["currents"], reversed: boolean): boolean {
+  /** Move ao longo da rota (clampado) e atualiza a posição. */
+  setPathDistance(distance: number): void {
+    this.pathDistance = Math.max(0, Math.min(this.route.totalLength, distance));
+    const point = this.route.getPointAtDistance(this.pathDistance);
+    this.x = point.x;
+    this.y = point.y;
+  }
+
+  tick(now: number, deltaMs: number, currents: LevelDefinition["currents"], reversed: boolean, flowFields: readonly FlowField[]): boolean {
     if (this.dead || this.reachedGoal) return false;
     this.now = now;
     this.status.update(now);
@@ -114,7 +141,8 @@ class SimEnemy {
     }
     const zone = currents.find((candidate) => containsPoint(candidate, this));
     const currentMultiplier = zone ? enemySpeedMultiplier(zone, tangent, reversed) : 1;
-    this.effectiveSpeed = this.definition.speed * this.status.speedMultiplier(now) * currentMultiplier;
+    const flowMultiplier = flowSpeedMultiplier(flowFields, this, this.definition.slowResistance ?? 0);
+    this.effectiveSpeed = this.definition.speed * this.status.speedMultiplier(now) * currentMultiplier * flowMultiplier;
     this.pathDistance += this.effectiveSpeed * (deltaMs / 1000);
     const point = this.route.getPointAtDistance(this.pathDistance);
     this.x = point.x;
@@ -126,15 +154,15 @@ class SimEnemy {
     return false;
   }
 
-  takeDamage(rawDamage: number, armorPiercing = false): boolean {
+  takeDamage(rawDamage: number, options: DamageOptions = {}): boolean {
     if (this.dead || this.reachedGoal) return false;
-    const base = armorPiercing ? Math.max(1, rawDamage) : mitigatedDamage(rawDamage, this.definition.armor);
-    return this.loseHealth(base * this.status.damageMultiplier(this.now));
+    const base = options.armorPiercing ? Math.max(1, rawDamage) : mitigatedDamage(rawDamage, this.definition.armor);
+    return this.loseHealth(base * this.status.damageMultiplier(this.now) * this.status.markMultiplier(options.sourceId, this.now));
   }
 
-  takeContinuousDamage(amount: number): boolean {
+  takeContinuousDamage(amount: number, options: DamageOptions = {}): boolean {
     if (this.dead || this.reachedGoal) return false;
-    return this.loseHealth(Math.max(0, amount) * this.status.damageMultiplier(this.now));
+    return this.loseHealth(Math.max(0, amount) * this.status.damageMultiplier(this.now) * this.status.markMultiplier(options.sourceId, this.now));
   }
 
   distanceTo(x: number, y: number): number {
@@ -152,8 +180,9 @@ class SimGuardian {
   branchId: BranchId | null = null;
   upgradeLevel = 0;
   attacksPerformed = 0;
-  aura: AuraEffect = NEUTRAL_AURA;
+  aura: ResolvedAura = NEUTRAL_AURA;
   readonly fsm: GuardianStateMachine;
+  readonly runtime = new GuardianRuntime();
   private cachedStats: GuardianStats | null = null;
 
   constructor(
@@ -162,8 +191,14 @@ class SimGuardian {
     readonly x: number,
     readonly y: number,
     readonly routeDistance: number | null,
+    now: number,
   ) {
     this.fsm = new GuardianStateMachine(scaledTimings(definition, this.stats.cooldownMs));
+    this.runtime.syncStats(this.stats, now);
+  }
+
+  get guardianId(): GuardianId {
+    return this.definition.id;
   }
 
   get progress(): UpgradeProgress {
@@ -171,7 +206,9 @@ class SimGuardian {
   }
 
   get stats(): GuardianStats {
-    if (!this.cachedStats) this.cachedStats = resolveGuardianStats(this.definition, this.progress, this.aura);
+    if (!this.cachedStats) {
+      this.cachedStats = resolveGuardianStats(this.definition, this.progress, this.aura, { attackSpeedBonus: this.runtime.attackSpeedBonus });
+    }
     return this.cachedStats;
   }
 
@@ -187,25 +224,32 @@ class SimGuardian {
     return upgradeOptions(this.definition, this.progress).find((option) => option.branchId === branchId)?.cost ?? null;
   }
 
-  applyUpgrade(branchId: BranchId): boolean {
+  applyUpgrade(branchId: BranchId, now: number): boolean {
     const next = applyUpgrade(this.definition, this.progress, branchId);
     if (!next) return false;
     this.branchId = next.branchId;
     this.upgradeLevel = next.upgradeLevel;
     this.invalidate();
+    this.runtime.syncStats(this.stats, now);
     return true;
   }
 
-  setAura(aura: AuraEffect): void {
+  setAura(aura: ResolvedAura): void {
     if (sameAura(this.aura, aura)) return;
     this.aura = { ...aura };
+    this.invalidate();
+  }
+
+  setAttackSpeedBonus(bonus: number): void {
+    if (Math.abs(this.runtime.attackSpeedBonus - bonus) < 1e-6) return;
+    this.runtime.attackSpeedBonus = bonus;
     this.invalidate();
   }
 
   tick(now: number, enemies: readonly SimEnemy[], onImpact: (guardian: SimGuardian, target: SimEnemy) => void): void {
     if (!this.stats.canAttack) return;
     if (this.fsm.state === "idle") {
-      const target = selectLeadingTarget(enemies, this, this.range);
+      const target = selectTarget(enemies, this, this.range, targetPolicyFor(this, now));
       if (target) this.consume(this.fsm.beginAttack(target.id, now), enemies, onImpact);
     }
     const target = enemies.find((enemy) => enemy.id === this.fsm.targetId);
@@ -257,6 +301,7 @@ interface SimCloud {
   expiresAt: number;
   slowFactor: number;
   vulnerabilityMultiplier: number;
+  poison: PoisonEffect | null;
 }
 
 interface SimRouteUnit extends Vec2 {
@@ -272,11 +317,12 @@ export class LevelSimulation {
   private readonly projectiles: ProjectileCore[] = [];
   private readonly fields: SimField[] = [];
   private readonly clouds: SimCloud[] = [];
-  private readonly cooldowns = new Map<string, AbilityCooldown>();
+  private readonly blocking = new BlockingSystem();
   private readonly routeUnits: SimRouteUnit[] = [];
   private readonly occupiedPlatforms = new Set<string>();
   private readonly kills: Partial<Record<EnemyId, number>> = {};
   private readonly leaks: Partial<Record<EnemyId, number>> = {};
+  private flowFields: FlowField[] = [];
   private reef: number;
   private state: "running" | "victory" | "defeat" = "running";
   private now = 0;
@@ -338,18 +384,30 @@ export class LevelSimulation {
       }
     }
 
-    this.updateBlockers(deltaMs);
+    this.flowFields = flowFieldsFor(this.guardians);
+    this.blocking.update(this.guardians, this.enemies, this.now, deltaMs, {
+      damage: (enemy, amount) => this.damage(enemy, amount, { continuous: true }),
+    });
     for (const enemy of this.enemies) {
-      if (enemy.tick(this.now, deltaMs, this.level.currents, this.currentReversed)) {
+      if (enemy.tick(this.now, deltaMs, this.level.currents, this.currentReversed, this.flowFields)) {
         this.reef = Math.max(0, this.reef - enemy.definition.reefDamage);
         this.leaks[enemy.definition.id] = (this.leaks[enemy.definition.id] ?? 0) + 1;
         if (this.reef <= 0) this.state = "defeat";
       }
     }
+    this.drainPoison();
 
+    const hooks = this.behaviorHooks();
+    for (const guardian of this.guardians) updateTrap(guardian, this.enemies, hooks);
     this.updateAuras();
     for (const guardian of this.guardians) {
+      updateFrenzy(guardian, this.enemies, this.now);
+      updateMark(guardian, this.enemies, hooks);
       guardian.tick(this.now, this.enemies, (attacker, target) => this.resolveAttack(attacker, target));
+    }
+    for (const guardian of this.guardians) {
+      updatePushWave(guardian, this.enemies, hooks);
+      updateSonar(guardian, this.enemies, this.guardians, hooks);
     }
     this.updateFields();
     this.updateClouds();
@@ -357,6 +415,27 @@ export class LevelSimulation {
 
     for (let index = this.enemies.length - 1; index >= 0; index -= 1) {
       if (this.enemies[index].dead || this.enemies[index].reachedGoal) this.enemies.splice(index, 1);
+    }
+  }
+
+  private behaviorHooks(): BehaviorHooks<SimEnemy> {
+    return {
+      now: this.now,
+      damage: (enemy, amount, options) => this.damage(enemy, amount, options),
+      spawnCloud: (ownerId, x, y, cloud) => this.createToxicCloud(ownerId, x, y, cloud),
+      onEscaped: (blockerId, enemyId) => {
+        const blocker = this.guardians.find((guardian) => guardian.id === blockerId);
+        const cooldown = blocker?.stats.blockHold?.releaseCooldownMs ?? 500;
+        this.blocking.notifyEscaped(blockerId, enemyId, this.now, cooldown);
+      },
+    };
+  }
+
+  private drainPoison(): void {
+    for (const enemy of this.enemies) {
+      if (enemy.dead || enemy.reachedGoal) continue;
+      const owed = enemy.status.drainPoison(this.now);
+      if (owed > 0) this.damage(enemy, owed, { continuous: true });
     }
   }
 
@@ -375,7 +454,7 @@ export class LevelSimulation {
         const cost = guardian.nextCost(step.branch);
         if (cost === null) throw new Error(`${this.level.id}: upgrade ${step.branch} indisponível em ${step.upgrade.join(",")}`);
         if (!this.economy.canAfford(cost)) return;
-        guardian.applyUpgrade(step.branch);
+        guardian.applyUpgrade(step.branch, this.now);
         this.economy.spend(cost);
       }
       this.stepIndex += 1;
@@ -392,46 +471,34 @@ export class LevelSimulation {
     let routeDistance: number | null = null;
     if (definition.placementMode === "platform") {
       const platform = this.level.placements.find(
-        (candidate) => !this.occupiedPlatforms.has(candidate.id) && Math.hypot(candidate.x - x, candidate.y - y) <= PLATFORM_HIT_RADIUS,
+        (candidate) => !this.occupiedPlatforms.has(candidate.id) && Math.hypot(candidate.x - x, candidate.y - y) <= PLACEMENT.platformHitRadius,
       );
       if (!platform) throw new Error(`${this.level.id}: nenhuma plataforma livre em ${at.join(",")}`);
       this.occupiedPlatforms.add(platform.id);
       x = platform.x;
       y = platform.y;
-    } else if (definition.placementMode === "water") {
-      const reason = this.waterPlacementError(x, y);
-      if (reason) throw new Error(`${this.level.id}: água inválida em ${at.join(",")} (${reason})`);
     } else {
-      const closest = this.route.getClosestPoint({ x, y });
-      if (closest.distance > ROUTE_PLACEMENT_CLEARANCE) throw new Error(`${this.level.id}: fora da correnteza em ${at.join(",")}`);
-      if (closest.routeDistance < 60 || closest.routeDistance > this.route.totalLength - 60) {
-        throw new Error(`${this.level.id}: muito perto da entrada/saída em ${at.join(",")}`);
-      }
-      if (this.routeUnits.some((unit) => Math.hypot(closest.point.x - unit.x, closest.point.y - unit.y) < ROUTE_UNIT_SEPARATION)) {
-        throw new Error(`${this.level.id}: muito perto de outra unidade da correnteza em ${at.join(",")}`);
-      }
-      x = closest.point.x;
-      y = closest.point.y;
-      routeDistance = closest.routeDistance;
+      const validation = validatePlacement(
+        definition.placementMode,
+        { route: this.route, platforms: this.level.placements, guardians: this.guardians, routeUnits: this.routeUnits },
+        { x, y },
+      );
+      if (!validation.valid) throw new Error(`${this.level.id}: ${definition.placementMode} inválido em ${at.join(",")} (${validation.reason})`);
+      x = validation.x;
+      y = validation.y;
+      routeDistance = validation.routeDistance;
     }
     this.economy.spend(definition.cost);
-    const guardian = new SimGuardian(`G${++this.guardianSerial}`, definition, x, y, routeDistance);
+    const guardian = new SimGuardian(`G${++this.guardianSerial}`, definition, x, y, routeDistance, this.now);
     this.guardians.push(guardian);
     if (routeDistance !== null) this.routeUnits.push({ x, y, guardianId: guardian.id });
-  }
-
-  private waterPlacementError(x: number, y: number): string | null {
-    if (x < 44 || x > GAME_WIDTH - 44 || y < HUD_TOP + 38 || y > GAME_HEIGHT - HUD_BOTTOM - 38) return "fora da área";
-    if (this.route.getClosestPoint({ x, y }).distance < WATER_ROUTE_CLEARANCE) return "perto da rota";
-    if (this.level.placements.some((placement) => Math.hypot(x - placement.x, y - placement.y) < WATER_SEPARATION)) return "plataforma";
-    if (this.guardians.some((guardian) => Math.hypot(x - guardian.x, y - guardian.y) < WATER_SEPARATION)) return "outro guardião";
-    return null;
   }
 
   // -------------------------------------------------------------- combate
 
   private resolveAttack(guardian: SimGuardian, target: SimEnemy): void {
-    switch (guardian.definition.attackKind) {
+    const kind = guardian.definition.attackKind;
+    switch (kind) {
       case "projectile":
         this.fireProjectile(guardian, target);
         return;
@@ -444,8 +511,18 @@ export class LevelSimulation {
       case "ink":
         this.resolveInk(guardian, target);
         return;
-      default:
+      case "sonar":
+        this.resolveSonarHit(guardian, target);
+        return;
+      case "area":
         this.resolvePulse(guardian);
+        return;
+      case "trap":
+        return;
+      default: {
+        const exhaustive: never = kind;
+        throw new Error(`attackKind desconhecido: ${String(exhaustive)}`);
+      }
     }
   }
 
@@ -507,7 +584,7 @@ export class LevelSimulation {
       .sort((a, b) => b.progress - a.progress)
       .slice(0, damages.length);
     candidates.forEach((enemy, index) => {
-      this.damage(enemy, damages[index] ?? damages[damages.length - 1]);
+      this.damage(enemy, damages[index] ?? damages[damages.length - 1], { sourceId: guardian.id });
       if (stats.slowFactor !== null) enemy.status.applySlow(stats.slowFactor, stats.slowDurationMs, this.now);
     });
     if (stats.stun && !target.dead) target.status.tryStun(stats.stun.durationMs, stats.stun.immunityMs, this.now);
@@ -517,7 +594,7 @@ export class LevelSimulation {
   private resolvePulse(guardian: SimGuardian): void {
     const stats = guardian.stats;
     this.inRange(guardian).forEach((enemy) => {
-      this.damage(enemy, stats.damage);
+      this.damage(enemy, stats.damage, { sourceId: guardian.id });
       if (stats.slowFactor !== null) enemy.status.applySlow(stats.slowFactor, stats.slowDurationMs, this.now);
     });
   }
@@ -528,9 +605,11 @@ export class LevelSimulation {
     const radius = spinning && stats.spin ? guardian.range * stats.spin.radiusMultiplier : guardian.range;
     const damage = spinning && stats.spin ? stats.spin.damage : stats.damage;
     const targets = stats.areaAttack || spinning ? this.inRange(guardian, radius) : [target];
+    if (stats.mark) registerSharkHit(guardian, target, this.now);
     targets.forEach((enemy) => {
-      this.damage(enemy, damage, stats.armorPiercing);
+      this.damage(enemy, damage, { armorPiercing: stats.armorPiercing, sourceId: guardian.id });
       if (stats.vulnerability) enemy.status.applyVulnerability(stats.vulnerability.multiplier, stats.vulnerability.durationMs, this.now);
+      if (stats.slowFactor !== null) enemy.status.applySlow(stats.slowFactor, stats.slowDurationMs, this.now);
     });
   }
 
@@ -542,78 +621,42 @@ export class LevelSimulation {
       : [target];
     if (!affected.includes(target)) affected.push(target);
     affected.forEach((enemy) => {
-      this.damage(enemy, enemy === target ? stats.damage : Math.ceil(stats.damage * 0.5));
+      this.damage(enemy, enemy === target ? stats.damage : Math.ceil(stats.damage * 0.5), { sourceId: guardian.id });
       if (vulnerability) enemy.status.applyVulnerability(vulnerability.multiplier, vulnerability.durationMs, this.now);
     });
     if (stats.inkCloud) this.createCloud(guardian, target.x, target.y);
   }
 
-  private damage(enemy: SimEnemy, amount: number, armorPiercing = false, continuous = false): void {
-    const killed = continuous ? enemy.takeContinuousDamage(amount) : enemy.takeDamage(amount, armorPiercing);
+  /** Golpe base do Golfinho: pulso fraco em um alvo. O sonar de área é uma habilidade separada. */
+  private resolveSonarHit(guardian: SimGuardian, target: SimEnemy): void {
+    this.damage(target, guardian.stats.damage, { sourceId: guardian.id });
+  }
+
+  private damage(enemy: SimEnemy, amount: number, options: DamageOptions = {}): void {
+    const killed = options.continuous ? enemy.takeContinuousDamage(amount, options) : enemy.takeDamage(amount, options);
     if (!killed) return;
     this.economy.earn(enemy.definition.reward);
     this.kills[enemy.definition.id] = (this.kills[enemy.definition.id] ?? 0) + 1;
     if (enemy.definition.isBoss) this.currentReversed = false;
   }
 
-  private updateBlockers(deltaMs: number): void {
-    const blockers = this.guardians.filter((guardian) => guardian.stats.blocks && guardian.routeDistance !== null);
-    const blockerIds = new Set(blockers.map((guardian) => guardian.id));
-    this.enemies.forEach((enemy) => {
-      if (enemy.blockedById && !blockerIds.has(enemy.blockedById)) enemy.clearBlocked();
-    });
-    for (const blocker of blockers) {
-      const stats = blocker.stats;
-      const anchor = blocker.routeDistance as number;
-      const alreadyBlocked = this.enemies
-        .filter((enemy) => enemy.blockedById === blocker.id && !enemy.dead && !enemy.reachedGoal)
-        .slice(0, stats.blockCapacity);
-      this.enemies
-        .filter((enemy) => enemy.blockedById === blocker.id && !alreadyBlocked.includes(enemy))
-        .forEach((enemy) => enemy.clearBlocked());
-      const inContact = this.enemies.filter(
-        (enemy) =>
-          !enemy.dead &&
-          !enemy.reachedGoal &&
-          !enemy.blockedById &&
-          hasReachedBlockerContact(enemy.pathDistance, anchor, 28 + enemy.definition.hitRadius),
-      );
-      const candidates = inContact.filter((enemy) => enemy.isBlockable).sort((first, second) => second.pathDistance - first.pathDistance);
-      const blocked = [...alreadyBlocked, ...candidates.slice(0, Math.max(0, stats.blockCapacity - alreadyBlocked.length))];
-      blocked.forEach((enemy) => {
-        enemy.setBlocked(blocker.id, enemy.pathDistance);
-        if (stats.contactDamagePerSecond > 0) this.damage(enemy, stats.contactDamagePerSecond * (deltaMs / 1000), false, true);
-      });
-      inContact
-        .filter((enemy) => !enemy.isBlockable)
-        .forEach((enemy) => {
-          if (stats.bossHold) enemy.status.tryHold(stats.bossHold.durationMs, stats.bossHold.immunityMs, this.now);
-          if (enemy.status.isHeld(this.now) && stats.contactDamagePerSecond > 0) {
-            this.damage(enemy, stats.contactDamagePerSecond * (deltaMs / 1000), false, true);
-          }
-        });
-    }
-  }
-
   private updateAuras(): void {
-    const sources: AuraSource[] = this.guardians
-      .filter((guardian) => guardian.stats.providedAura)
-      .map((guardian) => ({ id: guardian.id, x: guardian.x, y: guardian.y, range: guardian.range, aura: guardian.stats.providedAura! }));
-    this.guardians.forEach((guardian) => guardian.setAura(resolveAura({ id: guardian.id, x: guardian.x, y: guardian.y }, sources)));
-  }
-
-  private cooldownFor(id: string): AbilityCooldown {
-    let cooldown = this.cooldowns.get(id);
-    if (!cooldown) {
-      cooldown = new AbilityCooldown();
-      this.cooldowns.set(id, cooldown);
+    const sources: AuraSource[] = [];
+    for (const guardian of this.guardians) {
+      const provided = guardian.stats.providedAura;
+      if (provided) sources.push({ id: guardian.id, x: guardian.x, y: guardian.y, range: guardian.range, aura: provided });
+      const chorus = updateChorus(guardian, this.guardians, this.now);
+      if (chorus) sources.push(chorus);
     }
-    return cooldown;
+    this.guardians.forEach((guardian) =>
+      guardian.setAura(resolveAura({ id: guardian.id, guardianId: guardian.guardianId, x: guardian.x, y: guardian.y }, sources)),
+    );
   }
 
   private createField(guardian: SimGuardian, x: number, y: number): void {
     const definition = guardian.stats.electricField;
-    if (!definition || !this.cooldownFor(guardian.id).tryActivate(this.now, definition.cooldownMs)) return;
+    if (!definition) return;
+    if (!guardian.runtime.cooldown("electricField").tryActivate(this.now, definition.cooldownMs * guardian.stats.abilityCooldownMultiplier)) return;
     for (let index = this.fields.length - 1; index >= 0; index -= 1) {
       if (this.fields[index].ownerId === guardian.id) this.fields.splice(index, 1);
     }
@@ -649,7 +692,7 @@ export class LevelSimulation {
           const allowed = Math.max(0, Math.min(field.damage, field.maxDamagePerTarget - dealt));
           if (allowed > 0) {
             field.damageDealt.set(enemy.id, dealt + allowed);
-            this.damage(enemy, allowed, false, true);
+            this.damage(enemy, allowed, { continuous: true });
           }
           enemy.status.applySlow(field.slowFactor, field.slowDurationMs, this.now);
         });
@@ -658,11 +701,9 @@ export class LevelSimulation {
 
   private createCloud(guardian: SimGuardian, x: number, y: number): void {
     const definition = guardian.stats.inkCloud;
-    if (!definition || !this.cooldownFor(guardian.id).tryActivate(this.now, definition.cooldownMs)) return;
-    for (let index = this.clouds.length - 1; index >= 0; index -= 1) {
-      if (this.clouds[index].ownerId === guardian.id) this.clouds.splice(index, 1);
-    }
-    this.clouds.push({
+    if (!definition) return;
+    if (!guardian.runtime.cooldown("inkCloud").tryActivate(this.now, definition.cooldownMs * guardian.stats.abilityCooldownMultiplier)) return;
+    this.replaceCloud({
       ownerId: guardian.id,
       x,
       y,
@@ -670,7 +711,28 @@ export class LevelSimulation {
       expiresAt: this.now + definition.durationMs,
       slowFactor: definition.slowFactor,
       vulnerabilityMultiplier: definition.vulnerabilityMultiplier,
+      poison: null,
     });
+  }
+
+  private createToxicCloud(ownerId: string, x: number, y: number, cloud: ToxicCloudEffect): void {
+    this.replaceCloud({
+      ownerId,
+      x,
+      y,
+      radius: cloud.radius,
+      expiresAt: this.now + cloud.durationMs,
+      slowFactor: 1,
+      vulnerabilityMultiplier: 1,
+      poison: cloud.poison,
+    });
+  }
+
+  private replaceCloud(cloud: SimCloud): void {
+    for (let index = this.clouds.length - 1; index >= 0; index -= 1) {
+      if (this.clouds[index].ownerId === cloud.ownerId) this.clouds.splice(index, 1);
+    }
+    this.clouds.push(cloud);
   }
 
   private updateClouds(): void {
@@ -683,8 +745,9 @@ export class LevelSimulation {
       this.enemies
         .filter((enemy) => !enemy.dead && !enemy.reachedGoal && enemy.distanceTo(cloud.x, cloud.y) <= cloud.radius)
         .forEach((enemy) => {
-          enemy.status.applySlow(cloud.slowFactor, 320, this.now);
-          enemy.status.applyVulnerability(cloud.vulnerabilityMultiplier, 320, this.now);
+          if (cloud.slowFactor < 1) enemy.status.applySlow(cloud.slowFactor, 320, this.now);
+          if (cloud.vulnerabilityMultiplier > 1) enemy.status.applyVulnerability(cloud.vulnerabilityMultiplier, 320, this.now);
+          if (cloud.poison && !enemy.status.isPoisoned(this.now)) enemy.status.applyPoison(cloud.poison, this.now);
         });
     }
   }

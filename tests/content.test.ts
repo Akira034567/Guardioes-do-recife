@@ -2,8 +2,9 @@ import { describe, expect, it } from "vitest";
 import { RECIFE_ONE_BACKGROUND_KEY } from "../src/game/assets/recifeOneAssets";
 import { containsPoint } from "../src/game/core/CurrentField";
 import { RoutePath } from "../src/game/core/RoutePath";
-import { GUARDIAN_BALANCE } from "../src/game/data/balance";
-import { GUARDIANS, GUARDIAN_ORDER } from "../src/game/data/guardians";
+import { GUARDIAN_BALANCE, PLACEMENT } from "../src/game/data/balance";
+import { ENEMIES } from "../src/game/data/enemies";
+import { DEFAULT_LOADOUT, GUARDIANS, GUARDIAN_ORDER, LOADOUT_SIZE, resolveLoadout } from "../src/game/data/guardians";
 import { RECIFE_ONE } from "../src/game/data/levels";
 import type { GuardianId } from "../src/game/types";
 
@@ -14,9 +15,23 @@ describe("Recife 1 content contracts", () => {
     expect("routePlacements" in RECIFE_ONE).toBe(false);
   });
 
-  it("assigns distinct placement rules to the five guardians", () => {
-    expect(GUARDIAN_ORDER).toHaveLength(5);
-    expect(new Set(GUARDIAN_ORDER).size).toBe(5);
+  it("registers nine guardians and a default squad of five", () => {
+    expect(GUARDIAN_ORDER).toHaveLength(9);
+    expect(new Set(GUARDIAN_ORDER).size).toBe(9);
+    expect(DEFAULT_LOADOUT).toHaveLength(LOADOUT_SIZE);
+    expect(DEFAULT_LOADOUT).toEqual(["pistol-shrimp", "jellyfish", "pufferfish", "reef-crab", "ink-octopus"]);
+    expect(resolveLoadout(null)).toEqual(DEFAULT_LOADOUT);
+    expect(resolveLoadout("shark, dolphin,shark,nao-existe")).toEqual(["shark", "dolphin", "pistol-shrimp", "jellyfish", "pufferfish"]);
+    expect(resolveLoadout("shark,sea-turtle,stonefish,dolphin,reef-crab,pistol-shrimp")).toEqual([
+      "shark",
+      "sea-turtle",
+      "stonefish",
+      "dolphin",
+      "reef-crab",
+    ]);
+  });
+
+  it("assigns distinct placement rules to every guardian", () => {
     expect(GUARDIANS["pistol-shrimp"].placementMode).toBe("platform");
     expect(GUARDIANS.jellyfish.placementMode).toBe("water");
     expect(GUARDIANS.pufferfish.placementMode).toBe("route");
@@ -24,6 +39,24 @@ describe("Recife 1 content contracts", () => {
     expect(GUARDIANS["reef-crab"].placementMode).toBe("route");
     expect(GUARDIANS["reef-crab"].blocks).toBe(false);
     expect(GUARDIANS["ink-octopus"].placementMode).toBe("platform");
+    expect(GUARDIANS.shark.placementMode).toBe("margin");
+    expect(GUARDIANS.shark.dash).toBe(true);
+    expect(GUARDIANS["sea-turtle"].placementMode).toBe("route");
+    expect(GUARDIANS["sea-turtle"].blocks).toBe(false);
+    expect(GUARDIANS["sea-turtle"].branches[0].upgrades.every((upgrade) => upgrade.blocks)).toBe(true);
+    expect(GUARDIANS["sea-turtle"].branches[1].upgrades.every((upgrade) => !upgrade.blocks)).toBe(true);
+    expect(GUARDIANS.stonefish.placementMode).toBe("route");
+    expect(GUARDIANS.stonefish.attackKind).toBe("trap");
+    expect(GUARDIANS.stonefish.damage).toBe(0);
+    expect(GUARDIANS.dolphin.placementMode).toBe("water");
+    expect(GUARDIANS.dolphin.attackKind).toBe("sonar");
+  });
+
+  it("lets the shark reach the route from anywhere in the margin band", () => {
+    const largestEnemy = Math.max(...Object.values(ENEMIES).map((enemy) => enemy.hitRadius));
+    expect(GUARDIANS.shark.range).toBeGreaterThanOrEqual(PLACEMENT.marginMax + largestEnemy);
+    expect(PLACEMENT.marginMin).toBeLessThan(PLACEMENT.routeClearance);
+    expect(PLACEMENT.marginMax).toBeGreaterThan(PLACEMENT.waterRouteClearance);
   });
 
   it("gives every guardian two branches of two upgrades with shared costs per level", () => {
@@ -59,6 +92,37 @@ describe("Recife 1 content contracts", () => {
     expect(hold).toBeDefined();
     expect(hold!.durationMs).toBeLessThanOrEqual(1500);
     expect(hold!.immunityMs).toBeGreaterThan(hold!.durationMs * 4);
+  });
+
+  it("wires the new guardians' abilities to their branches", () => {
+    const shark = GUARDIANS.shark;
+    expect(shark.branches[0].upgrades.map((upgrade) => upgrade.frenzy?.attackSpeedBonus)).toEqual([0.35, 0.35]);
+    expect(shark.branches[0].upgrades[1].frenzy).toMatchObject({ perWoundedBonus: 0.12, maxBonus: 0.6 });
+    expect(shark.branches[1].upgrades[0].mark).toMatchObject({ damageMultiplier: 1.3, durationMs: 6000, cooldownMs: 8000 });
+    expect(shark.branches[1].upgrades[1].mark?.stacking).toEqual({ perHit: 0.1, max: 0.5 });
+
+    const turtle = GUARDIANS["sea-turtle"];
+    expect(turtle.branches[0].upgrades.map((upgrade) => upgrade.blockCapacity)).toEqual([3, 5]);
+    expect(turtle.branches[0].upgrades.map((upgrade) => upgrade.blockHold?.durationMs)).toEqual([3000, 4000]);
+    expect(turtle.branches[0].upgrades[1].pushWave).toBeDefined();
+    expect(turtle.branches[1].upgrades[0].flowField?.speedFactor).toBe(0.75);
+    expect(turtle.branches[1].upgrades[1].pushWave?.cooldownMs).toBe(12000);
+
+    const stonefish = GUARDIANS.stonefish;
+    expect(stonefish.trap?.armMs).toBe(3000);
+    expect(stonefish.branches[0].upgrades[0].trap?.poison).toMatchObject({ durationMs: 5000, tickMs: 1000 });
+    expect(stonefish.branches[0].upgrades[1].trap?.cloud).toBeDefined();
+    expect(stonefish.branches[1].upgrades[0].trap?.stun?.durationMs).toBe(800);
+    expect(stonefish.branches[1].upgrades[1].trap).toMatchObject({ stun: { durationMs: 1200 }, waitFor: { count: 3 } });
+    expect(stonefish.branches[1].upgrades.every((upgrade) => upgrade.trap?.charge.applyTo === "control")).toBe(true);
+    expect(stonefish.branches[0].upgrades.every((upgrade) => upgrade.trap?.charge.applyTo === "damage")).toBe(true);
+
+    const dolphin = GUARDIANS.dolphin;
+    expect(dolphin.sonar?.vulnerability).toEqual({ multiplier: 1.05, durationMs: 4000 });
+    expect(dolphin.branches[0].upgrades[0].chorus).toMatchObject({ durationMs: 5000, cooldownMs: 12000, speciesBonus: 0.02, maxSpecies: 5 });
+    expect(Object.keys(dolphin.branches[0].upgrades[1].chorus?.thematic ?? {})).toHaveLength(7);
+    expect(dolphin.branches[1].upgrades[0].sonar?.vulnerability.multiplier).toBe(1.12);
+    expect(dolphin.branches[1].upgrades[1].sonar?.echo?.waves).toBe(3);
   });
 
   it("paints Recife 1 with the registered background", () => {

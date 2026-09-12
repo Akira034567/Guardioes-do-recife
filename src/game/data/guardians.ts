@@ -23,8 +23,13 @@ const jelly = GUARDIAN_BALANCE.jellyfish;
 const puffer = GUARDIAN_BALANCE.pufferfish;
 const crab = GUARDIAN_BALANCE["reef-crab"];
 const octopus = GUARDIAN_BALANCE["ink-octopus"];
+const shark = GUARDIAN_BALANCE.shark;
+const turtle = GUARDIAN_BALANCE["sea-turtle"];
+const stonefish = GUARDIAN_BALANCE.stonefish;
+const dolphin = GUARDIAN_BALANCE.dolphin;
 
 const pct = (multiplier: number): string => `${Math.round((multiplier - 1) * 100)}%`;
+const frac = (fraction: number): string => `${Math.round(fraction * 100)}%`;
 const seconds = (ms: number): string => `${(ms / 1000).toFixed(ms % 1000 === 0 ? 0 : 1)}s`;
 
 /**
@@ -356,6 +361,326 @@ export const GUARDIANS: Record<GuardianId, GuardianDefinition> = {
       },
     ],
   },
+  shark: {
+    id: "shark",
+    name: "Tubarão — Instinto Predador",
+    shortName: "Tubarão",
+    description: `Investida curta com ${shark.damage} de dano. Prioriza inimigos com pouca vida e volta para a margem.`,
+    role: "Execução",
+    color: 0x5b7f99,
+    accent: 0xff4d5e,
+    cost: shark.cost,
+    range: shark.range,
+    damage: shark.damage,
+    cooldownMs: shark.cooldownMs,
+    attackKind: "melee",
+    placementMode: "margin",
+    targeting: shark.targeting,
+    dash: true,
+    timings: { windupMs: 220, attackMs: 260, recoveryMs: 820 },
+    animation: stateProfile("shark", 220, 260, 150, 820),
+    branches: [
+      {
+        id: "a",
+        name: "Frenesi",
+        tagline: "Cada vez mais rápido contra feridos.",
+        color: 0xff5f6d,
+        upgrades: [
+          {
+            name: "Faro de Sangue",
+            description: `Contra alvos abaixo de ${frac(shark.frenzy.level1.healthThreshold)} de vida, ataca ${frac(shark.frenzy.level1.attackSpeedBonus)} mais rápido. Prioriza feridos, depois o mais avançado.`,
+            cost: shark.upgradeCosts[0],
+            targeting: "wounded",
+            frenzy: { ...shark.frenzy.level1 },
+          },
+          {
+            name: "Frenesi Predador",
+            description: `+${frac(shark.frenzy.level2.perWoundedBonus)} de velocidade por inimigo ferido ao alcance (máx. +${frac(shark.frenzy.level2.maxBonus)}). Rastros vermelhos, sem clones.`,
+            cost: shark.upgradeCosts[1],
+            targeting: "wounded",
+            frenzy: { ...shark.frenzy.level2 },
+          },
+        ],
+      },
+      {
+        id: "b",
+        name: "Caçador Alfa",
+        tagline: "Marca e executa a maior ameaça.",
+        color: 0x9fc9ff,
+        upgrades: [
+          {
+            name: "Marcar Presa",
+            description: `A cada ${seconds(shark.alpha.level1.mark.cooldownMs)} marca chefe, elite ou o inimigo mais forte ao alcance: +${pct(shark.alpha.level1.mark.damageMultiplier)} de dano contra ele por ${seconds(shark.alpha.level1.mark.durationMs)}.`,
+            cost: shark.upgradeCosts[0],
+            targeting: "threat",
+            mark: { ...shark.alpha.level1.mark },
+          },
+          {
+            name: "Predador Alfa",
+            description: `${shark.alpha.level2.damage} de dano. Golpes seguidos na presa somam +${frac(shark.alpha.level2.mark.stacking.perHit)} cada (máx. +${frac(shark.alpha.level2.mark.stacking.max)}). Se a presa cai, marca outra na hora.`,
+            cost: shark.upgradeCosts[1],
+            targeting: "threat",
+            damage: shark.alpha.level2.damage,
+            mark: { ...shark.alpha.level2.mark, stacking: { ...shark.alpha.level2.mark.stacking } },
+          },
+        ],
+      },
+    ],
+  },
+  "sea-turtle": {
+    id: "sea-turtle",
+    name: "Tartaruga-Marinha — Guardiã do Recife",
+    shortName: "Tartaruga",
+    description: `Batida de ${turtle.damage} de dano que deixa o alvo a ${Math.round(turtle.slowFactor * 100)}% da velocidade. O valor dela é o controle da rota.`,
+    role: "Controle de rota",
+    color: 0x3f9a6e,
+    accent: 0xd8f5c2,
+    cost: turtle.cost,
+    range: turtle.range,
+    damage: turtle.damage,
+    cooldownMs: turtle.cooldownMs,
+    attackKind: "melee",
+    placementMode: "route",
+    blocks: false,
+    slowFactor: turtle.slowFactor,
+    slowDurationMs: turtle.slowDurationMs,
+    timings: { windupMs: 320, attackMs: 240, recoveryMs: 940 },
+    animation: stateProfile("turtle", 320, 240, 110, 940),
+    branches: [
+      {
+        id: "a",
+        name: "Casco",
+        tagline: "Barreira viva na correnteza.",
+        color: 0x8cd98a,
+        upgrades: [
+          {
+            name: "Casco Ancestral",
+            description: `Segura até ${turtle.shell.level1.blockCapacity} inimigos comuns por ${seconds(turtle.shell.level1.blockHold.durationMs)} (elites ocupam ${turtle.shell.level1.blockHold.eliteSlots} vagas; chefes só perdem velocidade). Depois de soltar, ${seconds(turtle.shell.level1.blockHold.releaseCooldownMs)} de recarga. Turbulência leve em volta.`,
+            cost: turtle.upgradeCosts[0],
+            blocks: true,
+            blockCapacity: turtle.shell.level1.blockCapacity,
+            blockHold: { ...turtle.shell.level1.blockHold, bossSlow: { ...turtle.shell.level1.blockHold.bossSlow } },
+            flowField: { ...turtle.shell.level1.flowField },
+          },
+          {
+            name: "Matriarca do Recife",
+            description: `Segura até ${turtle.shell.level2.blockCapacity} comuns por ${seconds(turtle.shell.level2.blockHold.durationMs)}. Repulsa Ancestral a cada ${seconds(turtle.shell.level2.pushWave.cooldownMs)}: empurra comuns ${turtle.shell.level2.pushWave.distance}px pela rota, elites ${frac(turtle.shell.level2.pushWave.eliteFactor)}, chefes só slow.`,
+            cost: turtle.upgradeCosts[1],
+            blocks: true,
+            blockCapacity: turtle.shell.level2.blockCapacity,
+            blockHold: { ...turtle.shell.level2.blockHold, bossSlow: { ...turtle.shell.level2.blockHold.bossSlow } },
+            flowField: { ...turtle.shell.level2.flowField },
+            pushWave: { ...turtle.shell.level2.pushWave, bossSlow: { ...turtle.shell.level2.pushWave.bossSlow } },
+          },
+        ],
+      },
+      {
+        id: "b",
+        name: "Correnteza",
+        tagline: "Muda a própria água.",
+        color: 0x6fe3ff,
+        upgrades: [
+          {
+            name: "Condutora das Águas",
+            description: `Zona de corrente contrária em volta: inimigos dentro dela andam a ${Math.round(turtle.current.level1.flowField.speedFactor * 100)}% da velocidade.`,
+            cost: turtle.upgradeCosts[0],
+            flowField: { ...turtle.current.level1.flowField },
+          },
+          {
+            name: "Senhora das Correntes",
+            description: `A cada ${seconds(turtle.current.level2.pushWave.cooldownMs)} uma corrente forte empurra comuns ${turtle.current.level2.pushWave.distance}px para trás na rota (elites ${frac(turtle.current.level2.pushWave.eliteFactor)}; chefes recebem slow forte).`,
+            cost: turtle.upgradeCosts[1],
+            flowField: { ...turtle.current.level2.flowField },
+            pushWave: { ...turtle.current.level2.pushWave, bossSlow: { ...turtle.current.level2.pushWave.bossSlow } },
+          },
+        ],
+      },
+    ],
+  },
+  stonefish: {
+    id: "stonefish",
+    name: "Peixe-Pedra — Emboscador do Recife",
+    shortName: "Peixe-Pedra",
+    description: `Armadilha na rota: leva ${seconds(stonefish.trap.armMs)} para se enterrar e emerge com ${stonefish.trap.damage} de dano em quem pisar. Quanto mais tempo armado, mais forte (até +${frac(stonefish.trap.charge.max)}).`,
+    role: "Armadilha",
+    color: 0x8a7a55,
+    accent: 0xffd166,
+    cost: stonefish.cost,
+    range: stonefish.range,
+    damage: stonefish.damage,
+    cooldownMs: stonefish.cooldownMs,
+    attackKind: "trap",
+    placementMode: "route",
+    blocks: false,
+    trap: { ...stonefish.trap, charge: { ...stonefish.trap.charge } },
+    timings: { windupMs: 120, attackMs: 300, recoveryMs: 600 },
+    animation: stateProfile("stonefish", 120, 300, 60, 600),
+    branches: [
+      {
+        id: "a",
+        name: "Veneno",
+        tagline: "Dano ao longo do tempo e zonas tóxicas.",
+        color: 0xa4f26b,
+        upgrades: [
+          {
+            name: "Espinhos Tóxicos",
+            description: `${stonefish.venom.level1.damage} de dano e veneno de ${stonefish.venom.level1.poison.damagePerTick}/s por ${seconds(stonefish.venom.level1.poison.durationMs)} (acumula até ${stonefish.venom.level1.poison.maxStacks}×).`,
+            cost: stonefish.upgradeCosts[0],
+            trap: {
+              ...stonefish.trap,
+              damage: stonefish.venom.level1.damage,
+              poison: { ...stonefish.venom.level1.poison },
+              charge: { ...stonefish.trap.charge },
+            },
+          },
+          {
+            name: "Jardim Tóxico",
+            description: `Libera uma nuvem tóxica (raio ${stonefish.venom.level2.cloud.radius}) por ${seconds(stonefish.venom.level2.cloud.durationMs)} que envenena todos que passam por ${seconds(stonefish.venom.level2.poison.durationMs)}.`,
+            cost: stonefish.upgradeCosts[1],
+            trap: {
+              ...stonefish.trap,
+              damage: stonefish.venom.level2.damage,
+              poison: { ...stonefish.venom.level2.poison },
+              cloud: { ...stonefish.venom.level2.cloud, poison: { ...stonefish.venom.level2.cloud.poison } },
+              charge: { ...stonefish.trap.charge },
+            },
+          },
+        ],
+      },
+      {
+        id: "b",
+        name: "Emboscada",
+        tagline: "Controle e explosão instantânea.",
+        color: 0xffb35c,
+        upgrades: [
+          {
+            name: "Choque de Areia",
+            description: `Emerge com ${stonefish.ambush.level1.damage} de dano em área e atordoa por ${seconds(stonefish.ambush.level1.stun.durationMs)} (elites ${frac(stonefish.ambush.level1.stun.eliteFactor)}, chefes ${frac(stonefish.ambush.level1.stun.bossFactor)}). A carga aumenta a duração do controle.`,
+            cost: stonefish.upgradeCosts[0],
+            trap: {
+              ...stonefish.trap,
+              damage: stonefish.ambush.level1.damage,
+              stun: { ...stonefish.ambush.level1.stun },
+              charge: { ...stonefish.ambush.level1.charge },
+            },
+          },
+          {
+            name: "Fúria Abissal",
+            description: `Espera ${stonefish.ambush.level2.waitFor.count} inimigos (ou ${seconds(stonefish.ambush.level2.waitFor.maxWaitMs)}) e explode: ${stonefish.ambush.level2.damage} de dano, ${seconds(stonefish.ambush.level2.stun.durationMs)} de stun e empurra ${stonefish.ambush.level2.knockback.distance}px para trás na rota. Chefes: só stun reduzido.`,
+            cost: stonefish.upgradeCosts[1],
+            trap: {
+              ...stonefish.trap,
+              damage: stonefish.ambush.level2.damage,
+              stun: { ...stonefish.ambush.level2.stun },
+              knockback: { ...stonefish.ambush.level2.knockback },
+              waitFor: { ...stonefish.ambush.level2.waitFor },
+              charge: { ...stonefish.ambush.level2.charge },
+            },
+          },
+        ],
+      },
+    ],
+  },
+  dolphin: {
+    id: "dolphin",
+    name: "Golfinho — Mensageiro do Recife",
+    shortName: "Golfinho",
+    description: `Pulso de sonar fraco (${dolphin.damage}) e, a cada ${seconds(dolphin.sonar.cooldownMs)}, uma onda que revela inimigos e deixa +${pct(dolphin.sonar.vulnerability.multiplier)} vulneráveis por ${seconds(dolphin.sonar.vulnerability.durationMs)}.`,
+    role: "Suporte",
+    color: 0x4aa8d8,
+    accent: 0xe6f7ff,
+    cost: dolphin.cost,
+    range: dolphin.range,
+    damage: dolphin.damage,
+    cooldownMs: dolphin.cooldownMs,
+    attackKind: "sonar",
+    placementMode: "water",
+    sonar: { ...dolphin.sonar, vulnerability: { ...dolphin.sonar.vulnerability } },
+    timings: { windupMs: 260, attackMs: 220, recoveryMs: 920 },
+    animation: stateProfile("dolphin", 260, 220, 90, 920),
+    branches: [
+      {
+        id: "a",
+        name: "Coro",
+        tagline: "Fortalece o cardume de Guardiões.",
+        color: 0xffd76a,
+        upgrades: [
+          {
+            name: "Chamado do Cardume",
+            description: `A cada ${seconds(dolphin.chorus.level1.cooldownMs)}, por ${seconds(dolphin.chorus.level1.durationMs)}: aliados ao alcance atacam ${pct(dolphin.chorus.level1.aura.attackSpeedMultiplier)} mais rápido, recarregam habilidades ${Math.round((1 - dolphin.chorus.level1.aura.abilityCooldownMultiplier) * 100)}% antes e ganham +${pct(dolphin.chorus.level1.aura.rangeMultiplier)} de alcance. +${frac(dolphin.chorus.level1.speciesBonus)} de eficiência por espécie diferente (máx. ${dolphin.chorus.level1.maxSpecies}).`,
+            cost: dolphin.upgradeCosts[0],
+            chorus: { ...dolphin.chorus.level1, aura: { ...dolphin.chorus.level1.aura } },
+          },
+          {
+            name: "Maestro do Recife",
+            description: `Área ${pct(dolphin.chorus.level2.radiusMultiplier)} maior e buffs melhores. Cada espécie recebe um bônus temático modesto (velocidade da investida, controle, área, dano, debuffs, rearme, projétil).`,
+            cost: dolphin.upgradeCosts[1],
+            chorus: { ...dolphin.chorus.level2, aura: { ...dolphin.chorus.level2.aura }, thematic: { ...dolphin.chorus.level2.thematic } },
+          },
+        ],
+      },
+      {
+        id: "b",
+        name: "Sonar",
+        tagline: "Ecolocalização e coordenação.",
+        color: 0x9b7bff,
+        upgrades: [
+          {
+            name: "Olhos do Oceano",
+            description: `Pulso ${pct(dolphin.echo.level1.radiusMultiplier)} maior: revela, marca a ameaça prioritária (chefe > elite > mais vida > mais avançado) e aplica +${pct(dolphin.echo.level1.vulnerability.multiplier)} de dano recebido por ${seconds(dolphin.echo.level1.vulnerability.durationMs)}.`,
+            cost: dolphin.upgradeCosts[0],
+            sonar: { ...dolphin.echo.level1, vulnerability: { ...dolphin.echo.level1.vulnerability } },
+          },
+          {
+            name: "Oráculo das Profundezas",
+            description: `Eco Perfeito: ${dolphin.echo.level2.echo.waves} ondas seguidas. Localiza, analisa (vulnerabilidade e prioridade) e coordena: Guardiões da área priorizam a maior ameaça dentro do próprio alcance por ${seconds(dolphin.echo.level2.echo.coordinateMs)}.`,
+            cost: dolphin.upgradeCosts[1],
+            sonar: { ...dolphin.echo.level2, vulnerability: { ...dolphin.echo.level2.vulnerability }, echo: { ...dolphin.echo.level2.echo } },
+          },
+        ],
+      },
+    ],
+  },
 };
 
-export const GUARDIAN_ORDER: GuardianId[] = ["pistol-shrimp", "jellyfish", "pufferfish", "reef-crab", "ink-octopus"];
+/** Todos os Guardiões registrados, na ordem do catálogo. */
+export const GUARDIAN_ORDER: GuardianId[] = [
+  "pistol-shrimp",
+  "jellyfish",
+  "pufferfish",
+  "reef-crab",
+  "ink-octopus",
+  "shark",
+  "sea-turtle",
+  "stonefish",
+  "dolphin",
+];
+
+/** Quantos Guardiões vão para uma partida (cartas do HUD). */
+export const LOADOUT_SIZE = 5;
+
+/** Esquadrão padrão até existir a tela de seleção. */
+export const DEFAULT_LOADOUT: GuardianId[] = ["pistol-shrimp", "jellyfish", "pufferfish", "reef-crab", "ink-octopus"];
+
+export function isGuardianId(value: string): value is GuardianId {
+  return (GUARDIAN_ORDER as string[]).includes(value);
+}
+
+/**
+ * Esquadrão a partir de `?guardians=a,b,c` (ids inválidos e repetidos são ignorados; vagas restantes são
+ * preenchidas com o padrão). Sempre devolve exatamente `LOADOUT_SIZE` ids.
+ */
+export function resolveLoadout(query: string | null | undefined): GuardianId[] {
+  const chosen: GuardianId[] = [];
+  (query ?? "")
+    .split(",")
+    .map((token) => token.trim())
+    .forEach((token) => {
+      if (isGuardianId(token) && !chosen.includes(token) && chosen.length < LOADOUT_SIZE) chosen.push(token);
+    });
+  for (const id of DEFAULT_LOADOUT) {
+    if (chosen.length >= LOADOUT_SIZE) break;
+    if (!chosen.includes(id)) chosen.push(id);
+  }
+  return chosen;
+}

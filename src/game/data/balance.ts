@@ -124,6 +124,175 @@ export const GUARDIAN_BALANCE = {
       level2: { attackSpeedMultiplier: 1.15, rangeMultiplier: 1.12 },
     },
   },
+  /** Tubarão — Instinto Predador: investida curta, dano alto, prioriza inimigos com pouca vida. */
+  shark: {
+    cost: 110,
+    upgradeCosts: [90, 150] as const,
+    /** Precisa cobrir a margem (até PLACEMENT.marginMax) mais o raio do maior inimigo. */
+    range: 160,
+    damage: 30,
+    cooldownMs: 1300,
+    targeting: "lowestHealth" as const,
+    frenzy: {
+      level1: { healthThreshold: 0.4, attackSpeedBonus: 0.35 },
+      level2: { healthThreshold: 0.4, attackSpeedBonus: 0.35, perWoundedBonus: 0.12, maxBonus: 0.6 },
+    },
+    alpha: {
+      level1: { mark: { damageMultiplier: 1.3, durationMs: 6000, cooldownMs: 8000 } },
+      level2: {
+        damage: 34,
+        mark: { damageMultiplier: 1.3, durationMs: 6000, cooldownMs: 8000, stacking: { perHit: 0.1, max: 0.5 }, rearmOnDeath: true },
+      },
+    },
+  },
+  /** Tartaruga-Marinha — Guardiã do Recife: dano mínimo, controle de rota. */
+  "sea-turtle": {
+    cost: 100,
+    upgradeCosts: [85, 145] as const,
+    range: 90,
+    damage: 6,
+    cooldownMs: 1500,
+    /** Batida base: slow leve no alvo. */
+    slowFactor: 0.85,
+    slowDurationMs: 1000,
+    shell: {
+      level1: {
+        blockCapacity: 3,
+        blockHold: { durationMs: 3000, releaseCooldownMs: 4000, eliteSlots: 2, bossSlow: { factor: 0.7, durationMs: 1000 } },
+        /** Turbulência: slow ambiental leve em volta. */
+        flowField: { radiusMultiplier: 1.4, speedFactor: 0.9 },
+      },
+      level2: {
+        blockCapacity: 5,
+        blockHold: { durationMs: 4000, releaseCooldownMs: 4000, eliteSlots: 2, bossSlow: { factor: 0.7, durationMs: 1000 } },
+        flowField: { radiusMultiplier: 1.4, speedFactor: 0.9 },
+        /** Repulsa Ancestral. */
+        pushWave: { cooldownMs: 11000, distance: 90, eliteFactor: 0.5, bossSlow: { factor: 0.6, durationMs: 1200 }, visualMs: 700 },
+      },
+    },
+    current: {
+      level1: { flowField: { radiusMultiplier: 1.6, speedFactor: 0.75 } },
+      level2: {
+        flowField: { radiusMultiplier: 1.6, speedFactor: 0.75 },
+        /** Corrente forte. */
+        pushWave: { cooldownMs: 12000, distance: 120, eliteFactor: 0.5, bossSlow: { factor: 0.5, durationMs: 1500 }, visualMs: 1500 },
+      },
+    },
+  },
+  /** Peixe-Pedra — Emboscador do Recife: armadilha enterrada na rota. `range` é o raio de acionamento. */
+  stonefish: {
+    cost: 95,
+    upgradeCosts: [80, 140] as const,
+    range: 60,
+    /** Não ataca pela FSM: tudo acontece na armadilha. */
+    damage: 0,
+    cooldownMs: 6000,
+    trap: {
+      armMs: 3000,
+      cooldownMs: 6000,
+      triggerRadius: 60,
+      damage: 18,
+      charge: { everyMs: 2000, bonus: 0.05, max: 0.25, applyTo: "damage" as const },
+    },
+    venom: {
+      level1: { damage: 14, poison: { damagePerTick: 4, tickMs: 1000, durationMs: 5000, maxStacks: 2 } },
+      level2: {
+        damage: 14,
+        poison: { damagePerTick: 5, tickMs: 1000, durationMs: 6000, maxStacks: 2 },
+        cloud: { radius: 70, durationMs: 3000, poison: { damagePerTick: 4, tickMs: 1000, durationMs: 6000, maxStacks: 2 } },
+      },
+    },
+    ambush: {
+      level1: {
+        damage: 22,
+        stun: { durationMs: 800, eliteFactor: 0.6, bossFactor: 0.25 },
+        charge: { everyMs: 2000, bonus: 0.05, max: 0.25, applyTo: "control" as const },
+      },
+      level2: {
+        damage: 30,
+        stun: { durationMs: 1200, eliteFactor: 0.6, bossFactor: 0.2 },
+        knockback: { distance: 50, eliteFactor: 0.5 },
+        waitFor: { count: 3, maxWaitMs: 2500 },
+        charge: { everyMs: 2000, bonus: 0.05, max: 0.25, applyTo: "control" as const },
+      },
+    },
+  },
+  /** Golfinho — Mensageiro do Recife: suporte por sonar e coro. */
+  dolphin: {
+    cost: 120,
+    upgradeCosts: [100, 170] as const,
+    range: 150,
+    damage: 8,
+    cooldownMs: 1400,
+    sonar: { cooldownMs: 6000, radiusMultiplier: 1, revealMs: 4000, vulnerability: { multiplier: 1.05, durationMs: 4000 } },
+    chorus: {
+      level1: {
+        durationMs: 5000,
+        cooldownMs: 12000,
+        radiusMultiplier: 1,
+        aura: { attackSpeedMultiplier: 1.1, abilityCooldownMultiplier: 0.9, rangeMultiplier: 1.05 },
+        speciesBonus: 0.02,
+        maxSpecies: 5,
+      },
+      level2: {
+        durationMs: 5000,
+        cooldownMs: 12000,
+        radiusMultiplier: 1.3,
+        aura: { attackSpeedMultiplier: 1.12, abilityCooldownMultiplier: 0.88, rangeMultiplier: 1.08 },
+        speciesBonus: 0.02,
+        maxSpecies: 5,
+        thematic: {
+          shark: { dashSpeedMultiplier: 1.25 },
+          "sea-turtle": { controlDurationMultiplier: 1.15 },
+          pufferfish: { rangeMultiplier: 1.1 },
+          "reef-crab": { damageMultiplier: 1.1 },
+          "ink-octopus": { debuffDurationMultiplier: 1.2 },
+          stonefish: { rearmMultiplier: 0.8 },
+          "pistol-shrimp": { projectileSpeedMultiplier: 1.15 },
+        },
+      },
+    },
+    echo: {
+      level1: { cooldownMs: 6000, radiusMultiplier: 1.5, revealMs: 5000, vulnerability: { multiplier: 1.12, durationMs: 5000 }, markPriority: true },
+      level2: {
+        cooldownMs: 6000,
+        radiusMultiplier: 1.5,
+        revealMs: 5000,
+        vulnerability: { multiplier: 1.12, durationMs: 5000 },
+        markPriority: true,
+        echo: { waves: 3, intervalMs: 400, coordinateMs: 3500 },
+      },
+    },
+  },
+} as const;
+
+/**
+ * Resistência global a controle (stun, bloqueio temporário, knockback). Cada controle forte dentro da
+ * janela vale a fração do passo seguinte; esgotados os passos, o inimigo fica imune até a janela fechar.
+ * Comuns não resistem.
+ */
+export const CROWD_CONTROL = {
+  boss: { windowMs: 8000, steps: [1, 0.6, 0.3], immunityMs: 4000 },
+  elite: { windowMs: 6000, steps: [1, 0.75, 0.5], immunityMs: 2000 },
+} as const;
+
+/** Regras de posicionamento compartilhadas pela cena e pela simulação (distâncias em pixels). */
+export const PLACEMENT = {
+  /** Toque a até esta distância da linha da rota conta como "na correnteza". */
+  routeClearance: 52,
+  /** Separação mínima entre unidades da correnteza. */
+  routeSeparation: 78,
+  /** Distância mínima da entrada e da saída da rota. */
+  routeEndClearance: 60,
+  /** Água livre: distância mínima da rota. */
+  waterRouteClearance: 82,
+  /** Separação mínima de plataformas e de outros Guardiões (água e margem). */
+  separation: 78,
+  /** Margem: faixa de água ao lado da rota (distância da linha central). */
+  marginMin: 30,
+  marginMax: 120,
+  /** Raio de clique de uma plataforma na simulação. */
+  platformHitRadius: 47,
 } as const;
 
 /** Valores de referência da fase 1; cada fase aplica `enemyScaling` por cima. */

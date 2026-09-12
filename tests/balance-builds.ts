@@ -1,5 +1,5 @@
 import type { SimPoint, SimStep } from "../src/game/core/Simulation";
-import type { BranchId } from "../src/game/types";
+import type { BranchId, GuardianId } from "../src/game/types";
 
 /**
  * Roteiros de compra usados tanto pela simulação headless (`balance-sim.test.ts`)
@@ -12,6 +12,8 @@ export interface BalanceBuild {
   /** Vidas mínimas no fim. Há variação de ±2 entre execuções reais. */
   minReef: number;
   steps: SimStep[];
+  /** Esquadrão das cartas quando a build usa Guardiões fora do padrão (vira `?guardians=` no e2e). */
+  loadout?: GuardianId[];
 }
 
 export const shrimp = (at: SimPoint): SimStep => ({ place: "pistol-shrimp", at });
@@ -19,9 +21,106 @@ export const jelly = (at: SimPoint): SimStep => ({ place: "jellyfish", at });
 export const puffer = (at: SimPoint): SimStep => ({ place: "pufferfish", at });
 export const crab = (at: SimPoint): SimStep => ({ place: "reef-crab", at });
 export const octopus = (at: SimPoint): SimStep => ({ place: "ink-octopus", at });
+export const shark = (at: SimPoint): SimStep => ({ place: "shark", at });
+export const turtle = (at: SimPoint): SimStep => ({ place: "sea-turtle", at });
+export const stonefish = (at: SimPoint): SimStep => ({ place: "stonefish", at });
+export const dolphin = (at: SimPoint): SimStep => ({ place: "dolphin", at });
 export const up = (at: SimPoint, branch: BranchId): SimStep => ({ upgrade: at, branch });
 
+/** Esquadrão com os quatro Guardiões novos mais o Camarão. */
+export const NEW_LOADOUT: GuardianId[] = ["pistol-shrimp", "shark", "sea-turtle", "stonefish", "dolphin"];
+
 export const BALANCE_BUILDS: BalanceBuild[] = [
+  // ------------------------------------------------------------ Recife 1 · Guardiões novos
+  {
+    name: "novatos: tubarão alfa na margem + tartaruga casco + camarão",
+    level: "recife-1",
+    minReef: 10,
+    loadout: NEW_LOADOUT,
+    steps: [shrimp([375, 245]), shark([300, 470]), turtle([330, 388]), up([300, 470], "b"), up([330, 388], "a"), up([375, 245], "b")],
+  },
+  {
+    name: "novatos: tubarão frenesi + peixe-pedra emboscada + camarão",
+    level: "recife-1",
+    minReef: 10,
+    loadout: NEW_LOADOUT,
+    steps: [
+      shrimp([375, 245]),
+      shark([300, 470]),
+      stonefish([700, 260]),
+      up([300, 470], "a"),
+      up([700, 260], "b"),
+      up([375, 245], "b"),
+      up([700, 260], "b"),
+    ],
+  },
+  {
+    name: "novatos: camarões + peixe-pedra veneno + golfinho sonar",
+    level: "recife-1",
+    minReef: 7,
+    loadout: NEW_LOADOUT,
+    steps: [
+      shrimp([375, 245]),
+      shrimp([925, 500]),
+      stonefish([700, 260]),
+      up([375, 245], "b"),
+      dolphin([245, 255]),
+      up([700, 260], "a"),
+      up([925, 500], "b"),
+      up([245, 255], "b"),
+    ],
+  },
+  {
+    name: "novatos: camarões + tartaruga corrente + golfinho coro",
+    level: "recife-1",
+    minReef: 9,
+    loadout: NEW_LOADOUT,
+    steps: [
+      shrimp([375, 245]),
+      shrimp([925, 500]),
+      turtle([860, 372]),
+      up([375, 245], "b"),
+      up([860, 372], "b"),
+      dolphin([760, 470]),
+      up([760, 470], "a"),
+      up([925, 500], "b"),
+    ],
+  },
+  // ------------------------------------------------------------ Recife 2 · Guardiões novos
+  {
+    name: "novatos: camarões + tubarão frenesi na entrada + tartaruga corrente",
+    level: "recife-2",
+    minReef: 12,
+    loadout: NEW_LOADOUT,
+    steps: [
+      shrimp([1080, 385]),
+      shark([1150, 260]),
+      shrimp([600, 340]),
+      up([1150, 260], "a"),
+      turtle([910, 395]),
+      up([1080, 385], "b"),
+      up([910, 395], "b"),
+      up([600, 340], "b"),
+      up([1150, 260], "a"),
+    ],
+  },
+  {
+    name: "novatos: tubarão alfa + camarões + golfinho sonar",
+    level: "recife-2",
+    minReef: 10,
+    loadout: NEW_LOADOUT,
+    steps: [
+      shrimp([1080, 385]),
+      shark([1150, 260]),
+      up([1150, 260], "b"),
+      shrimp([600, 340]),
+      up([1080, 385], "b"),
+      dolphin([720, 300]),
+      up([720, 300], "b"),
+      up([600, 340], "b"),
+      up([1150, 260], "b"),
+    ],
+  },
   // ------------------------------------------------------------ Recife 1
   {
     name: "concentrado + quebra-casco (referência)",

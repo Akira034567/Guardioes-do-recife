@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { ECONOMY, ENEMY_BALANCE, GUARDIAN_BALANCE } from "../src/game/data/balance";
+import { CROWD_CONTROL, ECONOMY, ENEMY_BALANCE, GUARDIAN_BALANCE, PLACEMENT } from "../src/game/data/balance";
 import { ENEMIES, ENEMY_ORDER, scaleEnemy } from "../src/game/data/enemies";
 import { GUARDIANS } from "../src/game/data/guardians";
 import type { EnemyId, GuardianId } from "../src/game/types";
@@ -12,6 +12,10 @@ describe("balance sheet", () => {
       pufferfish: [110, 90, 150],
       "reef-crab": [90, 80, 140],
       "ink-octopus": [120, 100, 170],
+      shark: [110, 90, 150],
+      "sea-turtle": [100, 85, 145],
+      stonefish: [95, 80, 140],
+      dolphin: [120, 100, 170],
     };
     (Object.keys(expected) as GuardianId[]).forEach((id) => {
       expect(GUARDIAN_BALANCE[id].cost).toBe(expected[id][0]);
@@ -75,5 +79,11 @@ describe("balance sheet", () => {
     expect(GUARDIANS["ink-octopus"].vulnerability?.multiplier).toBe(1.1);
     expect(GUARDIANS["ink-octopus"].branches[1].upgrades.map((upgrade) => upgrade.aura?.attackSpeedMultiplier)).toEqual([1.1, 1.15]);
     expect(GUARDIANS["ink-octopus"].branches[1].upgrades.every((upgrade) => upgrade.damage === undefined)).toBe(true);
+    expect(GUARDIANS.shark).toMatchObject({ damage: 30, cooldownMs: 1300, range: 160 });
+    expect(GUARDIANS["sea-turtle"]).toMatchObject({ damage: 6, cooldownMs: 1500, slowFactor: 0.85 });
+    expect(GUARDIANS.stonefish.trap).toMatchObject({ damage: 18, armMs: 3000, cooldownMs: 6000, charge: { everyMs: 2000, bonus: 0.05, max: 0.25 } });
+    expect(GUARDIANS.dolphin).toMatchObject({ damage: 8, cooldownMs: 1400 });
+    expect(CROWD_CONTROL.boss).toEqual({ windowMs: 8000, steps: [1, 0.6, 0.3], immunityMs: 4000 });
+    expect(PLACEMENT).toMatchObject({ marginMin: 30, marginMax: 120, routeClearance: 52, waterRouteClearance: 82, separation: 78 });
   });
 });

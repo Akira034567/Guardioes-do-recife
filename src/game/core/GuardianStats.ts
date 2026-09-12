@@ -1,11 +1,25 @@
-import type { AuraEffect, GuardianDefinition, GuardianUpgrade, VulnerabilityEffect } from "../types";
+import type {
+  BlockHoldEffect,
+  ChorusEffect,
+  FlowFieldEffect,
+  FrenzyEffect,
+  GuardianDefinition,
+  GuardianUpgrade,
+  MarkEffect,
+  PushWaveEffect,
+  ResolvedAura,
+  SonarEffect,
+  TargetPolicyMode,
+  TrapEffect,
+  VulnerabilityEffect,
+} from "../types";
 import { NEUTRAL_AURA } from "./Auras";
 import { appliedUpgrades, resolveLast, resolveProduct, type UpgradeProgress } from "./UpgradeTree";
 
 /**
- * Atributos efetivos de um Guardião a partir da definição, do progresso na árvore
- * e da aura recebida. Fonte única usada pela simulação de balanceamento; o objeto
- * Phaser `Guardian` expõe os mesmos valores.
+ * Atributos efetivos de um Guardião a partir da definição, do progresso na árvore,
+ * da aura recebida e de bônus temporários (frenesi). Fonte única usada pela simulação
+ * de balanceamento e pelo objeto Phaser `Guardian`.
  */
 export interface GuardianStats {
   range: number;
@@ -31,30 +45,58 @@ export interface GuardianStats {
   areaAttack: boolean;
   spin: NonNullable<GuardianUpgrade["spin"]> | null;
   inkCloud: NonNullable<GuardianUpgrade["inkCloud"]> | null;
-  providedAura: AuraEffect | null;
+  providedAura: GuardianUpgrade["aura"] | null;
+  /** Política de alvo (padrão: o mais avançado). */
+  targeting: TargetPolicyMode;
+  dash: boolean;
+  frenzy: FrenzyEffect | null;
+  mark: MarkEffect | null;
+  blockHold: BlockHoldEffect | null;
+  flowField: FlowFieldEffect | null;
+  pushWave: PushWaveEffect | null;
+  trap: TrapEffect | null;
+  sonar: SonarEffect | null;
+  chorus: ChorusEffect | null;
+  /** Multiplicadores da aura que os sistemas aplicam na hora de usar (cooldowns, durações). */
+  abilityCooldownMultiplier: number;
+  controlDurationMultiplier: number;
+  debuffDurationMultiplier: number;
+  rearmMultiplier: number;
+  dashSpeedMultiplier: number;
+}
+
+export interface StatModifiers {
+  /** Bônus temporário de velocidade de ataque (Frenesi): 0.35 = +35%. */
+  attackSpeedBonus?: number;
 }
 
 export function resolveGuardianStats(
   definition: GuardianDefinition,
   progress: UpgradeProgress,
-  aura: AuraEffect = NEUTRAL_AURA,
+  aura: ResolvedAura = NEUTRAL_AURA,
+  modifiers: StatModifiers = {},
 ): GuardianStats {
   const applied = appliedUpgrades(definition, progress);
-  const damage = resolveLast(applied, "damage") ?? definition.damage;
-  const blocks = definition.placementMode === "route" && Boolean(definition.blocks);
+  const baseDamage = resolveLast(applied, "damage") ?? definition.damage;
+  const damage = baseDamage > 0 ? baseDamage * aura.damageMultiplier : 0;
+  const blocks = definition.placementMode === "route" && Boolean(resolveLast(applied, "blocks") ?? definition.blocks);
+  const attackSpeed = aura.attackSpeedMultiplier * (1 + Math.max(0, modifiers.attackSpeedBonus ?? 0));
+  const vulnerability = resolveLast(applied, "vulnerability") ?? definition.vulnerability ?? null;
+  const trap = resolveLast(applied, "trap") ?? definition.trap ?? null;
   return {
     range: definition.range * resolveProduct(applied, "rangeMultiplier") * aura.rangeMultiplier,
     damage,
     canAttack: damage > 0,
-    cooldownMs: (resolveLast(applied, "cooldownMs") ?? definition.cooldownMs) / aura.attackSpeedMultiplier,
-    projectileSpeed: (definition.projectileSpeed ?? 400) * resolveProduct(applied, "projectileSpeedMultiplier"),
+    cooldownMs: (resolveLast(applied, "cooldownMs") ?? definition.cooldownMs) / attackSpeed,
+    projectileSpeed:
+      (definition.projectileSpeed ?? 400) * resolveProduct(applied, "projectileSpeedMultiplier") * aura.projectileSpeedMultiplier,
     predictiveAim: applied.some((upgrade) => upgrade.predictiveAim),
     pierceDamages: resolveLast(applied, "pierceDamages") ?? [damage],
     straightRicochet: applied.some((upgrade) => upgrade.straightRicochet),
     splash: resolveLast(applied, "splash") ?? null,
     chainDamages: resolveLast(applied, "chainDamages") ?? [damage],
     slowFactor: resolveLast(applied, "slowFactor") ?? definition.slowFactor ?? null,
-    slowDurationMs: resolveLast(applied, "slowDurationMs") ?? definition.slowDurationMs ?? 0,
+    slowDurationMs: (resolveLast(applied, "slowDurationMs") ?? definition.slowDurationMs ?? 0) * aura.debuffDurationMultiplier,
     stun: resolveLast(applied, "stun") ?? null,
     electricField: resolveLast(applied, "electricField") ?? null,
     blocks,
@@ -62,11 +104,26 @@ export function resolveGuardianStats(
     contactDamagePerSecond: resolveLast(applied, "contactDamagePerSecond") ?? definition.contactDamagePerSecond ?? 0,
     bossHold: resolveLast(applied, "bossHold") ?? null,
     armorPiercing: applied.some((upgrade) => upgrade.armorPiercing),
-    vulnerability: resolveLast(applied, "vulnerability") ?? definition.vulnerability ?? null,
+    vulnerability: vulnerability ? { ...vulnerability, durationMs: vulnerability.durationMs * aura.debuffDurationMultiplier } : null,
     areaAttack: applied.some((upgrade) => upgrade.areaAttack),
     spin: resolveLast(applied, "spin") ?? null,
     inkCloud: resolveLast(applied, "inkCloud") ?? null,
     providedAura: resolveLast(applied, "aura") ?? null,
+    targeting: resolveLast(applied, "targeting") ?? definition.targeting ?? "leading",
+    dash: Boolean(definition.dash),
+    frenzy: resolveLast(applied, "frenzy") ?? null,
+    mark: resolveLast(applied, "mark") ?? null,
+    blockHold: blocks ? (resolveLast(applied, "blockHold") ?? null) : null,
+    flowField: resolveLast(applied, "flowField") ?? null,
+    pushWave: resolveLast(applied, "pushWave") ?? null,
+    trap,
+    sonar: resolveLast(applied, "sonar") ?? definition.sonar ?? null,
+    chorus: resolveLast(applied, "chorus") ?? null,
+    abilityCooldownMultiplier: aura.abilityCooldownMultiplier,
+    controlDurationMultiplier: aura.controlDurationMultiplier,
+    debuffDurationMultiplier: aura.debuffDurationMultiplier,
+    rearmMultiplier: aura.rearmMultiplier,
+    dashSpeedMultiplier: aura.dashSpeedMultiplier,
   };
 }
 

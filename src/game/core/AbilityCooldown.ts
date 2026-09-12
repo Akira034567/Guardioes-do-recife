@@ -14,4 +14,9 @@ export class AbilityCooldown {
     this.readyAt = now + Math.max(0, cooldownMs);
     return true;
   }
+
+  /** Zera a recarga (ex.: Alfa II remarca na hora quando a presa morre). */
+  reset(): void {
+    this.readyAt = 0;
+  }
 }

@@ -119,21 +119,21 @@ test("locks a unit into one upgrade branch, pauses and restarts without stale st
 test("enforces water and route placement rules on a procedural level", async ({ page }) => {
   const { canvas, clickGame, pageErrors } = await openGame(page, "level=recife-5");
   await expect(canvas).toHaveAttribute("data-level", "recife-5");
-  await expect(canvas).toHaveAttribute("data-pearls", "260");
+  await expect(canvas).toHaveAttribute("data-pearls", "340");
 
   await clickGame(CARD_X.jellyfish, CARD_Y);
   await clickGame(175, 510);
   await expect(canvas).toHaveAttribute("data-guardians", "0");
   await clickGame(700, 150);
   await expect(canvas).toHaveAttribute("data-guardians", "1");
-  await expect(canvas).toHaveAttribute("data-pearls", "160");
+  await expect(canvas).toHaveAttribute("data-pearls", "240");
 
   await clickGame(CARD_X.crab, CARD_Y);
   await clickGame(1100, 520);
   await expect(canvas).toHaveAttribute("data-guardians", "1");
   await clickGame(175, 510);
   await expect(canvas).toHaveAttribute("data-guardians", "2");
-  await expect(canvas).toHaveAttribute("data-pearls", "70");
+  await expect(canvas).toHaveAttribute("data-pearls", "150");
   await expect(canvas).toHaveAttribute("data-selected", "G2");
 
   await clickGame(700, 150);
@@ -142,6 +142,75 @@ test("enforces water and route placement rules on a procedural level", async ({ 
   await expect(canvas).toHaveAttribute("data-selected", "");
   await clickGame(175, 510);
   await expect(canvas).toHaveAttribute("data-selected", "G2");
+  expect(pageErrors).toEqual([]);
+});
+
+const NEW_SQUAD = "guardians=pistol-shrimp,shark,sea-turtle,stonefish,dolphin";
+/** Carta na posição do esquadrão acima: 0 camarão, 1 tubarão, 2 tartaruga, 3 peixe-pedra, 4 golfinho. */
+const squadCard = (slot: number) => 62 + slot * 118;
+
+test("places the shark only in the margin band and locks the other branch after the first upgrade", async ({ page }) => {
+  test.setTimeout(200_000);
+  const { canvas, clickGame, pageErrors } = await openGame(page, `level=recife-1&${NEW_SQUAD}`);
+  await expect(canvas).toHaveAttribute("data-loadout", "pistol-shrimp,shark,sea-turtle,stonefish,dolphin");
+
+  // Em cima da rota é recusado; na beira (30–120px da linha central) é aceito.
+  await clickGame(squadCard(1), CARD_Y);
+  await clickGame(350, 390);
+  await expect(canvas).toHaveAttribute("data-guardians", "0");
+  await clickGame(300, 470);
+  await expect(canvas).toHaveAttribute("data-guardians", "1");
+  await expect(canvas).toHaveAttribute("data-pearls", "70");
+  await expect(canvas).toHaveAttribute("data-selected-options", "2");
+
+  // Ramo B (Caçador Alfa): o ramo A fica bloqueado e o botão A não compra nada.
+  await expect.poll(async () => Number(await canvas.getAttribute("data-pearls")), { timeout: 150_000 }).toBeGreaterThanOrEqual(90);
+  await clickGame(300, 470);
+  await expect(canvas).toHaveAttribute("data-selected", "G1");
+  await clickGame(OPTION_B.x, OPTION_B.y);
+  await expect(canvas).toHaveAttribute("data-upgrades", "1");
+  await expect(canvas).toHaveAttribute("data-selected-branch", "b");
+  await expect(canvas).toHaveAttribute("data-selected-variant", "alfa_1");
+  await expect(canvas).toHaveAttribute("data-selected-options", "1");
+  const pearlsAfter = await canvas.getAttribute("data-pearls");
+  await clickGame(OPTION_A.x, OPTION_A.y);
+  await page.waitForTimeout(200);
+  await expect(canvas).toHaveAttribute("data-upgrades", "1");
+  await expect(canvas).toHaveAttribute("data-pearls", pearlsAfter ?? "");
+  expect(pageErrors).toEqual([]);
+});
+
+test("buries the stonefish on the route and arms it after a few seconds", async ({ page }) => {
+  const { canvas, clickGame, pageErrors } = await openGame(page, `level=recife-1&${NEW_SQUAD}`);
+  await clickGame(squadCard(3), CARD_Y);
+  await clickGame(700, 150);
+  await expect(canvas).toHaveAttribute("data-guardians", "0");
+  await clickGame(700, 260);
+  await expect(canvas).toHaveAttribute("data-guardians", "1");
+  await expect(canvas).toHaveAttribute("data-pearls", "85");
+  await expect(canvas).toHaveAttribute("data-trap-phase", "arming");
+  await expect(canvas).toHaveAttribute("data-trap-phase", /armed|triggered|cooldown/, { timeout: 15_000 });
+  expect(pageErrors).toEqual([]);
+});
+
+test("places the dolphin in open water and the turtle on the route", async ({ page }) => {
+  const { canvas, clickGame, pageErrors } = await openGame(page, `level=recife-2&${NEW_SQUAD}`);
+  await expect(canvas).toHaveAttribute("data-pearls", "220");
+  await clickGame(squadCard(4), CARD_Y);
+  await clickGame(950, 340);
+  await expect(canvas).toHaveAttribute("data-guardians", "0");
+  await clickGame(720, 300);
+  await expect(canvas).toHaveAttribute("data-guardians", "1");
+  await expect(canvas).toHaveAttribute("data-pearls", "100");
+
+  await clickGame(squadCard(2), CARD_Y);
+  await clickGame(720, 200);
+  await expect(canvas).toHaveAttribute("data-guardians", "1");
+  await clickGame(910, 395);
+  await expect(canvas).toHaveAttribute("data-guardians", "2");
+  await expect(canvas).toHaveAttribute("data-pearls", "0");
+  await expect(canvas).toHaveAttribute("data-selected", "G2");
+  await expect(canvas).toHaveAttribute("data-selected-options", "2");
   expect(pageErrors).toEqual([]);
 });
 
@@ -226,7 +295,7 @@ test("a balanced defense can finish all five waves and unlock the next level", a
   await clickGame(RESULT_NEXT.x, RESULT_NEXT.y);
   await expect(canvas).toHaveAttribute("data-level", "recife-2");
   await expect(canvas).toHaveAttribute("data-game-state", "countdown");
-  await expect(canvas).toHaveAttribute("data-pearls", "200");
+  await expect(canvas).toHaveAttribute("data-pearls", "220");
 
   await clickGame(MENU.x, MENU.y);
   await expect(canvas).toHaveAttribute("data-screen", "menu");

@@ -1,6 +1,7 @@
 import { expect, test, type Locator, type Page } from "@playwright/test";
 import type { SimPoint } from "../../src/game/core/Simulation";
-import { GUARDIANS } from "../../src/game/data/guardians";
+import { DEFAULT_LOADOUT, GUARDIANS } from "../../src/game/data/guardians";
+import { cardCenterX, HUD_LAYOUT } from "../../src/game/hudLayout";
 import type { BranchId, GuardianId } from "../../src/game/types";
 import { BALANCE_BUILDS, RAW_BUILD, type BalanceBuild } from "../balance-builds";
 
@@ -12,26 +13,30 @@ import { BALANCE_BUILDS, RAW_BUILD, type BalanceBuild } from "../balance-builds"
  * `guardians.ts`, então basta descrever o que comprar e onde.
  */
 
-const CARD_Y = 672;
-const CARD_X: Record<GuardianId, number> = {
-  "pistol-shrimp": 62,
-  jellyfish: 180,
-  pufferfish: 298,
-  "reef-crab": 416,
-  "ink-octopus": 534,
-};
-const OPTION = { a: { x: 690, y: 692 }, b: { x: 800, y: 692 } } as const;
+const CARD_Y = HUD_LAYOUT.cardY;
+const OPTION = {
+  a: { x: HUD_LAYOUT.optionButtonXs[0], y: HUD_LAYOUT.optionButtonY },
+  b: { x: HUD_LAYOUT.optionButtonXs[1], y: HUD_LAYOUT.optionButtonY },
+} as const;
 const REEF_MAX = 20;
 
 type Point = SimPoint;
 type Build = BalanceBuild;
 const BUILDS = BALANCE_BUILDS;
 
-async function openLevel(page: Page, levelId: string) {
-  await page.goto(`/?level=${levelId}`);
+/** Coordenada da carta de um Guardião no esquadrão desta build. */
+function cardX(loadout: readonly GuardianId[], id: GuardianId): number {
+  const slot = loadout.indexOf(id);
+  if (slot < 0) throw new Error(`${id} não está no esquadrão ${loadout.join(",")}`);
+  return cardCenterX(slot);
+}
+
+async function openLevel(page: Page, levelId: string, loadout: readonly GuardianId[]) {
+  await page.goto(`/?level=${levelId}&guardians=${loadout.join(",")}`);
   const canvas = page.locator("canvas");
   await expect(canvas).toBeVisible();
   await expect(canvas).toHaveAttribute("data-level", levelId);
+  await expect(canvas).toHaveAttribute("data-loadout", loadout.join(","));
   const box = await canvas.boundingBox();
   if (!box) throw new Error("Canvas bounds unavailable");
   const clickGame = (x: number, y: number) => page.mouse.click(box.x + (x * box.width) / 1280, box.y + (y * box.height) / 720);
@@ -54,14 +59,15 @@ async function waitForPearls(page: Page, canvas: Locator, minimum: number, timeo
 }
 
 async function playBuild(page: Page, build: Build) {
-  const { canvas, clickGame } = await openLevel(page, build.level);
+  const loadout = build.loadout ?? DEFAULT_LOADOUT;
+  const { canvas, clickGame } = await openLevel(page, build.level, loadout);
   const placed = new Map<string, { id: GuardianId; branch: BranchId | null; level: number }>();
   for (const step of build.steps) {
     if ("place" in step) {
       const ready = await waitForPearls(page, canvas, GUARDIANS[step.place].cost);
       if (!ready) break;
       const before = Number(await canvas.getAttribute("data-guardians"));
-      await clickGame(CARD_X[step.place], CARD_Y);
+      await clickGame(cardX(loadout, step.place), CARD_Y);
       await clickGame(step.at[0], step.at[1]);
       await expect(canvas, `${build.name}: posicionar ${step.place} em ${key(step.at)}`).toHaveAttribute("data-guardians", String(before + 1));
       placed.set(key(step.at), { id: step.place, branch: null, level: 0 });
