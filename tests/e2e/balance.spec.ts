@@ -39,6 +39,8 @@ async function openLevel(page: Page, levelId: string, loadout: readonly Guardian
   await page.goto(`/?level=${levelId}&guardians=${loadout.join(",")}`);
   const canvas = page.locator("canvas");
   await expect(canvas).toBeVisible();
+  // O boot carrega toda a arte dos Guardiões; em máquina carregada isso passa dos 5 s padrão.
+  await expect(canvas).toHaveAttribute("data-screen", "game", { timeout: 30_000 });
   await expect(canvas).toHaveAttribute("data-level", levelId);
   await expect(canvas).toHaveAttribute("data-loadout", loadout.join(","));
   const box = await canvas.boundingBox();

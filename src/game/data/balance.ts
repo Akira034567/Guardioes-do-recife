@@ -9,7 +9,7 @@
 
 export const ECONOMY = {
   /** Pérolas iniciais padrão (cada fase pode sobrescrever em `startingPearls`). */
-  startingPearls: 180,
+  startingPearls: 180 ,
   /** Vidas do Recife. */
   reefHealth: 20,
   /** Fração do valor investido (custo base + upgrades) devolvida na venda. */
