@@ -126,14 +126,15 @@ export class UIScene extends Phaser.Scene {
     this.healthText = this.add.text(340, 24, "RECIFE ♥ 20/20", this.topStyle("#82f1bd"));
     this.waveText = this.add.text(548, 24, "ONDA 1/5", this.topStyle("#d4f7ff"));
     this.timerText = this.add.text(690, 24, "EM 10s", this.topStyle("#75e2f5"));
+    // Centro deslocado para a esquerda: a faixa da direita agora pertence aos botões de velocidade.
     this.messageText = this.add
-      .text(880, 36, "", {
+      .text(855, 36, "", {
         fontFamily: "Arial, sans-serif",
-        fontSize: "14px",
+        fontSize: "13px",
         fontStyle: "bold",
         color: "#ffffff",
         align: "center",
-        wordWrap: { width: 260 },
+        wordWrap: { width: 235 },
       })
       .setOrigin(0.5);
 
