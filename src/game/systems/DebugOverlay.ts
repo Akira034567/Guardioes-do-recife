@@ -4,9 +4,9 @@ import { normalizedDirection } from "../core/CurrentField";
 import type { FlowField } from "../core/FlowField";
 import type { RoutePath } from "../core/RoutePath";
 import type { CurrentZoneDefinition, DebugFlags } from "../types";
-import type { Enemy } from "../objects/Enemy";
-import type { Guardian } from "../objects/Guardian";
-import type { Projectile } from "../objects/Projectile";
+import type { MatchEnemy } from "../core/match/MatchEnemy";
+import type { MatchGuardian } from "../core/match/MatchGuardian";
+import type { ProjectileView } from "../core/match/systems/ProjectileSystem";
 
 export interface PlacementDebugInfo {
   waterBounds: { x: number; y: number; width: number; height: number };
@@ -34,9 +34,9 @@ export class DebugOverlay {
 
   render(
     flags: DebugFlags,
-    guardians: readonly Guardian[],
-    enemies: readonly Enemy[],
-    projectiles: readonly Projectile[],
+    guardians: readonly MatchGuardian[],
+    enemies: readonly MatchEnemy[],
+    projectiles: readonly ProjectileView[],
     currents: readonly CurrentZoneDefinition[],
     currentReversed: boolean,
     selectedGuardianId: string | null,
@@ -55,7 +55,7 @@ export class DebugOverlay {
 
     if (flags.ranges) {
       guardians.forEach((guardian) => {
-        const selected = guardian.instanceId === selectedGuardianId;
+        const selected = guardian.id === selectedGuardianId;
         this.graphics.lineStyle(selected ? 3 : 1, selected ? 0xffe36e : 0x72ddff, selected ? 0.9 : 0.42);
         this.graphics.strokeCircle(guardian.x, guardian.y, guardian.range);
       });
@@ -73,20 +73,20 @@ export class DebugOverlay {
     if (flags.targets) {
       this.graphics.lineStyle(1, 0xffffff, 0.7);
       guardians.forEach((guardian) => {
-        const target = enemies.find((enemy) => enemy.instanceId === guardian.targetId);
+        const target = enemies.find((enemy) => enemy.id === guardian.targetId);
         if (target) this.graphics.lineBetween(guardian.x, guardian.y, target.x, target.y);
       });
     }
 
     if (flags.states) {
       guardians.forEach((guardian) => {
-        const trap = guardian.currentTrapPhase ? ` · ${guardian.currentTrapPhase}` : "";
+        const trap = guardian.trapPhase ? ` · ${guardian.trapPhase}` : "";
         const frenzy = guardian.runtime.attackSpeedBonus > 0 ? ` · +${Math.round(guardian.runtime.attackSpeedBonus * 100)}%` : "";
         const prey = guardian.runtime.preyId ? ` · presa ${guardian.runtime.preyId}` : "";
         this.addLabel(
           guardian.x,
           guardian.y - 55,
-          `${guardian.guardianState}${guardian.targetId ? ` → ${guardian.targetId}` : ""}${trap}${frenzy}${prey}`,
+          `${guardian.state}${guardian.targetId ? ` → ${guardian.targetId}` : ""}${trap}${frenzy}${prey}`,
           0x9df2ff,
         );
       });
@@ -155,7 +155,7 @@ export class DebugOverlay {
   }
 
   /** Zonas de corrente das Tartarugas (setas contra a rota) e alvos coordenados pelo Sonar. */
-  private drawControls(controls: ControlDebugInfo, guardians: readonly Guardian[], enemies: readonly Enemy[]): void {
+  private drawControls(controls: ControlDebugInfo, guardians: readonly MatchGuardian[], enemies: readonly MatchEnemy[]): void {
     controls.flowFields.forEach((field) => {
       this.graphics.lineStyle(2, 0x6fe3ff, 0.9);
       this.graphics.strokeCircle(field.x, field.y, field.radius);
@@ -170,7 +170,7 @@ export class DebugOverlay {
     });
     guardians.forEach((guardian) => {
       const preferred = guardian.runtime.preferredTargetId(controls.now);
-      const target = preferred ? enemies.find((enemy) => enemy.instanceId === preferred) : undefined;
+      const target = preferred ? enemies.find((enemy) => enemy.id === preferred) : undefined;
       if (target) {
         this.graphics.lineStyle(2, 0x9b7bff, 0.8);
         this.graphics.lineBetween(guardian.x, guardian.y, target.x, target.y);
@@ -182,7 +182,7 @@ export class DebugOverlay {
     });
   }
 
-  private drawPlacements(info: PlacementDebugInfo, guardians: readonly Guardian[]): void {
+  private drawPlacements(info: PlacementDebugInfo, guardians: readonly MatchGuardian[]): void {
     this.graphics.fillStyle(0x4edff0, 0.035);
     this.graphics.fillRect(info.waterBounds.x, info.waterBounds.y, info.waterBounds.width, info.waterBounds.height);
     this.graphics.lineStyle(info.waterRouteClearance * 2, 0xff526d, 0.055);

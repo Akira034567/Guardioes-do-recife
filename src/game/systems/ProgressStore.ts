@@ -1,13 +1,30 @@
-import { LevelProgress } from "../core/LevelProgress";
+import type { LevelProgressApi } from "../core/LevelProgress";
+import { SaveManager, type SaveStorage } from "../core/save/SaveManager";
+import { ENEMY_ORDER } from "../data/enemies";
+import { DEFAULT_LOADOUT, GUARDIAN_ORDER } from "../data/guardians";
 import { LEVEL_IDS } from "../data/levels";
 
-/** Progresso persistido no navegador; cai para memória quando não há localStorage. */
-export function createLevelProgress(): LevelProgress {
-  let storage: Storage | null = null;
+let manager: SaveManager | null = null;
+
+function browserStorage(): SaveStorage | null {
   try {
-    storage = window.localStorage;
+    return window.localStorage;
   } catch {
-    storage = null;
+    return null;
   }
-  return new LevelProgress(LEVEL_IDS, storage);
+}
+
+/** Único `SaveManager` da página; cai para memória quando não há localStorage. */
+export function getSaveManager(): SaveManager {
+  if (!manager) {
+    manager = new SaveManager(browserStorage(), {
+      registry: { levelIds: LEVEL_IDS, guardianIds: GUARDIAN_ORDER, enemyIds: ENEMY_ORDER, defaultUnlockedGuardians: DEFAULT_LOADOUT },
+    });
+  }
+  return manager;
+}
+
+/** Progressão de fases (API antiga) por cima do save versionado. */
+export function createLevelProgress(): LevelProgressApi {
+  return getSaveManager().levelProgress();
 }

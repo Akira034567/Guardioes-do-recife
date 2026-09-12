@@ -1,6 +1,6 @@
 import Phaser from "phaser";
 import { GAME_HEIGHT, GAME_WIDTH } from "../constants";
-import type { LevelProgress } from "../core/LevelProgress";
+import type { LevelProgressApi } from "../core/LevelProgress";
 import { LEVELS, LEVEL_IDS } from "../data/levels";
 import { ENEMIES } from "../data/enemies";
 import { createLevelProgress } from "../systems/ProgressStore";
@@ -8,7 +8,7 @@ import type { EnemyId, LevelDefinition } from "../types";
 
 /** Menu de fases: mostra progressão e inicia a fase escolhida. */
 export class LevelSelectScene extends Phaser.Scene {
-  private progress!: LevelProgress;
+  private progress!: LevelProgressApi;
 
   constructor() {
     super("LevelSelectScene");

@@ -12,6 +12,10 @@ export const Events = {
   toggleMute: "ui:toggle-mute",
   restart: "ui:restart",
   skipCountdown: "ui:skip-countdown",
+  /** Mesmo efeito de `skipCountdown`; nome do botão "INICIAR PRÓXIMA ONDA". */
+  startNextWave: "ui:start-next-wave",
+  /** payload: 1 | 2 | 3 */
+  setSpeed: "ui:set-speed",
   toggleDebug: "ui:toggle-debug",
   toggleDebugFlag: "ui:toggle-debug-flag",
   /** payload: levelId */

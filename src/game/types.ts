@@ -485,6 +485,8 @@ export interface HudSnapshot {
   waveState: WaveState;
   countdownSeconds: number;
   canSkipCountdown: boolean;
+  /** Velocidade da partida (1×, 2×, 3×). */
+  speed: 1 | 2 | 3;
   /** Os cinco Guardiões disponíveis nas cartas desta partida. */
   loadout: GuardianId[];
   selectedGuardianId: GuardianId | null;

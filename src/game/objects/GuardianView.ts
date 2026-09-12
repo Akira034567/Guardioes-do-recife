@@ -2,119 +2,61 @@ import Phaser from "phaser";
 import { artTextureFor, artVariant, GUARDIAN_ART, hasGuardianArt, type ArtKind } from "../assets/guardianArt";
 import { DEPTH } from "../constants";
 import { NEUTRAL_AURA, sameAura } from "../core/Auras";
-import { targetPolicyFor } from "../core/GuardianBehaviors";
-import { GuardianRuntime } from "../core/GuardianRuntime";
-import { GuardianStateMachine, type GuardianFsmEvent } from "../core/GuardianStateMachine";
-import { resolveGuardianStats, scaledTimings, type GuardianStats } from "../core/GuardianStats";
-import { selectTarget } from "../core/Targeting";
+import type { MatchGuardian } from "../core/match/MatchGuardian";
 import type { TrapPhase } from "../core/TrapCore";
-import {
-  appliedUpgrades,
-  applyUpgrade,
-  branchOf,
-  branchStatuses,
-  investedValue,
-  MAX_UPGRADE_LEVEL,
-  sellValue,
-  upgradeOptions,
-  type UpgradeProgress,
-} from "../core/UpgradeTree";
-import type {
-  BranchId,
-  BranchStatus,
-  GuardianDefinition,
-  GuardianId,
-  GuardianState,
-  GuardianUpgrade,
-  ResolvedAura,
-  UpgradeBranch,
-  UpgradeOption,
-  Vec2,
-} from "../types";
-import type { Enemy } from "./Enemy";
+import type { GuardianState, ResolvedAura, Vec2 } from "../types";
 
-export interface GuardianPlacementContext {
-  routePlacementId?: string;
-  routeDistance?: number;
-}
-
-export class Guardian extends Phaser.GameObjects.Container {
-  readonly fsm: GuardianStateMachine;
-  readonly instanceId: string;
-  readonly definition: GuardianDefinition;
-  readonly routePlacementId: string | null;
-  readonly routeDistance: number | null;
-  readonly runtime = new GuardianRuntime();
-  branchId: BranchId | null = null;
-  upgradeLevel = 0;
-  /** Contador de golpes para habilidades "a cada N ataques" (giro do Caranguejo). */
-  attacksPerformed = 0;
-  aura: ResolvedAura = NEUTRAL_AURA;
-
+/**
+ * Desenho de um Guardião. Todo estado de jogo vem do `MatchGuardian`; aqui ficam só os detalhes
+ * visuais (sprite da variante, investida do Tubarão, fase enterrada do Peixe-Pedra, selo do ramo).
+ */
+export class GuardianView extends Phaser.GameObjects.Container {
   private readonly bodyGraphic: Phaser.GameObjects.Graphics;
   private readonly badgeGraphic: Phaser.GameObjects.Graphics;
   private readonly artSprite: Phaser.GameObjects.Image | null;
-  private visualState: GuardianState = "idle";
   private readonly artBaselineY = 34;
-  private cachedStats: GuardianStats | null = null;
-  /** Posição do alvo da investida (Tubarão), atualizada enquanto o alvo é válido. */
+  private visualState: GuardianState = "idle";
   private dashTarget: Vec2 | null = null;
   private trapPhase: TrapPhase | null = null;
+  private progressKey = "";
+  private auraShown: ResolvedAura = NEUTRAL_AURA;
 
   constructor(
     scene: Phaser.Scene,
-    instanceId: string,
-    definition: GuardianDefinition,
-    x: number,
-    y: number,
-    placement: GuardianPlacementContext = {},
-    now = 0,
+    readonly guardian: MatchGuardian,
+    onSelect: () => void,
   ) {
-    super(scene, x, y);
-    this.instanceId = instanceId;
-    this.definition = definition;
-    this.routePlacementId = placement.routePlacementId ?? null;
-    this.routeDistance = placement.routeDistance ?? null;
-    this.fsm = new GuardianStateMachine(scaledTimings(definition, this.stats.cooldownMs));
-    this.runtime.syncStats(this.stats, now);
-    if (this.stats.trap) this.trapPhase = "arming";
+    super(scene, guardian.x, guardian.y);
     this.bodyGraphic = scene.add.graphics();
     this.badgeGraphic = scene.add.graphics();
     this.add([this.bodyGraphic, this.badgeGraphic]);
-    if (hasGuardianArt(scene, definition.id)) {
+    if (hasGuardianArt(scene, guardian.guardianId)) {
       // As imagens preservam a célula da tabela: a criatura fica encostada na base do canvas, então a
       // âncora é o centro da base e uma escala única por Guardião mantém a proporção entre variantes.
       this.artSprite = new Phaser.GameObjects.Image(scene, 0, this.artBaselineY, this.artTexture("idle"));
-      this.artSprite.setOrigin(0.5, 1).setScale(GUARDIAN_ART[definition.id].scale);
+      this.artSprite.setOrigin(0.5, 1).setScale(GUARDIAN_ART[guardian.guardianId].scale);
       this.add(this.artSprite);
       this.bodyGraphic.setVisible(false);
     } else {
       this.artSprite = null;
     }
+    this.trapPhase = guardian.trapPhase;
+    this.progressKey = this.currentProgressKey();
     this.drawBody();
     this.drawBadge();
     this.setDepth(DEPTH.guardians);
+    this.setSize(80, 80);
+    this.setInteractive(new Phaser.Geom.Circle(40, 40, 40), Phaser.Geom.Circle.Contains);
+    this.on("pointerdown", (_pointer: Phaser.Input.Pointer, _localX: number, _localY: number, event: Phaser.Types.Input.EventData) => {
+      event.stopPropagation();
+      onSelect();
+    });
     scene.add.existing(this);
     this.applyStateVisual();
   }
 
-  // ---------------------------------------------------------------- estado
-
-  /** Mesmo nome usado pela simulação e pelos comportamentos compartilhados. */
   get id(): string {
-    return this.instanceId;
-  }
-
-  get guardianId(): GuardianId {
-    return this.definition.id;
-  }
-
-  get guardianState(): GuardianState {
-    return this.fsm.state;
-  }
-
-  get targetId(): string | null {
-    return this.fsm.targetId;
+    return this.guardian.id;
   }
 
   get usesSpriteArt(): boolean {
@@ -131,167 +73,48 @@ export class Guardian extends Phaser.GameObjects.Container {
 
   /** Pasta da variante visual atual (`base`, `perfuracao-1`, ...). */
   get artVariantFolder(): string {
-    return artVariant(this.definition.id, this.progress).folder;
+    return artVariant(this.guardian.guardianId, this.guardian.progress).folder;
   }
 
   /** Chave de textura de um tipo de imagem para a variante visual atual. */
   artTexture(kind: ArtKind): string {
-    return artTextureFor(this.definition.id, this.progress, kind);
+    return artTextureFor(this.guardian.guardianId, this.guardian.progress, kind);
   }
 
-  get currentTrapPhase(): TrapPhase | null {
-    return this.trapPhase;
-  }
-
-  // -------------------------------------------------------------- upgrades
-
-  get progress(): UpgradeProgress {
-    return { branchId: this.branchId, upgradeLevel: this.upgradeLevel };
-  }
-
-  get branch(): UpgradeBranch | null {
-    return branchOf(this.definition, this.branchId);
-  }
-
-  get applied(): GuardianUpgrade[] {
-    return appliedUpgrades(this.definition, this.progress);
-  }
-
-  get options(): UpgradeOption[] {
-    return upgradeOptions(this.definition, this.progress);
-  }
-
-  get branchStatuses(): BranchStatus[] {
-    return branchStatuses(this.definition, this.progress);
-  }
-
-  get maxUpgradeLevel(): number {
-    return MAX_UPGRADE_LEVEL;
-  }
-
-  get invested(): number {
-    return investedValue(this.definition, this.progress);
-  }
-
-  sellValueAt(refundRate: number): number {
-    return sellValue(this.invested, refundRate);
-  }
-
-  applyUpgrade(branchId: BranchId, now: number): boolean {
-    const next = applyUpgrade(this.definition, this.progress, branchId);
-    if (!next) return false;
-    this.branchId = next.branchId;
-    this.upgradeLevel = next.upgradeLevel;
-    this.invalidateStats();
-    this.runtime.syncStats(this.stats, now);
-    this.drawBody();
-    this.drawBadge();
-    this.syncArtTexture();
-    return true;
-  }
-
-  setAura(aura: ResolvedAura): void {
-    if (sameAura(this.aura, aura)) return;
-    this.aura = { ...aura };
-    this.invalidateStats();
-    this.drawBadge();
-  }
-
-  /** Bônus temporário de velocidade de ataque (Frenesi); só reescala a FSM quando muda. */
-  setAttackSpeedBonus(bonus: number): void {
-    if (Math.abs(this.runtime.attackSpeedBonus - bonus) < 1e-6) return;
-    this.runtime.attackSpeedBonus = bonus;
-    this.invalidateStats();
-  }
-
-  // ------------------------------------------------------------ atributos
-
-  /** Atributos efetivos (definição + upgrades + aura + frenesi), com cache. */
-  get stats(): GuardianStats {
-    if (!this.cachedStats) {
-      this.cachedStats = resolveGuardianStats(this.definition, this.progress, this.aura, {
-        attackSpeedBonus: this.runtime.attackSpeedBonus,
-      });
+  /** Lê o estado do motor e atualiza o desenho. `enemyPosition` localiza o alvo da investida. */
+  sync(now: number, enemyPosition: (id: string) => Vec2 | null): void {
+    const guardian = this.guardian;
+    const state = guardian.state;
+    if (state !== this.visualState) {
+      this.visualState = state;
+      if (state === "idle") this.dashTarget = null;
+      this.applyStateVisual();
     }
-    return this.cachedStats;
-  }
-
-  get range(): number {
-    return this.stats.range;
-  }
-
-  get damage(): number {
-    return this.stats.damage;
-  }
-
-  get canAttack(): boolean {
-    return this.stats.canAttack;
-  }
-
-  get cooldownMs(): number {
-    return this.stats.cooldownMs;
-  }
-
-  get blocks(): boolean {
-    return this.stats.blocks;
-  }
-
-  /** Aura que esta unidade fornece aos aliados (Polvo, ramo Maré Aliada). */
-  get providedAura(): GuardianUpgrade["aura"] | null {
-    return this.stats.providedAura;
-  }
-
-  private invalidateStats(): void {
-    this.cachedStats = null;
-    this.fsm.setTimings(scaledTimings(this.definition, this.stats.cooldownMs));
-  }
-
-  // ------------------------------------------------------------------ tick
-
-  tick(now: number, enemies: readonly Enemy[], onImpact: (guardian: Guardian, target: Enemy) => void): void {
-    if (this.canAttack) {
-      if (this.fsm.state === "idle") {
-        const target = this.findTarget(enemies, now);
-        if (target) this.processEvents(this.fsm.beginAttack(target.instanceId, now), enemies, onImpact);
-      }
-      const target = enemies.find((enemy) => enemy.instanceId === this.fsm.targetId);
-      const valid = Boolean(target && !target.dead && !target.reachedGoal && target.distanceTo(this.x, this.y) <= this.range);
-      if (target && valid) this.dashTarget = { x: target.x, y: target.y };
-      this.processEvents(this.fsm.update(now, valid), enemies, onImpact);
+    if (guardian.targetId) {
+      const target = enemyPosition(guardian.targetId);
+      if (target && Math.hypot(target.x - guardian.x, target.y - guardian.y) <= guardian.range) this.dashTarget = { x: target.x, y: target.y };
+    }
+    if (guardian.trapPhase !== this.trapPhase) {
+      this.trapPhase = guardian.trapPhase;
+      this.drawBody();
+      this.applyStateVisual();
+    }
+    const progressKey = this.currentProgressKey();
+    if (progressKey !== this.progressKey) {
+      this.progressKey = progressKey;
+      this.drawBody();
+      this.drawBadge();
+      this.syncArtTexture();
+    }
+    if (!sameAura(this.auraShown, guardian.aura)) {
+      this.auraShown = { ...guardian.aura };
+      this.drawBadge();
     }
     this.animatePassiveVisual(now);
   }
 
-  private findTarget(enemies: readonly Enemy[], now: number): Enemy | undefined {
-    return selectTarget(enemies, this, this.range, targetPolicyFor(this, now));
-  }
-
-  private processEvents(
-    events: readonly GuardianFsmEvent[],
-    enemies: readonly Enemy[],
-    onImpact: (guardian: Guardian, target: Enemy) => void,
-  ): void {
-    for (const event of events) {
-      if (event.type === "transition") {
-        this.visualState = event.transition.current;
-        if (this.visualState === "idle") this.dashTarget = null;
-        this.applyStateVisual();
-      } else {
-        const target = enemies.find((enemy) => enemy.instanceId === event.targetId);
-        if (target && !target.dead && !target.reachedGoal) {
-          this.attacksPerformed += 1;
-          onImpact(this, target);
-        }
-      }
-    }
-  }
-
-  // ---------------------------------------------------------------- visual
-
-  /** Armadilha (Peixe-Pedra): a fase decide entre enterrado (`idle`) e emergido (`attack`). */
-  setTrapPhase(phase: TrapPhase): void {
-    this.trapPhase = phase;
-    this.applyStateVisual();
+  private currentProgressKey(): string {
+    return `${this.guardian.branchId ?? "-"}:${this.guardian.upgradeLevel}`;
   }
 
   private applyStateVisual(): void {
@@ -347,16 +170,17 @@ export class Guardian extends Phaser.GameObjects.Container {
    */
   private dashOffset(now: number): { x: number; y: number; angle: number | null } {
     const none = { x: 0, y: 0, angle: null };
-    if (!this.stats.dash || !this.dashTarget || this.visualState === "idle" || this.visualState === "disabled") return none;
+    const stats = this.guardian.stats;
+    if (!stats.dash || !this.dashTarget || this.visualState === "idle" || this.visualState === "disabled") return none;
     const dx = this.dashTarget.x - this.x;
     const dy = this.dashTarget.y - this.y;
     const distance = Math.hypot(dx, dy);
     if (distance < 1) return none;
-    const reach = Math.max(0, Math.min(distance - 18, this.range));
-    const snapshot = this.fsm.snapshot();
+    const reach = Math.max(0, Math.min(distance - 18, this.guardian.range));
+    const snapshot = this.guardian.fsmSnapshot();
     const duration = snapshot.stateDurationMs ?? 1;
     const elapsed = Math.max(0, Math.min(1, (now - snapshot.stateStartedAt) / Math.max(1, duration)));
-    const speed = Math.max(1, this.stats.dashSpeedMultiplier);
+    const speed = Math.max(1, stats.dashSpeedMultiplier);
     let fraction = 0;
     if (this.visualState === "windup") fraction = Math.min(1, elapsed * speed);
     else if (this.visualState === "attack") fraction = 1;
@@ -383,17 +207,17 @@ export class Guardian extends Phaser.GameObjects.Container {
   /** Anel colorido do ramo escolhido + marcadores de nível; halo quando recebe aura. */
   private drawBadge(): void {
     this.badgeGraphic.clear();
-    const buffed = !sameAura(this.aura, NEUTRAL_AURA);
+    const buffed = !sameAura(this.guardian.aura, NEUTRAL_AURA);
     if (buffed) {
       this.badgeGraphic.lineStyle(2, 0xffc3f0, 0.55);
       this.badgeGraphic.strokeCircle(0, 6, 40);
     }
-    const branch = this.branch;
+    const branch = this.guardian.branch;
     if (!branch) return;
     this.badgeGraphic.lineStyle(4, branch.color, 0.95);
     this.badgeGraphic.strokeCircle(0, 6, 34);
     this.badgeGraphic.fillStyle(branch.color, 1);
-    for (let index = 0; index < this.upgradeLevel; index += 1) {
+    for (let index = 0; index < this.guardian.upgradeLevel; index += 1) {
       this.badgeGraphic.fillCircle(-7 + index * 14, 44, 5);
       this.badgeGraphic.lineStyle(2, 0x03212f, 1);
       this.badgeGraphic.strokeCircle(-7 + index * 14, 44, 5);
@@ -401,14 +225,15 @@ export class Guardian extends Phaser.GameObjects.Container {
   }
 
   private drawBody(): void {
-    const primary = this.definition.color;
-    const accent = this.definition.accent;
+    const { definition, branchId, upgradeLevel } = this.guardian;
+    const primary = definition.color;
+    const accent = definition.accent;
     const graphic = this.bodyGraphic;
     graphic.clear();
     graphic.fillStyle(0x001823, 0.35);
     graphic.fillEllipse(0, 18, 62, 18);
 
-    switch (this.definition.id) {
+    switch (definition.id) {
       case "pistol-shrimp":
         graphic.fillStyle(primary, 1);
         graphic.fillEllipse(-5, 0, 50, 30);
@@ -492,16 +317,16 @@ export class Guardian extends Phaser.GameObjects.Container {
         break;
       case "shark": {
         // Corpo fusiforme, barbatana dorsal, cauda em foice; o ramo Alfa fica mais pesado.
-        const heavy = this.branchId === "b" ? 1 + this.upgradeLevel * 0.12 : 1;
+        const heavy = branchId === "b" ? 1 + upgradeLevel * 0.12 : 1;
         graphic.fillStyle(primary, 1);
         graphic.fillEllipse(0, 0, 66 * heavy, 24 * heavy);
         graphic.fillTriangle(-2, -12 * heavy, 12, -12 * heavy, 4, -30 * heavy);
         graphic.fillTriangle(-30 * heavy, 0, -46 * heavy, -16, -46 * heavy, 14);
         graphic.fillStyle(0xdbe8f0, 1);
         graphic.fillEllipse(6, 6, 50 * heavy, 10 * heavy);
-        if (this.branchId === "a" && this.upgradeLevel > 0) {
+        if (branchId === "a" && upgradeLevel > 0) {
           graphic.lineStyle(3, accent, 0.7);
-          for (let index = 1; index <= this.upgradeLevel + 1; index += 1) graphic.lineBetween(-20 - index * 10, -6 + index * 3, -34 - index * 10, -6 + index * 3);
+          for (let index = 1; index <= upgradeLevel + 1; index += 1) graphic.lineBetween(-20 - index * 10, -6 + index * 3, -34 - index * 10, -6 + index * 3);
         }
         graphic.fillStyle(0xffffff, 1);
         graphic.fillCircle(20 * heavy, -5, 4);
@@ -513,7 +338,7 @@ export class Guardian extends Phaser.GameObjects.Container {
       }
       case "sea-turtle": {
         // Casco oval com placas; quatro nadadeiras; o ramo Casco engrossa, o Correnteza ganha faixas luminosas.
-        const shell = this.branchId === "a" ? 1 + this.upgradeLevel * 0.15 : 1;
+        const shell = branchId === "a" ? 1 + upgradeLevel * 0.15 : 1;
         graphic.fillStyle(primary, 1);
         for (const [sx, sy] of [
           [-20, -10],
@@ -524,9 +349,9 @@ export class Guardian extends Phaser.GameObjects.Container {
           graphic.fillEllipse(sx * shell, sy, 22, 10);
         }
         graphic.fillCircle(30 * shell, 0, 9);
-        graphic.fillStyle(this.branchId === "a" ? 0x5b6b3a : 0x2f7a5a, 1);
+        graphic.fillStyle(branchId === "a" ? 0x5b6b3a : 0x2f7a5a, 1);
         graphic.fillEllipse(0, 0, 50 * shell, 34 * shell);
-        graphic.lineStyle(2, this.branchId === "b" && this.upgradeLevel > 0 ? 0x6fe3ff : accent, this.branchId === "b" ? 0.9 : 0.6);
+        graphic.lineStyle(2, branchId === "b" && upgradeLevel > 0 ? 0x6fe3ff : accent, branchId === "b" ? 0.9 : 0.6);
         graphic.strokeEllipse(0, 0, 32 * shell, 20 * shell);
         graphic.lineBetween(-16 * shell, 0, 16 * shell, 0);
         graphic.lineBetween(0, -10 * shell, 0, 10 * shell);
@@ -557,7 +382,7 @@ export class Guardian extends Phaser.GameObjects.Container {
       }
       case "dolphin": {
         // Corpo curvo, barbatana dorsal, bico; Coro dourado, Sonar roxo.
-        const tint = this.branchId === "a" && this.upgradeLevel > 0 ? 0xffd76a : this.branchId === "b" && this.upgradeLevel > 0 ? 0x9b7bff : accent;
+        const tint = branchId === "a" && upgradeLevel > 0 ? 0xffd76a : branchId === "b" && upgradeLevel > 0 ? 0x9b7bff : accent;
         graphic.fillStyle(primary, 1);
         graphic.fillEllipse(0, 0, 60, 22);
         graphic.fillTriangle(-4, -10, 8, -10, 0, -24);
@@ -567,7 +392,7 @@ export class Guardian extends Phaser.GameObjects.Container {
         graphic.fillEllipse(4, 6, 42, 9);
         graphic.lineStyle(2, tint, 0.85);
         graphic.strokeCircle(0, -2, 34);
-        if (this.upgradeLevel > 1) graphic.strokeCircle(0, -2, 42);
+        if (upgradeLevel > 1) graphic.strokeCircle(0, -2, 42);
         graphic.fillStyle(0xffffff, 1);
         graphic.fillCircle(18, -5, 4);
         graphic.fillStyle(0x092333, 1);

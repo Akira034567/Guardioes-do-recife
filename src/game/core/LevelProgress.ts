@@ -5,6 +5,16 @@ export interface ProgressStorage {
 
 export const PROGRESS_STORAGE_KEY = "guardioes-do-recife.progress.v1";
 
+/** O que menu e partida precisam da progressão de fases (implementado pela classe abaixo e pelo `SaveManager`). */
+export interface LevelProgressApi {
+  readonly completed: readonly string[];
+  isCompleted(levelId: string): boolean;
+  isUnlocked(levelId: string): boolean;
+  /** Marca a fase como concluída e devolve a próxima fase liberada, se houver. */
+  complete(levelId: string): string | null;
+  reset(): void;
+}
+
 interface StoredProgress {
   completed: string[];
 }
@@ -14,7 +24,7 @@ interface StoredProgress {
  * fase N libera a fase N+1. O armazenamento é injetável (localStorage no jogo,
  * memória nos testes).
  */
-export class LevelProgress {
+export class LevelProgress implements LevelProgressApi {
   private readonly completedIds = new Set<string>();
 
   constructor(

@@ -59,7 +59,7 @@ Peixinho (cardume), Peixe Invasor, Peixe-Flecha, Peixe-Agulha, Cascudo (armadura
 
 Critério de vencibilidade: toda fase deve ser vencível perdendo poucas vidas com builds diversas, sem ficar fácil demais. Os roteiros de compra ficam em `tests/balance-builds.ts` (dois ou mais por fase) e são verificados de duas formas:
 
-- `npm test` roda `tests/balance-sim.test.ts`, uma simulação headless da partida (`src/game/core/Simulation.ts`, mesmas regras da `GameScene`, sem Phaser) que termina em segundos e imprime `[sim] … vidas X/20 · pérolas Y · vazou: …` por build. `tests/balance-lab.test.ts` imprime rota, cobertura de cada plataforma e vida/renda por onda de cada fase.
+- `npm test` roda `tests/balance-sim.test.ts`, uma simulação headless da partida (`src/game/core/Simulation.ts`, que roda o MESMO motor da partida real, `src/game/core/match/Match.ts`, sem Phaser) que termina em segundos e imprime `[sim] … vidas X/20 · pérolas Y · vazou: …` por build. `tests/balance-lab.test.ts` imprime rota, cobertura de cada plataforma e vida/renda por onda de cada fase. `tests/match-golden.test.ts` congela o resultado exato de cada build em snapshot: qualquer refatoração precisa mantê-lo.
 - `npm run test:balance` joga os mesmos roteiros no jogo real via Playwright (`tests/e2e/balance.spec.ts`), mais lento; a simulação tende a ser 2 a 4 vidas mais otimista que a partida real.
 
 Cada fase controla sua dificuldade em `enemyScaling` (vida, velocidade, recompensa), `enemyOverrides` (ex.: chefe mais fraco) e na composição das ondas; a razão vida-total ÷ (pérolas iniciais + renda) sobe de ~2,7 na fase 1 para ~6,8 na fase 6; as rotas longas com laços (fases 2 e 3) compensam com mais inimigos, e as rotas curtas do naufrágio (fases 5 e 6) com plataformas mais próximas do canal.
@@ -69,19 +69,22 @@ Todos os números vivem em `src/game/data/balance.ts`: economia (pérolas inicia
 ## Debug
 
 - `F2`: abre ou fecha o modo debug.
-- `?debug=1`: inicia com debug e disponibiliza o botão para dispositivos touch.
+- `?debug=1`: inicia com debug e disponibiliza o botão para dispositivos touch. Em build de produção, F2 só funciona com `?debug=1`.
 - O painel permite alternar rota, alcance, hitboxes, corrente, estados, alvos e áreas de posicionamento separadamente.
 
 ## Organização
 
 - `src/game/data`: balanceamento, catálogo de Guardiões e inimigos, registro de fases.
-- `src/game/core`: simulação pura e testável (rota, corrente, economia, ondas, árvore de upgrades, projétil, status de inimigos, auras, progresso).
-- `src/game/objects`: representações Phaser substituíveis pelos sprites finais.
-- `src/game/scenes`: carregamento, menu de fases, gameplay e HUD.
-- `src/game/systems`: áudio provisório, overlay de debug, fundo procedural e persistência de progresso.
+- `src/game/core`: regras puras e testáveis (rota, corrente, economia, ondas, árvore de upgrades, projétil, status de inimigos, auras).
+- `src/game/core/match`: o motor único da partida (`Match`): estado, `tick()` de passo fixo, comandos (`placeGuardian`, `upgradeGuardian`, `sellGuardian`, `startNextWave`), eventos de domínio, `MatchStats`, `MatchClock` (pause e velocidade). Cena e simulação de balanceamento rodam o mesmo motor.
+- `src/game/core/save`: progressão permanente versionada (`PlayerProgress`, `SaveManager`, migrações); nunca se mistura com o estado da partida.
+- `src/game/objects`: views Phaser (`EnemyView`, `GuardianView`, `ProjectileView`, áreas) que só desenham o que o motor diz.
+- `src/game/scenes`: carregamento, menu de fases, apresentação da partida (`GameScene`) e HUD.
+- `src/game/systems`: `MatchEffects` (evento → efeito/som/mensagem), áudio provisório, overlay de debug, fundo procedural e `ProgressStore`.
 
 ## Como estender
 
-- Novo Guardião: entrada em `GUARDIAN_BALANCE`, em `GUARDIANS`, no tipo `GuardianId`, em `GUARDIAN_ORDER` e em `GUARDIAN_ART` (`assets/guardianArt.ts`, com `assetFolder`/`abilityFile` se as pastas seguirem outro nome); mecânicas novas entram como campos de `GuardianUpgrade` resolvidos em `GuardianStats.ts` e como funções em `core/GuardianBehaviors.ts`, para que cena e simulação compartilhem a lógica. Pastas de arte: `public/assets/guardians/<pasta>/<forma>/{idle,attack,ability,impact}.png`.
+- Novo Guardião: entrada em `GUARDIAN_BALANCE`, em `GUARDIANS`, no tipo `GuardianId`, em `GUARDIAN_ORDER` e em `GUARDIAN_ART` (`assets/guardianArt.ts`, com `assetFolder`/`abilityFile` se as pastas seguirem outro nome); mecânicas novas entram como campos de `GuardianUpgrade` resolvidos em `GuardianStats.ts` e como funções em `core/GuardianBehaviors.ts` ou nos sistemas de `core/match/systems`; o visual reage aos eventos em `systems/MatchEffects.ts`. Pastas de arte: `public/assets/guardians/<pasta>/<forma>/{idle,attack,ability,impact}.png`.
+- Regra nova de partida: sempre no motor (`core/match`), nunca na cena. Emita um evento em `MatchEvents.ts` se a apresentação precisar reagir.
 - Novo inimigo: entrada em `ENEMY_BALANCE`, em `ENEMIES`, no tipo `EnemyId` (e um desenho em `Enemy.drawBody`, opcional).
 - Nova fase: arquivo em `src/game/data/levels/` e inclusão em `LEVELS`; os testes em `tests/levels.test.ts` validam rota, plataformas, correntes e ondas automaticamente.
