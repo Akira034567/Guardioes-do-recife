@@ -57,7 +57,14 @@ interface Handler<A extends EnemyAbility> {
   scope: "enemy" | "world";
   onSpawn?<E extends AbilityEnemy>(ability: A, enemy: E, world: EnemyAbilityWorld<E>): void;
   onTick?<E extends AbilityEnemy>(ability: A, enemy: E, deltaMs: number, world: EnemyAbilityWorld<E>): void;
-  onWorldTick?<E extends AbilityEnemy>(ability: A, owners: readonly E[], deltaMs: number, shared: Map<string, unknown>, world: EnemyAbilityWorld<E>): void;
+  /** `ability` é `undefined` quando nenhum dono está vivo (o handler ainda roda para desfazer o estado). */
+  onWorldTick?<E extends AbilityEnemy>(
+    ability: A | undefined,
+    owners: readonly E[],
+    deltaMs: number,
+    shared: Map<string, unknown>,
+    world: EnemyAbilityWorld<E>,
+  ): void;
   onDamaged?<E extends AbilityEnemy>(ability: A, enemy: E, amount: number, world: EnemyAbilityWorld<E>): void;
   onDeath?<E extends AbilityEnemy>(ability: A, enemy: E, shared: Map<string, unknown>, world: EnemyAbilityWorld<E>): void;
 }
@@ -93,7 +100,7 @@ const reverseCurrents: HandlerFor<"reverseCurrents"> = {
     const current = (shared.get(REVERSE_SOURCE) as ReverseState | undefined) ?? { cycleMs: 0, reverseRemainingMs: 0, reversed: false };
     shared.set(REVERSE_SOURCE, current);
     const alive = owners.filter(isAlive);
-    if (alive.length === 0) {
+    if (!ability || alive.length === 0) {
       current.cycleMs = 0;
       current.reverseRemainingMs = 0;
       if (current.reversed) {
@@ -291,7 +298,7 @@ export class EnemyAbilitySystem<E extends AbilityEnemy> {
       if (handler.scope !== "world" || !handler.onWorldTick) continue;
       const entry = owners.get(type);
       // Sem donos vivos o handler ainda roda (para desfazer estado compartilhado), com lista vazia.
-      handler.onWorldTick(entry?.ability ?? this.lastAbility(type), entry?.enemies ?? [], deltaMs, this.shared, world);
+      handler.onWorldTick(entry?.ability, entry?.enemies ?? [], deltaMs, this.shared, world);
     }
   }
 
@@ -319,8 +326,4 @@ export class EnemyAbilitySystem<E extends AbilityEnemy> {
     return this.shared.get(key) as T | undefined;
   }
 
-  private lastAbility(type: EnemyAbility["type"]): EnemyAbility {
-    const remembered = this.shared.get(`ability:${type}`) as EnemyAbility | undefined;
-    return remembered ?? ({ type } as EnemyAbility);
-  }
 }

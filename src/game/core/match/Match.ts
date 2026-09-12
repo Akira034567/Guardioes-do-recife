@@ -445,8 +445,7 @@ export class Match {
         this.spawnEnemy(event.enemyId, { pathId: event.pathId, pathDistance: 0 }, event.eliteId);
       } else if (event.type === "waveStarted") {
         // Chamar a onda antes da hora rende pérolas por segundo poupado (taxa 0 = desligado).
-        const bonus = this.earn(Math.floor((event.earlyStartMs / 1000) * ECONOMY.earlyStartBonusPerSecond), "EarlyWaveBonus", DEFAULT_PLAYER_ID);
-        void bonus;
+        this.earn(Math.floor((event.earlyStartMs / 1000) * ECONOMY.earlyStartBonusPerSecond), "EarlyWaveBonus", DEFAULT_PLAYER_ID);
         this.emit({
           type: "waveStarted",
           now: this.nowMs,

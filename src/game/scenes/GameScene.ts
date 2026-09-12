@@ -281,9 +281,6 @@ export class GameScene extends Phaser.Scene {
     }
     // Efeitos, sons e mensagens depois das views existirem (impactos precisam da view do projétil).
     this.effects.handle(event);
-    if (event.type === "projectileHit" && !event.splash) {
-      // O evento chega antes do `projectileExpired`; nada mais a fazer aqui.
-    }
   }
 
   private syncViews(deltaMs: number): void {
