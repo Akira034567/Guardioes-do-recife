@@ -1,12 +1,13 @@
 import { ECONOMY, PLACEMENT } from "../../data/balance";
 import { ENEMIES, scaleEnemy } from "../../data/enemies";
 import { GUARDIANS } from "../../data/guardians";
-import type { GuardianDefinition, LevelDefinition, PlayerId, TeamId } from "../../types";
+import type { EnemyId, GuardianDefinition, LevelDefinition, PlayerId, TeamId } from "../../types";
 import { resolveAura, type AuraSource } from "../Auras";
 import { BlockingSystem } from "../Blocking";
 import { controlTier } from "../CrowdControl";
 import { CurrentSystem, zoneFromFlowField } from "../CurrentSystem";
 import { Economy, type PearlSink, type PearlSource } from "../Economy";
+import { EnemyAbilitySystem, type EnemyAbilityEvent, type EnemyAbilityWorld } from "../EnemyAbilities";
 import type { FlowField } from "../FlowField";
 import {
   flowFieldsFor,
@@ -30,7 +31,6 @@ import { MatchGuardian, type GuardianPlacement } from "./MatchGuardian";
 import type { MatchSnapshot, MatchStatus } from "./MatchSnapshot";
 import { MatchStats } from "./MatchStats";
 import { AreaEffects } from "./systems/AreaEffects";
-import { BossCurrent } from "./systems/BossCurrent";
 import { resolveAttack } from "./systems/CombatSystem";
 import { ProjectileSystem } from "./systems/ProjectileSystem";
 
@@ -79,7 +79,7 @@ export class Match {
   private readonly projectileSystem = new ProjectileSystem();
   private readonly areas = new AreaEffects();
   private readonly blocking = new BlockingSystem();
-  private readonly bossCurrent = new BossCurrent();
+  private readonly abilitySystem = new EnemyAbilitySystem<MatchEnemy>();
   private readonly routeUnits: RouteUnit[] = [];
   private readonly platformOccupants = new Map<string, string>();
   private readonly players: PlayerConfig[];
@@ -382,7 +382,8 @@ export class Match {
     this.nowMs += deltaMs;
     this.stats.timeMs = this.nowMs;
     this.controller?.act(this);
-    this.updateBossCurrent(deltaMs);
+    // Habilidades de escopo de mundo (inversão de corrente do chefe) rodam antes das ondas, como antes.
+    this.abilitySystem.worldTick(deltaMs, this.abilityWorld());
 
     const alive = this.enemyList.filter((enemy) => !enemy.dead && !enemy.reachedGoal).length;
     for (const event of this.scheduler.tick(deltaMs, alive)) {
@@ -414,6 +415,7 @@ export class Match {
       onBossHeld: (blocker, enemy) => this.emit({ type: "enemyHeld", now: this.nowMs, blockerId: blocker.id, enemyId: enemy.id, x: enemy.x, y: enemy.y }),
       onReleased: (blocker, enemy) => this.emit({ type: "enemyReleased", now: this.nowMs, blockerId: blocker.id, enemyId: enemy.id, x: enemy.x, y: enemy.y }),
     });
+    this.abilitySystem.tick(deltaMs, this.abilityWorld());
     for (const enemy of this.enemyList) {
       if (enemy.tick(this.nowMs, deltaMs, this.currents)) this.leak(enemy);
     }
@@ -449,16 +451,37 @@ export class Match {
     this.listener?.(event);
   }
 
-  private spawnEnemy(enemyId: keyof typeof ENEMIES): void {
+  private spawnEnemy(enemyId: EnemyId, at: { pathId: string; pathDistance: number } = { pathId: MAIN_PATH_ID, pathDistance: 0 }): void {
     const definition = scaleEnemy(ENEMIES[enemyId], this.level.enemyScaling, this.level.enemyOverrides?.[enemyId]);
-    const enemy = new MatchEnemy(`E${++this.enemySerial}`, definition, this.route, MAIN_PATH_ID);
+    const enemy = new MatchEnemy(`E${++this.enemySerial}`, definition, this.route, at.pathId);
+    if (at.pathDistance > 0) enemy.setPathDistance(at.pathDistance);
     this.enemyList.push(enemy);
-    this.emit({ type: "enemySpawned", now: this.nowMs, id: enemy.id, enemyId, x: enemy.x, y: enemy.y, pathId: MAIN_PATH_ID });
+    this.abilitySystem.register(enemy, this.abilityWorld());
+    this.emit({ type: "enemySpawned", now: this.nowMs, id: enemy.id, enemyId, x: enemy.x, y: enemy.y, pathId: at.pathId });
     if (definition.isBoss) this.emit({ type: "bossStarted", now: this.nowMs, id: enemy.id, enemyId, name: definition.name });
   }
 
+  /** Contexto que as habilidades de inimigo enxergam (item 6): sem Phaser, sem acesso à cena. */
+  private abilityWorld(): EnemyAbilityWorld<MatchEnemy> {
+    return {
+      now: this.nowMs,
+      enemies: this.enemyList,
+      guardians: this.guardianList,
+      currents: this.currents,
+      spawnEnemy: (enemyId, at) => this.spawnEnemy(enemyId, at),
+      heal: (enemy, amount) => enemy.heal(amount),
+      emit: (event) => this.onAbilityEvent(event),
+    };
+  }
+
+  private onAbilityEvent(event: EnemyAbilityEvent): void {
+    if (event.type !== "currentsReversed") return;
+    const boss = this.enemy(event.enemyId);
+    this.emit({ type: "currentsReversed", now: this.nowMs, reversed: event.reversed, bossName: boss?.definition.name ?? null });
+  }
+
   private leak(enemy: MatchEnemy): void {
-    const damage = enemy.definition.reefDamage;
+    const damage = Math.round(enemy.definition.reefDamage * enemy.mods.reefDamage);
     this.reefValue = Math.max(0, this.reefValue - damage);
     this.stats.recordLeak(enemy.definition.id, damage, controlTier(enemy.definition));
     this.emit({
@@ -523,6 +546,7 @@ export class Match {
     if (outcome.applied <= 0 && !outcome.killed) return;
     const cause = options.cause ?? (options.continuous ? "contact" : "melee");
     const source = options.sourceId ? this.guardian(options.sourceId) : undefined;
+    this.abilitySystem.damaged(enemy, outcome.applied, this.abilityWorld());
     this.stats.recordDamage(outcome.applied, cause, options.sourceId ?? null, source?.guardianId ?? null);
     if (this.listener) {
       this.emit({
@@ -539,6 +563,7 @@ export class Match {
       });
     }
     if (!outcome.killed) return;
+    this.abilitySystem.died(enemy, this.abilityWorld());
     const reward = this.earn(enemy.definition.reward, "EnemyReward", DEFAULT_PLAYER_ID);
     this.stats.recordKill(enemy.definition.id, Boolean(enemy.definition.isBoss), source?.guardianId ?? null);
     this.emit({
@@ -552,8 +577,6 @@ export class Match {
       killerId: options.sourceId ?? null,
     });
     if (enemy.definition.isBoss) {
-      this.bossCurrent.onBossKilled();
-      this.currents.setReversed("boss", false);
       this.emit({ type: "bossDefeated", now: this.nowMs, id: enemy.id, enemyId: enemy.definition.id, name: enemy.definition.name, x: enemy.x, y: enemy.y });
     }
   }
@@ -579,12 +602,6 @@ export class Match {
       this.currents.setOwnerZones(field.ownerId, [zoneFromFlowField(field)]);
     }
     for (const guardian of this.guardianList) if (!owners.has(guardian.id)) this.currents.setOwnerZones(guardian.id, []);
-  }
-
-  private updateBossCurrent(deltaMs: number): void {
-    const change = this.bossCurrent.update(deltaMs, this.enemyList);
-    this.currents.setReversed("boss", this.bossCurrent.reversed);
-    if (change) this.emit({ type: "currentsReversed", now: this.nowMs, reversed: change.reversed, bossName: change.boss?.definition.name ?? null });
   }
 
   private earn(amount: number, source: PearlSource, playerId: PlayerId): number {

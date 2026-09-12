@@ -1,5 +1,5 @@
-import type { EnemyDefinition, EnemyId, EnemyOverride, EnemyScaling } from "../types";
-import { ENEMY_BALANCE } from "./balance";
+import type { EnemyDefinition, EnemyId, EnemyOverride, EnemyRole, EnemyScaling, EnemyShapeKey, EnemyTag, ResolvedEnemyDefinition } from "../types";
+import { BOSS_CURRENT, ENEMY_BALANCE } from "./balance";
 
 /**
  * Catálogo de inimigos. Números em `balance.ts`; aqui ficam identidade visual e
@@ -80,14 +80,54 @@ export const ENEMIES: Record<EnemyId, EnemyDefinition> = {
     isBoss: true,
     unblockable: true,
     slowResistance: 0.35,
+    description: "O chefe das primeiras marés: inverte a corrente do recife em ciclos e não pode ser bloqueado.",
+    abilities: [{ type: "reverseCurrents", cycleMs: BOSS_CURRENT.cycleMs, reverseMs: BOSS_CURRENT.reverseMs }],
   },
 };
+
+/** Categorias padrão a partir do papel antigo. */
+export const TAGS_FOR_ROLE: Record<EnemyRole, EnemyTag[]> = {
+  swarm: ["SWARM"],
+  common: ["NORMAL"],
+  fast: ["FAST"],
+  armored: ["ARMORED", "TANK"],
+  elite: ["ELITE"],
+  boss: ["BOSS"],
+};
+
+/** Forma vetorial de cada inimigo atual (o antigo `switch` por id no desenho). */
+export const SHAPE_FOR_LEGACY_ID: Record<EnemyId, EnemyShapeKey> = {
+  minnow: "minnow",
+  swimmer: "fish",
+  dartfish: "dart",
+  needlefish: "needle",
+  shellback: "shell",
+  moray: "moray",
+  tidebreaker: "boss",
+};
+
+export const THREAT_FOR_ROLE: Record<EnemyRole, number> = { swarm: 0, common: 0, fast: 0, armored: 1, elite: 2, boss: 3 };
+
+/** Preenche os campos v2 ausentes com padrões derivados do papel; campos presentes vencem. */
+export function resolveEnemy(definition: EnemyDefinition): ResolvedEnemyDefinition {
+  const baseId = definition.baseId ?? definition.id;
+  return {
+    ...definition,
+    description: definition.description ?? "",
+    art: definition.art ?? { kind: "procedural", shape: SHAPE_FOR_LEGACY_ID[baseId] ?? (definition.isBoss ? "boss" : "fish") },
+    tags: definition.tags ?? [...TAGS_FOR_ROLE[definition.role]],
+    resistances: { slow: definition.slowResistance ?? 0, ...(definition.resistances ?? {}) },
+    immunities: definition.immunities ?? [],
+    threatLevel: definition.threatLevel ?? THREAT_FOR_ROLE[definition.role],
+    abilities: definition.abilities ?? [],
+  };
+}
 
 export const ENEMY_ORDER: EnemyId[] = ["minnow", "swimmer", "dartfish", "needlefish", "shellback", "moray", "tidebreaker"];
 
 /** Aplica a sobrescrita da fase (se houver) e depois o multiplicador da fase. */
-export function scaleEnemy(definition: EnemyDefinition, scaling: EnemyScaling, override: EnemyOverride = {}): EnemyDefinition {
-  const base = { ...definition, ...override };
+export function scaleEnemy(definition: EnemyDefinition, scaling: EnemyScaling, override: EnemyOverride = {}): ResolvedEnemyDefinition {
+  const base = { ...resolveEnemy(definition), ...override };
   return {
     ...base,
     maxHealth: Math.round(base.maxHealth * scaling.health),

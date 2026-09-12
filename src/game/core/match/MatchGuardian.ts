@@ -4,6 +4,7 @@ import { targetPolicyFor } from "../GuardianBehaviors";
 import { GuardianRuntime } from "../GuardianRuntime";
 import { GuardianStateMachine, type GuardianFsmSnapshot } from "../GuardianStateMachine";
 import { resolveGuardianStats, scaledTimings, type GuardianStats } from "../GuardianStats";
+import type { StatusEffectInput } from "../StatusEffects";
 import { selectTarget } from "../Targeting";
 import type { TrapPhase } from "../TrapCore";
 import {
@@ -148,6 +149,12 @@ export class MatchGuardian {
     if (Math.abs(this.runtime.attackSpeedBonus - bonus) < 1e-6) return;
     this.runtime.attackSpeedBonus = bonus;
     this.invalidate();
+  }
+
+  /** Recebe um status (buff de aliado, interferência de inimigo). */
+  applyStatus(input: StatusEffectInput, now: number): void {
+    this.runtime.status.apply(input, now);
+    this.syncStatus(now);
   }
 
   /** Expira status e reflete buffs/debuffs ativos nos stats (só invalida quando algo mudou). */

@@ -1,3 +1,5 @@
+import type { StatusType } from "./core/StatusEffects";
+
 export interface Vec2 {
   x: number;
   y: number;
@@ -335,6 +337,64 @@ export interface GuardianDefinition {
   branches: [UpgradeBranch, UpgradeBranch];
 }
 
+/** Categorias de inimigo (item 5). Um inimigo pode ter várias; elites e chefes acumulam a própria. */
+export type EnemyTag = "NORMAL" | "FAST" | "TANK" | "SWARM" | "ARMORED" | "STEALTH" | "SUPPORT" | "ELITE" | "BOSS";
+/** Formas vetoriais disponíveis para inimigos sem sprite (o antigo `switch` por id em `Enemy.drawBody`). */
+export type EnemyShapeKey = "fish" | "minnow" | "dart" | "needle" | "shell" | "moray" | "boss";
+
+export type EnemyArtRef =
+  | { kind: "procedural"; shape: EnemyShapeKey }
+  /** Pasta em `public/assets/enemies/<folder>/frame-N.png`; cai para a forma vetorial se a textura faltar. */
+  | { kind: "sprite"; folder: string; frames: number; frameMs?: number; scale?: number; shapeFallback?: EnemyShapeKey };
+
+/** Multiplicadores de atributos (elites, fases de chefe). `armorBonus` é aditivo. */
+export interface StatMultipliers {
+  maxHealth?: number;
+  speed?: number;
+  reward?: number;
+  reefDamage?: number;
+  scale?: number;
+  armorBonus?: number;
+}
+
+/** Resistências por tipo de status: 0..1 = fração ignorada. `slow` substitui o antigo `slowResistance`. */
+export type StatusResistanceMap = Partial<Record<StatusType, number>>;
+
+/**
+ * Habilidades de inimigo como componentes reutilizáveis (item 6). O motor despacha por `type`
+ * (`core/EnemyAbilities.ts`); nenhum código olha o id do inimigo.
+ */
+export type EnemyAbility =
+  | { type: "regen"; hpPerSecond: number; delayAfterHitMs?: number; maxFraction?: number }
+  | { type: "enrageBelowHp"; threshold: number; speedMultiplier?: number; armorBonus?: number; reefDamageBonus?: number }
+  | { type: "shieldAllies"; radius: number; damageReduction: number; onlyTags?: EnemyTag[] }
+  | { type: "disruptGuardians"; radius: number; intervalMs: number; attackSpeedMultiplier: number; durationMs: number }
+  | { type: "stealth"; untilDamaged?: boolean }
+  | { type: "splitOnDeath"; enemyId: EnemyId; count: number; spreadPx?: number }
+  | { type: "phaseChangeAtHp"; threshold: number; statMultipliers?: StatMultipliers; addAbilities?: EnemyAbility[]; announcement?: string }
+  | { type: "speedBurst"; intervalMs: number; durationMs: number; multiplier: number }
+  /** Quebra-Marés: inverte as correntes reversíveis do mapa em ciclo (um ciclo compartilhado por todos os donos vivos). */
+  | { type: "reverseCurrents"; cycleMs: number; reverseMs: number };
+
+export interface BossPhase {
+  id: string;
+  name?: string;
+  /** Entra quando `health / maxHealth <= hpThreshold` (a primeira fase usa 1). */
+  hpThreshold: number;
+  announcement?: string;
+  statMultipliers?: StatMultipliers;
+  addAbilities?: EnemyAbility[];
+  removeAbilityTypes?: EnemyAbility["type"][];
+}
+
+/** Encontro de chefe (item 8): fases por vida, barra própria e recompensa extra. */
+export interface BossDefinition {
+  title?: string;
+  phases: BossPhase[];
+  healthBar?: { segments?: number; color?: number };
+  rewards?: { pearls?: number };
+}
+
 export interface EnemyDefinition {
   id: EnemyId;
   name: string;
@@ -351,8 +411,32 @@ export interface EnemyDefinition {
   isBoss?: boolean;
   /** Ignora bloqueios de rota (chefes). */
   unblockable?: boolean;
-  /** 0..1: fração da lentidão ignorada (0.5 = sofre metade do slow). */
+  /** 0..1: fração da lentidão ignorada (0.5 = sofre metade do slow). Atalho para `resistances.slow`. */
   slowResistance?: number;
+  // ---- v2 (todos opcionais; ausente = comportamento atual; ver `resolveEnemy`) ----
+  description?: string;
+  art?: EnemyArtRef;
+  tags?: EnemyTag[];
+  resistances?: StatusResistanceMap;
+  immunities?: StatusType[];
+  /** 0 comum · 1 blindado · 2 elite · 3 chefe (preview de onda e bestiário). */
+  threatLevel?: number;
+  abilities?: EnemyAbility[];
+  boss?: BossDefinition;
+  /** Preenchidos por `applyElite`; nunca escritos à mão. */
+  eliteId?: string;
+  baseId?: EnemyId;
+}
+
+/** `EnemyDefinition` com todos os campos v2 preenchidos (`resolveEnemy`). */
+export interface ResolvedEnemyDefinition extends EnemyDefinition {
+  description: string;
+  art: EnemyArtRef;
+  tags: EnemyTag[];
+  resistances: StatusResistanceMap;
+  immunities: StatusType[];
+  threatLevel: number;
+  abilities: EnemyAbility[];
 }
 
 export interface WaveGroupDefinition {

@@ -1,6 +1,7 @@
-import type { EnemyDefinition, Vec2 } from "../../types";
+import type { EnemyAbility, ResolvedEnemyDefinition, Vec2 } from "../../types";
 import { mitigatedDamage } from "../Combat";
 import type { CurrentSystem } from "../CurrentSystem";
+import { NEUTRAL_MODS, type AbilityEnemy, type EnemyMods } from "../EnemyAbilities";
 import { EnemyStatus } from "../EnemyStatus";
 import type { DamageOptions } from "../GuardianBehaviors";
 import type { RoutePath } from "../RoutePath";
@@ -12,11 +13,11 @@ export interface DamageOutcome {
 }
 
 /**
- * Inimigo da partida: só estado e regras (posição na rota, vida, status). Nada de Phaser; a
- * apresentação lê `x/y/heading/health` e desenha. Satisfaz `BehaviorEnemy`, `ControlTarget`,
- * `BlockableEnemy` e `TargetCandidate`.
+ * Inimigo da partida: só estado e regras (posição na rota, vida, status, habilidades). Nada de Phaser;
+ * a apresentação lê `x/y/heading/health` e desenha. Satisfaz `BehaviorEnemy`, `ControlTarget`,
+ * `BlockableEnemy`, `TargetCandidate` e `AbilityEnemy`.
  */
-export class MatchEnemy {
+export class MatchEnemy implements AbilityEnemy {
   x: number;
   y: number;
   health: number;
@@ -28,11 +29,16 @@ export class MatchEnemy {
   reachedGoal = false;
   blockedById: string | null = null;
   readonly status: EnemyStatus;
+  /** Modificadores dinâmicos de habilidades e fases de chefe (velocidade, armadura, dano recebido). */
+  readonly mods: EnemyMods = { ...NEUTRAL_MODS };
+  readonly abilityState = new Map<string, unknown>();
+  readonly abilities: EnemyAbility[];
+  hitOnce = false;
   private now = 0;
 
   constructor(
     readonly id: string,
-    readonly definition: EnemyDefinition,
+    readonly definition: ResolvedEnemyDefinition,
     readonly route: RoutePath,
     readonly pathId: string,
   ) {
@@ -41,7 +47,8 @@ export class MatchEnemy {
     this.y = start.y;
     this.health = definition.maxHealth;
     this.effectiveSpeed = definition.speed;
-    this.status = new EnemyStatus(definition.slowResistance ?? 0);
+    this.status = new EnemyStatus(definition.slowResistance ?? 0, definition.resistances, new Set(definition.immunities));
+    this.abilities = [...definition.abilities];
     const tangent = route.getTangentAtDistance(0);
     this.heading = Math.atan2(tangent.y, tangent.x);
   }
@@ -64,6 +71,11 @@ export class MatchEnemy {
     return !this.definition.unblockable;
   }
 
+  /** Camuflados só podem ser mirados depois de revelados (ou atingidos, conforme a habilidade). */
+  isTargetable(now: number): boolean {
+    return !this.mods.hidden || this.status.isRevealed(now);
+  }
+
   setBlocked(blockerId: string, stopDistance: number): void {
     this.blockedById = blockerId;
     this.setPathDistance(stopDistance);
@@ -82,6 +94,12 @@ export class MatchEnemy {
     this.y = point.y;
   }
 
+  /** Cura (regeneração); nunca passa da vida máxima. */
+  heal(amount: number): void {
+    if (this.dead || this.reachedGoal || amount <= 0) return;
+    this.health = Math.min(this.definition.maxHealth, this.health + amount);
+  }
+
   /** Avança um passo; devolve true no instante em que chega ao Recife. */
   tick(now: number, deltaMs: number, currents: CurrentSystem): boolean {
     if (this.dead || this.reachedGoal) return false;
@@ -94,7 +112,7 @@ export class MatchEnemy {
       return false;
     }
     const currentMultiplier = currents.enemySpeedMultiplier(this, tangent, this.status.resistance("slow"));
-    this.effectiveSpeed = this.definition.speed * this.status.speedMultiplier(now) * currentMultiplier;
+    this.effectiveSpeed = this.definition.speed * this.mods.speed * this.status.speedMultiplier(now) * currentMultiplier;
     this.pathDistance += this.effectiveSpeed * (deltaMs / 1000);
     const point = this.route.getPointAtDistance(this.pathDistance);
     this.x = point.x;
@@ -109,7 +127,8 @@ export class MatchEnemy {
   /** Dano de golpe: sofre armadura (salvo perfuração), vulnerabilidade e a marca da fonte. */
   takeDamage(rawDamage: number, options: DamageOptions = {}): DamageOutcome {
     if (this.dead || this.reachedGoal) return { applied: 0, killed: false };
-    const base = options.armorPiercing ? Math.max(1, rawDamage) : mitigatedDamage(rawDamage, this.definition.armor);
+    const armor = this.definition.armor + this.mods.armorBonus - this.status.armorBreak(this.now);
+    const base = options.armorPiercing ? Math.max(1, rawDamage) : mitigatedDamage(rawDamage, armor);
     return this.loseHealth(base * this.status.damageMultiplier(this.now) * this.status.markMultiplier(options.sourceId, this.now));
   }
 
@@ -125,7 +144,9 @@ export class MatchEnemy {
 
   private loseHealth(amount: number): DamageOutcome {
     const before = this.health;
-    this.health = Math.max(0, this.health - amount);
+    // Escudo de um inimigo de suporte reduz o dano; modificadores de fase podem aumentá-lo.
+    const shielded = amount * this.mods.damageTaken * (1 - this.status.shield(this.now));
+    this.health = Math.max(0, this.health - shielded);
     if (this.health <= 0) this.dead = true;
     return { applied: before - this.health, killed: this.dead };
   }
