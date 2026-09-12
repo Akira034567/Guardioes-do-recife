@@ -1,3 +1,4 @@
+import { ENCOUNTER_LEVELS } from "../encounters";
 import type { LevelDefinition } from "../../types";
 import { RECIFE_FIVE } from "./recifeFive";
 import { RECIFE_FOUR } from "./recifeFour";
@@ -14,7 +15,16 @@ export const LEVELS: readonly LevelDefinition[] = [RECIFE_ONE, RECIFE_TWO, RECIF
 
 export const LEVEL_IDS: readonly string[] = LEVELS.map((level) => level.id);
 
+/**
+ * Fase jogável por id: as seis da campanha e, depois delas, as fases de Encontro. `LEVELS`,
+ * `levelIndex` e `nextLevelId` continuam falando só da campanha — Encontro não entra na cadeia.
+ */
 export function getLevel(id: string | null | undefined): LevelDefinition | undefined {
+  return LEVELS.find((level) => level.id === id) ?? ENCOUNTER_LEVELS.find((level) => level.id === id);
+}
+
+/** Só a campanha, quando o chamador precisa garantir que não é um Encontro. */
+export function getCampaignLevel(id: string | null | undefined): LevelDefinition | undefined {
   return LEVELS.find((level) => level.id === id);
 }
 

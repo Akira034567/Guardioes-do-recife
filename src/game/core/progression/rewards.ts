@@ -12,6 +12,17 @@ export interface RewardBreakdown {
 }
 
 /**
+ * Encontro paga uma vez: é a caçada que vale, não a repetição. Repetir rende um agrado simbólico.
+ */
+export function encounterRewards(progress: { completedEncounters: readonly string[] }, result: { encounterId?: string; levelId: string; difficulty: string }): RewardBreakdown {
+  const encounterId = result.encounterId ?? result.levelId;
+  const first = !progress.completedEncounters.includes(encounterId);
+  const base = first ? REWARDS.firstCompletion : REWARDS.replayVictory;
+  const shells = Math.round(base * (DIFFICULTY_REWARD_MULTIPLIER[result.difficulty] ?? 1));
+  return { shells, lines: [{ label: first ? "Guardião encontrado" : "Encontro revisitado", shells }] };
+}
+
+/**
  * Conchas de uma vitória (item 2): primeira conclusão, cada estrela nova, a primeira vez com 3/3 e um
  * agrado por repetir a fase. Dificuldades maiores multiplicam o total.
  */

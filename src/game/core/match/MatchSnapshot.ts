@@ -2,6 +2,7 @@ import type { WaveState } from "../../types";
 import type { WavePreview } from "../WavePreview";
 import type { TrapPhase } from "../TrapCore";
 import type { MatchStatsSnapshot } from "./MatchStats";
+import type { InteractableState } from "../Interactables";
 
 export type MatchStatus = "running" | "victory" | "defeat";
 
@@ -41,5 +42,22 @@ export interface MatchSnapshot {
   nextWave: WavePreview | null;
   /** Fase da primeira armadilha em campo (hook de teste e2e). */
   trapPhase: TrapPhase | null;
+  /** Elementos interativos do mapa e o progresso de cada um (item 28). */
+  interactables: InteractableSnapshot[];
   stats: MatchStatsSnapshot;
+}
+
+/** Um interagível do mapa como a apresentação precisa vê-lo. */
+export interface InteractableSnapshot {
+  id: string;
+  label: string;
+  x: number;
+  y: number;
+  radius: number;
+  state: InteractableState;
+  /** 0..1 para a argola de progresso. */
+  progress: number;
+  /** Responde a toque do jogador (rede, pedra); os demais dependem do que acontece em campo. */
+  tappable: boolean;
+  hint: string;
 }

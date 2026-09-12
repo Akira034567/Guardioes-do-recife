@@ -10,6 +10,8 @@ export type MatchCommand =
   | { type: "upgradeGuardian"; instanceId: string; branchId: BranchId; playerId?: PlayerId }
   | { type: "sellGuardian"; instanceId: string; playerId?: PlayerId }
   | { type: "startNextWave"; playerId?: PlayerId }
+  /** Toque em um elemento do mapa (rede, gruta, pedra que pisca) — item 28. */
+  | { type: "interact"; interactableId: string; playerId?: PlayerId }
   // Ferramentas de desenvolvimento (item 40). Toda partida que usar uma delas fica marcada
   // (`stats.cheated`) e não deve render estrelas nem moeda global.
   | { type: "debug.addPearls"; amount: number; playerId?: PlayerId }
@@ -30,10 +32,15 @@ export type RejectionReason =
   | "branchLocked"
   | "noOption"
   | "notInCountdown"
+  | "interactableLocked"
+  | "interactableBusy"
+  | "interactableDone"
   | "unknownCommand";
 
 export type CommandResult =
-  | { ok: true; instanceId?: string; refund?: number; earlyStartMs?: number; cost?: number }
+  | { ok: true; instanceId?: string; refund?: number; earlyStartMs?: number; cost?: number; progress?: number; completed?: boolean }
   | { ok: false; reason: RejectionReason; message: string };
 
 export const DEFAULT_PLAYER_ID: PlayerId = "p1";
+/** Dono dos Guardiões libertados num Encontro: ajudam, mas não pertencem ao jogador. */
+export const ALLY_PLAYER_ID: PlayerId = "npc";

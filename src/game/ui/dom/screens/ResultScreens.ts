@@ -74,10 +74,10 @@ export function victoryScreen(result: MatchResult, outcome: MatchOutcome, levelN
         h(
           "div",
           { class: "gr-panel" },
-          h("h1", { class: "gr-title gr-title--victory", text: "FASE CONCLUÍDA" }),
-          h("p", { class: "gr-subtitle", text: `${levelName} · ${outcome.stars}/3 estrelas` }),
-          stars(outcome.stars),
-          objectiveList(outcome),
+          h("h1", { class: "gr-title gr-title--victory", text: outcome.encounterId ? "GUARDIÃO ENCONTRADO" : "FASE CONCLUÍDA" }),
+          h("p", { class: "gr-subtitle", text: outcome.encounterId ? levelName : `${levelName} · ${outcome.stars}/3 estrelas` }),
+          // Encontro não vale estrela: o prêmio é quem acabou de entrar para o Recife.
+          ...(outcome.encounterId ? [] : [stars(outcome.stars), objectiveList(outcome)]),
           statGrid([
             ["Vidas restantes", `${result.livesRemaining}/${result.maxLives}`],
             ["Inimigos derrotados", String(result.stats.enemiesKilled)],

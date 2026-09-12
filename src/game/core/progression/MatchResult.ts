@@ -7,6 +7,9 @@ import type { MatchStatsSnapshot } from "../match/MatchStats";
  */
 export interface MatchResult {
   levelId: string;
+  /** Fase da campanha (padrão) ou Encontro: o Encontro não vale estrela e conclui um `encounterId`. */
+  kind?: "campaign" | "encounter";
+  encounterId?: string;
   difficulty: string;
   victory: boolean;
   livesRemaining: number;

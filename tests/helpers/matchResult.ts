@@ -30,6 +30,8 @@ const BASE_STATS: MatchStatsSnapshot = {
   pearlsEarned: 300,
   pearlsSpent: 250,
   pearlsBySource: {},
+  interactablesCompleted: [],
+  secretsFound: [],
   cheated: false,
 };
 

@@ -8,6 +8,7 @@ import { BlockingSystem } from "../Blocking";
 import { BossEncounter, type BossEncounterEvent } from "../BossEncounter";
 import { controlTier } from "../CrowdControl";
 import { CurrentSystem, zoneFromFlowField } from "../CurrentSystem";
+import { InteractableSystem, type InteractableRuntime } from "../Interactables";
 import { Economy, type PearlSink, type PearlSource } from "../Economy";
 import { EnemyAbilitySystem, type EnemyAbilityEvent, type EnemyAbilityWorld } from "../EnemyAbilities";
 import type { FlowField } from "../FlowField";
@@ -29,7 +30,7 @@ import { RoutePath } from "../RoutePath";
 import { MAIN_PATH_ID, resolveLevelPaths } from "../WaveDefinitions";
 import { wavePreview, type WavePreview } from "../WavePreview";
 import { WaveScheduler } from "../WaveScheduler";
-import { DEFAULT_PLAYER_ID, type CommandResult, type MatchCommand } from "./MatchCommands";
+import { ALLY_PLAYER_ID, DEFAULT_PLAYER_ID, type CommandResult, type MatchCommand } from "./MatchCommands";
 import { MatchEnemy } from "./MatchEnemy";
 import type { MatchEvent, MatchListener } from "./MatchEvents";
 import { MatchGuardian, type GuardianPlacement } from "./MatchGuardian";
@@ -88,6 +89,8 @@ export class Match {
   private readonly bossEncounter = new BossEncounter<MatchEnemy>();
   private readonly routeUnits: RouteUnit[] = [];
   private readonly platformOccupants = new Map<string, string>();
+  /** Elementos do mapa com que o jogador interage (item 28); vazio nas fases sem nenhum. */
+  readonly interactables: InteractableSystem;
   private readonly players: PlayerConfig[];
   private readonly controller: MatchController | null;
   readonly currents: CurrentSystem;
@@ -107,6 +110,7 @@ export class Match {
     this.dtMs = options.dtMs ?? 1000 / 60;
     this.rng = createRng(options.seed ?? level.id);
     this.players = options.players ?? [{ id: DEFAULT_PLAYER_ID, teamId: "t1" }];
+    this.interactables = new InteractableSystem(level.interactables ?? []);
     this.controller = options.controller ?? null;
     const paths = resolveLevelPaths(level);
     this.routes = new Map(paths.map((path) => [path.id, new RoutePath(path.waypoints)]));
@@ -260,8 +264,109 @@ export class Match {
           : null,
       nextWave: this.nextWavePreview(),
       trapPhase: trap?.trapPhase ?? null,
+      interactables: this.interactables.states().map((runtime) => ({
+        id: runtime.definition.id,
+        label: runtime.definition.label,
+        x: runtime.definition.x,
+        y: runtime.definition.y,
+        radius: InteractableSystem.radiusOf(runtime.definition),
+        state: runtime.state,
+        progress: runtime.progress,
+        tappable: runtime.definition.goal.type === "taps" || runtime.definition.goal.type === "reveal",
+        hint: this.interactableHint(runtime),
+      })),
       stats: this.stats.snapshot(this.economy.snapshot()),
     };
+  }
+
+
+  // ------------------------------------------------------- interagíveis do mapa
+
+  /** Toque do jogador em um elemento do mapa (item 28). */
+  private interact(command: Extract<MatchCommand, { type: "interact" }>): CommandResult {
+    const result = this.interactables.interact(command.interactableId, this.nowMs);
+    if (!result.ok) {
+      const messages: Record<typeof result.reason, string> = {
+        notFound: "Nada para fazer aqui.",
+        locked: "Ainda não dá para mexer nisso.",
+        cooldown: "Espere um instante antes de tentar de novo.",
+        done: "Já está resolvido.",
+        notTappable: "Isto não se resolve com toques.",
+      };
+      const reason = result.reason === "cooldown" ? "interactableBusy" : result.reason === "done" ? "interactableDone" : result.reason === "locked" ? "interactableLocked" : "notFound";
+      return { ok: false, reason, message: messages[result.reason] };
+    }
+    const runtime = this.interactables.get(command.interactableId);
+    if (runtime && !result.completed) {
+      this.emit({
+        type: "interactableProgress",
+        now: this.nowMs,
+        id: runtime.definition.id,
+        progress: result.progress,
+        label: runtime.definition.label,
+        x: runtime.definition.x,
+        y: runtime.definition.y,
+      });
+    }
+    if (runtime && result.completed) this.resolveInteractable(runtime);
+    return { ok: true, progress: result.progress, completed: result.completed };
+  }
+
+  /** Paga o que o interagível prometia: aliado, corrente temporária, segredo. */
+  private resolveInteractable(runtime: InteractableRuntime): void {
+    const definition = runtime.definition;
+    this.emit({
+      type: "interactableCompleted",
+      now: this.nowMs,
+      id: definition.id,
+      label: definition.label,
+      x: definition.x,
+      y: definition.y,
+      secretId: definition.secretId ?? null,
+    });
+    if (definition.secretId) this.stats.recordSecret(definition.secretId);
+    this.stats.recordInteractable(definition.id);
+    if (definition.current) {
+      // Corrente temporária: a água muda de ideia por alguns segundos (a Tartaruga saindo da rede).
+      this.currents.addTemporary({
+        id: `interact:${definition.id}`,
+        ownerId: null,
+        origin: "interactable",
+        shape: { kind: "circle", x: definition.current.x, y: definition.current.y, radius: definition.current.radius },
+        direction: null,
+        strength: definition.current.speedFactor,
+        projectileDrift: 0,
+        affects: ["enemy"],
+        reversible: false,
+        expiresAt: this.nowMs + definition.current.durationMs,
+        respectsSlowResistance: true,
+        visual: { kind: "ring", color: 0x8df3ff },
+      });
+    }
+    if (definition.ally) this.spawnAlly(definition, definition.ally);
+  }
+
+  /**
+   * Guardião libertado entra de graça e sem dono: o jogador sente a mecânica antes de tê-lo na
+   * coleção. Não pode ser vendido nem evoluído (é emprestado, não comprado).
+   */
+  private spawnAlly(definition: InteractableRuntime["definition"], ally: NonNullable<InteractableRuntime["definition"]["ally"]>): void {
+    const guardianDefinition: GuardianDefinition = GUARDIANS[ally.guardianId];
+    const routeDistance = guardianDefinition.placementMode === "route" || guardianDefinition.placementMode === "margin" ? this.route.getClosestPoint(ally).routeDistance : null;
+    const guardian = new MatchGuardian(`A${++this.guardianSerial}`, guardianDefinition, { x: ally.x, y: ally.y, routeDistance, platformId: null }, ALLY_PLAYER_ID, this.nowMs);
+    for (let level = 0; level < (ally.upgradeLevel ?? 0); level += 1) guardian.applyUpgrade(ally.branchId ?? "a", this.nowMs);
+    this.guardianList.push(guardian);
+    if (routeDistance !== null) this.routeUnits.push({ x: guardian.x, y: guardian.y, guardianId: guardian.id });
+    this.emit({ type: "allyJoined", now: this.nowMs, id: guardian.id, guardianId: guardianDefinition.id, x: guardian.x, y: guardian.y, label: definition.label });
+  }
+
+  /** Texto curto que a cena mostra ao lado do elemento. */
+  private interactableHint(runtime: InteractableRuntime): string {
+    const messages = runtime.definition.messages ?? {};
+    if (runtime.state === "done") return messages.done ?? "Resolvido.";
+    if (runtime.state === "locked") return messages.idle ?? "Ainda não.";
+    if (runtime.progress > 0) return messages.progress ?? runtime.definition.label;
+    return messages.idle ?? runtime.definition.label;
   }
 
   // ---------------------------------------------------------------- comandos
@@ -277,6 +382,8 @@ export class Match {
         return this.sellGuardian(command);
       case "startNextWave":
         return this.startNextWave();
+      case "interact":
+        return this.interact(command);
       case "debug.addPearls":
         this.stats.cheated = true;
         this.earn(Math.max(0, command.amount), "SpecialReward", command.playerId ?? DEFAULT_PLAYER_ID);
@@ -391,6 +498,8 @@ export class Match {
   private sellGuardian(command: Extract<MatchCommand, { type: "sellGuardian" }>): CommandResult {
     const guardian = this.guardian(command.instanceId);
     if (!guardian) return { ok: false, reason: "notFound", message: "Guardião não encontrado." };
+    // Aliado libertado é emprestado, não comprado: fica até o fim da partida e não rende pérolas.
+    if (guardian.ownerId === ALLY_PLAYER_ID) return { ok: false, reason: "notOwner", message: "Este Guardião veio ajudar; não é seu para vender." };
     const refund = guardian.sellValueAt(ECONOMY.sellRefundRate);
     this.removeGuardian(guardian);
     this.earn(refund, "SellRefund", command.playerId ?? DEFAULT_PLAYER_ID);
@@ -466,6 +575,14 @@ export class Match {
 
     this.currents.update(this.nowMs);
     this.syncGuardianCurrents();
+    if (!this.interactables.isEmpty) {
+      const finished = this.interactables.tick(this.nowMs, {
+        wave: this.scheduler.currentWave,
+        guardians: this.guardianList,
+        deltaMs,
+      });
+      finished.forEach((runtime) => this.resolveInteractable(runtime));
+    }
     this.blocking.update(this.guardianList, this.enemyList, this.nowMs, deltaMs, {
       damage: (enemy, amount) => this.damage(enemy, amount, { continuous: true, cause: "contact" }),
       onBossHeld: (blocker, enemy) => this.emit({ type: "enemyHeld", now: this.nowMs, blockerId: blocker.id, enemyId: enemy.id, x: enemy.x, y: enemy.y }),
@@ -678,6 +795,7 @@ export class Match {
     this.onBossEvents(this.bossEncounter.onRemoved(enemy), enemy);
     const reward = this.earn(enemy.definition.reward, "EnemyReward", DEFAULT_PLAYER_ID);
     this.stats.recordKill(enemy.definition.id, Boolean(enemy.definition.isBoss), source?.guardianId ?? null);
+    if (!this.interactables.isEmpty) this.interactables.onEnemyKilled(enemy.definition.id).forEach((runtime) => this.resolveInteractable(runtime));
     this.emit({
       type: "enemyKilled",
       now: this.nowMs,

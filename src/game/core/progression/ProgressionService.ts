@@ -4,7 +4,7 @@ import type { SaveManager } from "../save/SaveManager";
 import type { LevelRecord, PlayerProgress, Stars } from "../save/PlayerProgress";
 import { countsForProgression, type MatchResult } from "./MatchResult";
 import { evaluateObjectives } from "./objectives";
-import { computeLevelRewards, type RewardBreakdown } from "./rewards";
+import { computeLevelRewards, encounterRewards, type RewardBreakdown } from "./rewards";
 import { mergeLevelRecord, type LevelMerge } from "./stars";
 import { purchaseUnlock, reconcileUnlocks, unlockStatus, type PurchaseResult, type UnlockStatus } from "./unlocks";
 
@@ -18,6 +18,8 @@ export interface ObjectiveOutcome {
 export interface MatchOutcome {
   levelId: string;
   victory: boolean;
+  /** Encontro concluído nesta partida, quando foi um. */
+  encounterId: string | null;
   stars: Stars;
   starsBefore: Stars;
   objectives: ObjectiveOutcome[];
@@ -55,11 +57,13 @@ export class ProgressionService {
 
   /** Aplica o resultado de uma partida e devolve o que a tela de vitória precisa mostrar. */
   applyMatchResult(result: MatchResult, objectiveDefinitions: readonly LevelObjectiveDefinition[]): MatchOutcome {
+    const isEncounter = result.kind === "encounter";
     const achieved = evaluateObjectives(objectiveDefinitions, result);
     const before = this.save.progress.levelStars[result.levelId];
     const merge = mergeLevelRecord(before, result, achieved);
     const counted = countsForProgression(result);
-    const rewards = counted && result.victory ? computeLevelRewards(merge, result.difficulty) : { shells: 0, lines: [] };
+    // Encontro não vale estrela: paga uma recompensa própria e entrega o Guardião.
+    const rewards = !counted || !result.victory ? { shells: 0, lines: [] } : isEncounter ? encounterRewards(this.save.progress, result) : computeLevelRewards(merge, result.difficulty);
     const unlocked: GuardianId[] = [];
 
     this.save.update((draft) => {
@@ -67,12 +71,21 @@ export class ProgressionService {
       this.recordDiscovery(draft, result);
       if (!counted) return;
       this.recordTotals(draft, result);
+      // Segredos achados no mapa valem mesmo sem vencer: o jogador esteve lá e viu.
+      for (const secretId of result.stats.secretsFound) {
+        if (!draft.discoveredSecrets.includes(secretId)) draft.discoveredSecrets.push(secretId);
+      }
       if (!result.loadoutOverride) draft.lastLoadout = [...result.loadout];
       draft.lastDifficulty = result.difficulty;
       if (!result.victory) return;
 
-      draft.levelStars[result.levelId] = merge.next;
-      if (!draft.completedLevels.includes(result.levelId)) draft.completedLevels.push(result.levelId);
+      if (isEncounter) {
+        const encounterId = result.encounterId ?? result.levelId;
+        if (!draft.completedEncounters.includes(encounterId)) draft.completedEncounters.push(encounterId);
+      } else {
+        draft.levelStars[result.levelId] = merge.next;
+        if (!draft.completedLevels.includes(result.levelId)) draft.completedLevels.push(result.levelId);
+      }
       draft.currency.shells += rewards.shells;
       draft.currency.lifetimeShells += rewards.shells;
       unlocked.push(...reconcileUnlocks(this.context.unlocks, draft));
@@ -82,16 +95,17 @@ export class ProgressionService {
     return {
       levelId: result.levelId,
       victory: result.victory,
-      stars: merge.next.stars,
-      starsBefore: before?.stars ?? 0,
-      objectives: objectiveDefinitions.map((definition, index) => ({
+      encounterId: isEncounter && result.victory ? (result.encounterId ?? result.levelId) : null,
+      stars: isEncounter ? 0 : merge.next.stars,
+      starsBefore: isEncounter ? 0 : (before?.stars ?? 0),
+      objectives: (isEncounter ? [] : objectiveDefinitions).map((definition, index) => ({
         definition,
         achieved: merge.next.objectives[index] ?? false,
         isNew: merge.newObjectives[index] ?? false,
       })),
       rewards,
       unlocked,
-      nextLevelId: result.victory ? this.nextLevelId(result.levelId) : null,
+      nextLevelId: result.victory && !isEncounter ? this.nextLevelId(result.levelId) : null,
       counted,
     };
   }

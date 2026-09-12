@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { CARD_X, CARD_Y, MENU, MENU_CARD_BUTTON, NAV, NEXT_WAVE, openGame, OPTION_A, OPTION_B, PAUSE, RESTART, SELL, SPEED_1X, SPEED_2X } from "./helpers";
+import { CARD_X, CARD_Y, MENU, NEXT_WAVE, openGame, OPTION_A, OPTION_B, PAUSE, RESTART, SELL, SPEED_1X, SPEED_2X } from "./helpers";
 
 test("loads a level directly and places a shrimp on a platform", async ({ page }) => {
   const { canvas, clickGame, pageErrors } = await openGame(page);
@@ -215,14 +215,14 @@ test("level select only opens unlocked levels", async ({ page }) => {
   if (!box) throw new Error("Canvas bounds unavailable");
   const clickGame = (x: number, y: number) => page.mouse.click(box.x + (x * box.width) / 1280, box.y + (y * box.height) / 720);
 
-  const locked = MENU_CARD_BUTTON(1);
-  await clickGame(locked.x, locked.y);
-  await page.waitForTimeout(200);
-  await expect(canvas).toHaveAttribute("data-screen", "menu");
+  // O mapa mostra as seis fases; só a primeira está aberta, e os Encontros começam fechados.
+  await expect(page.getByTestId("map-node-recife-1")).toHaveAttribute("data-state", "available");
+  await expect(page.getByTestId("map-node-recife-2")).toHaveAttribute("data-state", "locked");
+  await expect(page.getByTestId("map-node-recife-2")).toBeDisabled();
+  await expect(page.getByTestId("map-node-gruta-do-predador")).toHaveAttribute("data-state", "locked");
 
-  // A carta abre a história de abertura; a preparação vem logo depois dela.
-  const first = MENU_CARD_BUTTON(0);
-  await clickGame(first.x, first.y);
+  // O nó abre a história de abertura; a preparação vem logo depois dela.
+  await page.getByTestId("map-node-recife-1").click();
   await expect(page.getByTestId("story-panel")).toHaveAttribute("data-story", "abertura");
   await page.getByTestId("story-next").click();
   await expect(page.getByTestId("story-text")).toContainText("corrente virar");
@@ -294,11 +294,11 @@ test("opens the reef album, the bestiary and the settings from the map", async (
       }),
     );
   });
-  const { canvas, clickGame, pageErrors } = await openGame(page, "");
+  const { canvas, pageErrors } = await openGame(page, "");
   await expect(canvas).toHaveAttribute("data-screen", "menu");
 
   // Álbum do Recife: os cinco fundadores aparecem; o Peixe-Pedra segue oculto em "???".
-  await clickGame(NAV.collection.x, NAV.collection.y);
+  await page.getByTestId("map-collection").click();
   await expect(page.getByTestId("collection-panel")).toBeVisible();
   await expect(page.getByTestId("collection-card-pistol-shrimp")).toHaveAttribute("data-state", "unlocked");
   await expect(page.getByTestId("collection-card-stonefish")).toHaveAttribute("data-state", "locked");
@@ -314,7 +314,7 @@ test("opens the reef album, the bestiary and the settings from the map", async (
   await page.getByTestId("collection-back").click();
 
   // Bestiário: o Quebra-Marés só aparece depois do primeiro encontro.
-  await clickGame(NAV.bestiary.x, NAV.bestiary.y);
+  await page.getByTestId("map-bestiary").click();
   await expect(page.getByTestId("bestiary-panel")).toBeVisible();
   await expect(page.getByTestId("bestiary-card-tidebreaker")).toHaveAttribute("data-state", "unknown");
   await expect(page.getByTestId("bestiary-card-swimmer")).toHaveAttribute("data-state", "seen");
@@ -324,13 +324,13 @@ test("opens the reef album, the bestiary and the settings from the map", async (
   await page.getByTestId("bestiary-back").click();
 
   // Histórias: capítulo não vivido fica em "???" no índice.
-  await clickGame(NAV.stories.x, NAV.stories.y);
+  await page.getByTestId("map-stories").click();
   await expect(page.getByTestId("story-index")).toBeVisible();
   await expect(page.getByTestId("story-entry-abertura")).toHaveAttribute("data-state", "locked");
   await page.getByTestId("story-index-back").click();
 
   // Configurações: a escolha vale na hora e fica gravada no save.
-  await clickGame(NAV.settings.x, NAV.settings.y);
+  await page.getByTestId("map-settings").click();
   await expect(page.getByTestId("settings-panel")).toBeVisible();
   await page.getByTestId("settings-mute").click();
   await page.getByTestId("settings-scale-large").click();
@@ -339,7 +339,8 @@ test("opens the reef album, the bestiary and the settings from the map", async (
   expect(settings.muted).toBe(true);
   expect(settings.uiScale).toBe("large");
   await page.getByTestId("settings-back").click();
-  await expect(canvas).toHaveAttribute("data-overlay", "");
+  // Fechar uma tela volta para o mapa, que agora é a tela inicial do jogo.
+  await expect(canvas).toHaveAttribute("data-overlay", "map");
   expect(pageErrors).toEqual([]);
 });
 
@@ -365,5 +366,35 @@ test("guides the first match with hints that never block the game", async ({ pag
   await page.reload();
   await expect(canvas).toHaveAttribute("data-screen", "game", { timeout: 30_000 });
   await expect(canvas).toHaveAttribute("data-tutorial", "");
+  expect(pageErrors).toEqual([]);
+});
+
+test("rescues a guardian in an encounter and adds him to the collection", async ({ page }) => {
+  // Save com a campanha até o Recife 3: o Encontro da Tartaruga está aberto no mapa.
+  await page.addInitScript(() => {
+    window.localStorage.setItem(
+      "guardioes-do-recife.save",
+      JSON.stringify({ saveVersion: 2, completedLevels: ["recife-1", "recife-2", "recife-3"], storyProgress: { seen: ["abertura"] } }),
+    );
+  });
+  const { canvas, clickGame, pageErrors } = await openGame(page, "");
+  await expect(page.getByTestId("map-node-rede-fantasma")).toHaveAttribute("data-state", "available");
+  await page.getByTestId("map-node-rede-fantasma").click();
+  await expect(page.getByTestId("prep-encounter")).toContainText("Tartaruga");
+  await page.getByTestId("prep-start").click();
+  await expect(canvas).toHaveAttribute("data-level", "rede-fantasma");
+  // A rede começa disponível e sem progresso.
+  await expect(canvas).toHaveAttribute("data-interactables", "rede:available:0");
+
+  // Cinco cortes, com fôlego entre eles; um toque adiantado não conta, então insistimos até cair.
+  for (let attempt = 0; attempt < 12; attempt += 1) {
+    if ((await canvas.getAttribute("data-interactables")) === "rede:done:100") break;
+    await clickGame(700, 480);
+    await page.waitForTimeout(1200);
+  }
+  await expect(canvas).toHaveAttribute("data-interactables", "rede:done:100");
+  // A Tartaruga entra em campo de graça, sem custar pérolas.
+  await expect(canvas).toHaveAttribute("data-guardians", "1");
+  await expect(canvas).toHaveAttribute("data-pearls", "210");
   expect(pageErrors).toEqual([]);
 });

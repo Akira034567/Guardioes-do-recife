@@ -84,6 +84,11 @@ export type MatchEvent =
   | (Timed & { type: "cloudExpired"; ownerId: string })
   // economia
   | (Timed & { type: "pearlsChanged"; playerId: PlayerId; pearls: number; delta: number; source: PearlSource | PearlSink })
+  // interagíveis do mapa (item 28)
+  | (Timed & { type: "interactableProgress"; id: string; progress: number; label: string; x: number; y: number })
+  | (Timed & { type: "interactableCompleted"; id: string; label: string; x: number; y: number; secretId: string | null })
+  /** Guardião libertado que entra de graça, sem dono, até o fim da partida. */
+  | (Timed & { type: "allyJoined"; id: string; guardianId: GuardianId; x: number; y: number; label: string })
   // comportamentos compartilhados (visual)
   | (Timed & { type: "behavior"; event: BehaviorEvent });
 

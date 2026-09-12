@@ -472,7 +472,11 @@ export class UIScene extends Phaser.Scene {
     this.renderWavePreview(snapshot);
     this.renderBossBar(snapshot);
     this.renderTutorial(snapshot);
-    this.levelLabel.setText(`FASE ${snapshot.levelIndex + 1}/${snapshot.levelCount} · ${snapshot.levelName.toUpperCase()}`);
+    this.levelLabel.setText(
+      snapshot.levelIndex < 0
+        ? `ENCONTRO · ${snapshot.levelName.toUpperCase()}`
+        : `FASE ${snapshot.levelIndex + 1}/${snapshot.levelCount} · ${snapshot.levelName.toUpperCase()}`,
+    );
 
     this.cards.forEach((card) => {
       const selected = snapshot.selectedGuardianId === card.id;

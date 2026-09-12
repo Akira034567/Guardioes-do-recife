@@ -22,7 +22,7 @@ export function preparationScreen(
   levelIndex: number,
   progression: ProgressionService,
   actions: PreparationActions,
-  initial: { difficulty: DifficultyId; loadout: GuardianId[] },
+  initial: { difficulty: DifficultyId; loadout: GuardianId[]; encounter?: { guardianId: GuardianId; teaser: string } },
 ): Screen {
   let difficulty = initial.difficulty;
   const squad: GuardianId[] = initial.loadout.filter((id) => progression.isUnlocked(id)).slice(0, LOADOUT_SIZE);
@@ -39,9 +39,12 @@ export function preparationScreen(
       const draw = (): void => {
         panel.replaceChildren();
         panel.append(
-          h("span", { class: "gr-badge", text: `Fase ${levelIndex + 1}` }),
+          h("span", { class: "gr-badge", text: initial.encounter ? "encontro" : `Fase ${levelIndex + 1}` }),
           h("h1", { class: "gr-title", text: level.name }),
           h("p", { class: "gr-subtitle", text: level.subtitle }),
+          ...(initial.encounter
+            ? [h("p", { class: "gr-hint", testId: "prep-encounter", text: `${initial.encounter.teaser} Vencer aqui traz ${GUARDIANS[initial.encounter.guardianId].name} para a coleção.` })]
+            : []),
           statsRow(level, record?.stars ?? 0),
           objectives(level),
           difficultyPicker(difficulty, (next) => {

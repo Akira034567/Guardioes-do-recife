@@ -32,6 +32,9 @@ export interface MatchStatsSnapshot {
   pearlsEarned: number;
   pearlsSpent: number;
   pearlsBySource: EconomySnapshot["earned"];
+  /** Interagíveis resolvidos e segredos achados nesta partida (item 28). */
+  interactablesCompleted: string[];
+  secretsFound: string[];
   cheated: boolean;
 }
 
@@ -62,6 +65,16 @@ export class MatchStats {
   abilitiesUsed = 0;
   earlyWaveCalls = 0;
   cheated = false;
+  private readonly interactables = new Set<string>();
+  private readonly secrets = new Set<string>();
+
+  recordInteractable(id: string): void {
+    this.interactables.add(id);
+  }
+
+  recordSecret(secretId: string): void {
+    this.secrets.add(secretId);
+  }
 
   recordDamage(amount: number, cause: DamageCause, sourceId: string | null, guardianId: GuardianId | null): void {
     if (amount <= 0) return;
@@ -128,6 +141,8 @@ export class MatchStats {
       pearlsEarned: economy.totalEarned,
       pearlsSpent: economy.totalSpent,
       pearlsBySource: economy.earned,
+      interactablesCompleted: [...this.interactables],
+      secretsFound: [...this.secrets],
       cheated: this.cheated,
     };
   }

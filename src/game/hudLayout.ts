@@ -40,20 +40,6 @@ export const HUD_LAYOUT = {
   wavePreviewY: 86,
 } as const;
 
-/**
- * Barra de baixo do menu de fases: álbum, bestiário, configurações e limpar progresso. Fica aqui
- * junto do resto do layout para que os testes e2e cliquem nas mesmas coordenadas da cena.
- */
-export const MENU_NAV = {
-  y: GAME_HEIGHT - 56,
-  width: 176,
-  collection: 250,
-  bestiary: 445,
-  stories: 640,
-  settings: 835,
-  reset: 1030,
-} as const;
-
 /** Centro da carta na posição `slot` (0..4) do esquadrão. */
 export function cardCenterX(slot: number): number {
   return HUD_LAYOUT.cardStartX + slot * HUD_LAYOUT.cardStep;

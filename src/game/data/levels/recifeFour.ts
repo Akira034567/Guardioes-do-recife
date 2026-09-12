@@ -97,6 +97,21 @@ export const RECIFE_FOUR: LevelDefinition = {
       projectileDrift: 40,
     },
   ],
+  interactables: [
+    {
+      id: "pedra-que-pisca",
+      x: 905,
+      y: 520,
+      radius: 30,
+      label: "Uma pedra que pisca",
+      goal: { type: "reveal" },
+      secretId: "pedra-que-pisca",
+      messages: {
+        idle: "Alguma coisa pisca no leito, perto do coral.",
+        done: "Ela piscou de volta. Alguém está ali.",
+      },
+    },
+  ],
   waves: [
     {
       name: "Patrulha",

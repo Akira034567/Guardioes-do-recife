@@ -5,9 +5,8 @@ import type { GuardianId } from "../types";
  * ENCONTRADOS no Recife (resgate numa fase de Encontro, segredo escondido no mapa ou aparição durante
  * uma onda), não comprados num menu.
  *
- * Enquanto as fases de Encontro não existem (Fase 5 do plano), cada um dos quatro novos também aceita
- * uma condição de reserva por fase concluída, para o jogo seguir jogável. Ao criar o Encontro, basta
- * apagar a condição de reserva.
+ * Cada Guardião novo sai de um Encontro próprio (`data/encounters/`). Quem já tinha o Guardião antes
+ * dos Encontros existirem continua com ele: a reconciliação só adiciona, nunca tira.
  */
 export type UnlockCondition =
   | { type: "default" }
@@ -25,6 +24,8 @@ export interface GuardianUnlockDefinition {
   conditions: UnlockCondition[];
   /** Sem progresso nenhum, o card fica como "???" na coleção. */
   hidden?: boolean;
+  /** Condições que só tiram o "???" da coleção, sem desbloquear o Guardião. */
+  revealWhen?: UnlockCondition[];
   /** Texto curto da apresentação de desbloqueio e da dica na coleção. */
   reveal: { title: string; role: string; mechanic: string; hint: string };
 }
@@ -82,7 +83,7 @@ export const GUARDIAN_UNLOCKS: GuardianUnlockDefinition[] = [
   },
   {
     guardianId: "shark",
-    conditions: [{ type: "encounterCompleted", encounterId: "gruta-do-predador" }, { type: "levelCompleted", levelId: "recife-2" }],
+    conditions: [{ type: "encounterCompleted", encounterId: "gruta-do-predador" }],
     reveal: {
       title: "Tubarão — Instinto Predador",
       role: "Execução",
@@ -92,7 +93,7 @@ export const GUARDIAN_UNLOCKS: GuardianUnlockDefinition[] = [
   },
   {
     guardianId: "sea-turtle",
-    conditions: [{ type: "encounterCompleted", encounterId: "rede-fantasma" }, { type: "levelCompleted", levelId: "recife-3" }],
+    conditions: [{ type: "encounterCompleted", encounterId: "rede-fantasma" }],
     reveal: {
       title: "Tartaruga-Marinha — Guardiã do Recife",
       role: "Controle de rota",
@@ -102,8 +103,10 @@ export const GUARDIAN_UNLOCKS: GuardianUnlockDefinition[] = [
   },
   {
     guardianId: "stonefish",
-    conditions: [{ type: "encounterCompleted", encounterId: "emboscada-no-coral" }, { type: "levelCompleted", levelId: "recife-4" }],
+    conditions: [{ type: "encounterCompleted", encounterId: "emboscada-no-coral" }],
     hidden: true,
+    // Achar a pedra que pisca não entrega o Guardião: tira o "???" e abre o Encontro dele.
+    revealWhen: [{ type: "secretFound", secretId: "pedra-que-pisca" }],
     reveal: {
       title: "Peixe-Pedra — Emboscador do Recife",
       role: "Armadilha",
@@ -113,7 +116,7 @@ export const GUARDIAN_UNLOCKS: GuardianUnlockDefinition[] = [
   },
   {
     guardianId: "dolphin",
-    conditions: [{ type: "encounterCompleted", encounterId: "chamado-do-golfinho" }, { type: "levelCompleted", levelId: "recife-5" }],
+    conditions: [{ type: "encounterCompleted", encounterId: "chamado-do-golfinho" }],
     reveal: {
       title: "Golfinho — Mensageiro do Recife",
       role: "Suporte",

@@ -137,11 +137,18 @@ describe("guardian unlocks", () => {
     expect(progression.reconcile(), "reconciliar de novo não repete").toEqual([]);
   });
 
-  it("unlocks through the fallback level and queues the reveal", () => {
+  it("unlocks the guardian by finishing his encounter, and queues the reveal", () => {
     const { progression, save } = service();
+    // Vencer a fase da campanha não entrega mais o Tubarão: ele vem do Encontro.
     progression.applyMatchResult(makeResult({ levelId: "recife-2" }), OBJECTIVES);
+    expect(progression.isUnlocked("shark")).toBe(false);
+
+    progression.applyMatchResult(makeResult({ levelId: "gruta-do-predador", kind: "encounter", encounterId: "gruta-do-predador" }), []);
     expect(progression.isUnlocked("shark")).toBe(true);
-    expect(save.progress.pendingUnlockReveals).toEqual(["shark"]);
+    expect(save.progress.completedEncounters).toEqual(["gruta-do-predador"]);
+    // Encontro não entra na cadeia de fases nem vale estrela.
+    expect(save.progress.completedLevels).toEqual(["recife-2"]);
+    expect(save.progress.levelStars["gruta-do-predador"]).toBeUndefined();
     expect(progression.takePendingReveals()).toEqual(["shark"]);
     expect(progression.takePendingReveals(), "a fila esvazia depois de apresentada").toEqual([]);
   });
@@ -151,10 +158,12 @@ describe("guardian unlocks", () => {
     const before = progression.unlockStatuses();
     expect(before.find((status) => status.guardianId === "pistol-shrimp")?.state).toBe("unlocked");
     expect(before.find((status) => status.guardianId === "stonefish")).toMatchObject({ state: "locked", hidden: true });
-    save.update((draft) => draft.completedLevels.push("recife-4"));
+    // Achar o segredo tira o "???" sem entregar o Guardião: ele ainda depende do Encontro.
+    save.update((draft) => draft.discoveredSecrets.push("pedra-que-pisca"));
     const after = progression.unlockStatuses().find((status) => status.guardianId === "stonefish");
-    expect(after?.hidden, "com progresso, o card sai do ???").toBe(false);
-    expect(after?.progress).toMatchObject({ current: 1, target: 1 });
+    expect(after?.hidden, "com a pista, o card sai do ???").toBe(false);
+    expect(after?.state).toBe("locked");
+    expect(progression.isUnlocked("stonefish")).toBe(false);
   });
 
   it("buys a guardian with shells and refuses when short", () => {

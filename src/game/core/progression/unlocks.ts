@@ -77,7 +77,7 @@ export function unlockStatus(definition: GuardianUnlockDefinition, progress: Pla
     state: unlocked ? "unlocked" : affordable ? "available" : "locked",
     progress: best,
     price,
-    hidden: Boolean(definition.hidden) && !unlocked && (best?.current ?? 0) === 0,
+    hidden: Boolean(definition.hidden) && !unlocked && (best?.current ?? 0) === 0 && !(definition.revealWhen ?? []).some((condition) => isSatisfied(condition, progress)),
     hint: definition.reveal.hint,
   };
 }

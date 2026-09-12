@@ -1,5 +1,5 @@
 import { expect, type Page } from "@playwright/test";
-import { cardCenterX, HUD_LAYOUT, MENU_NAV } from "../../src/game/hudLayout";
+import { cardCenterX, HUD_LAYOUT } from "../../src/game/hudLayout";
 
 /**
  * Coordenadas do HUD e utilitários compartilhados pelas sondas e2e. As posições vêm de
@@ -24,15 +24,8 @@ export const PAUSE = { x: HUD_LAYOUT.pauseButtonX, y: HUD_LAYOUT.topButtonY } as
 export const SPEED_1X = { x: HUD_LAYOUT.speedButtonXs[0], y: HUD_LAYOUT.topButtonY } as const;
 export const SPEED_2X = { x: HUD_LAYOUT.speedButtonXs[1], y: HUD_LAYOUT.topButtonY } as const;
 export const RESULT_NEXT = { x: 640, y: 408 } as const;
-/** Seis cartas de 192px com 16px de espaço, centralizadas (ver `LevelSelectScene`). */
-export const MENU_CARD_BUTTON = (index: number) => ({ x: 120 + index * 208, y: 478 });
-/** Barra de baixo do menu: álbum, bestiário e configurações. */
-export const NAV = {
-  collection: { x: MENU_NAV.collection, y: MENU_NAV.y },
-  bestiary: { x: MENU_NAV.bestiary, y: MENU_NAV.y },
-  stories: { x: MENU_NAV.stories, y: MENU_NAV.y },
-  settings: { x: MENU_NAV.settings, y: MENU_NAV.y },
-} as const;
+// O mapa do Recife é HTML: fases, Encontros e navegação são alcançados por `data-testid`
+// (`map-node-recife-1`, `map-collection`, …), não por coordenada no canvas.
 
 export async function openGame(page: Page, query = "level=recife-1") {
   const pageErrors: string[] = [];

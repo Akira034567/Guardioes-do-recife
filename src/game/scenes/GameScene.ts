@@ -33,6 +33,8 @@ import { isDebugAllowed } from "../systems/debugGate";
 import { drawLevelBackdrop } from "../systems/LevelBackdrop";
 import { MatchEffects } from "../systems/MatchEffects";
 import { PlacementGhost } from "../objects/PlacementGhost";
+import { InteractableView } from "../objects/InteractableView";
+import { encounterForLevel } from "../data/encounters";
 import type { MatchSnapshot } from "../core/match/MatchSnapshot";
 import { TutorialDirector } from "../core/tutorial/TutorialDirector";
 import { createLevelProgress, getSaveManager } from "../systems/ProgressStore";
@@ -73,6 +75,7 @@ export class GameScene extends Phaser.Scene {
   private readonly fieldViews = new Map<string, FieldGfx>();
   private readonly cloudViews = new Map<string, CloudGfx>();
   private readonly flowViews = new Map<string, FlowGfx>();
+  private readonly interactableViews = new Map<string, InteractableView>();
   private pendingEvents: MatchEvent[] = [];
   private currentMotes: Array<{ mote: Phaser.GameObjects.Arc; zoneIndex: number }> = [];
   private loadout: GuardianId[] = [];
@@ -122,6 +125,7 @@ export class GameScene extends Phaser.Scene {
     this.fieldViews.clear();
     this.cloudViews.clear();
     this.flowViews.clear();
+    this.interactableViews.clear();
     this.pendingEvents = [];
     this.currentMotes = [];
     this.platforms = [];
@@ -175,6 +179,7 @@ export class GameScene extends Phaser.Scene {
     this.selectionGraphic = this.add.graphics().setDepth(DEPTH.effects);
     this.placementGuideGraphic = this.add.graphics().setDepth(DEPTH.effects - 1);
     this.ghost = new PlacementGhost(this);
+    this.createInteractables();
     this.debugOverlay = new DebugOverlay(this, this.match.route);
     this.registerEvents();
     this.game.canvas.addEventListener("pointerdown", this.unlockAudio, { passive: true });
@@ -192,6 +197,7 @@ export class GameScene extends Phaser.Scene {
     const ticks = this.clock.advance(delta, () => this.match.tick());
     this.drainEvents();
     if (ticks > 0) this.syncViews(ticks * this.match.dtMs);
+    if (ticks > 0) this.syncInteractables();
     this.effects.update(this.match.now);
     if (!this.clock.paused) this.updateCurrentMotes(Math.min(delta, 100) * this.clock.speed);
 
@@ -229,6 +235,12 @@ export class GameScene extends Phaser.Scene {
         this.enemyViews.get(event.id)?.destroy();
         this.enemyViews.delete(event.id);
         break;
+      case "allyJoined": {
+        const ally = this.match.guardian(event.id);
+        if (ally) this.guardianViews.set(event.id, new GuardianView(this, ally, () => this.selectPlacedGuardian(event.id)));
+        this.showMessage(`${GUARDIANS[event.guardianId].name} veio ajudar!`, 2600);
+        break;
+      }
       case "guardianPlaced": {
         const guardian = this.match.guardian(event.id);
         if (guardian) this.guardianViews.set(event.id, new GuardianView(this, guardian, () => this.selectPlacedGuardian(event.id)));
@@ -538,6 +550,35 @@ export class GameScene extends Phaser.Scene {
     this.renderPlacementState();
   }
 
+
+  // ------------------------------------------------------ interagíveis do mapa
+
+  /** Cria as views dos elementos interativos desta fase (nenhuma nas fases sem Encontro). */
+  private createInteractables(): void {
+    for (const state of this.match.snapshot().interactables) {
+      this.interactableViews.set(state.id, new InteractableView(this, state, () => this.touchInteractable(state.id)));
+    }
+  }
+
+  /** Toque do jogador em um elemento do mapa; o motor decide se conta. */
+  private touchInteractable(id: string): void {
+    this.audio.unlock();
+    if (this.match.status !== "running" || this.clock.paused) return;
+    const result = this.match.execute({ type: "interact", interactableId: id });
+    this.drainEvents();
+    if (!result.ok) {
+      if (result.reason !== "interactableDone") this.showMessage(result.message, 1400);
+      return;
+    }
+    this.syncInteractables();
+    this.emitHud();
+  }
+
+  private syncInteractables(): void {
+    if (this.interactableViews.size === 0) return;
+    for (const state of this.match.snapshot().interactables) this.interactableViews.get(state.id)?.sync(state);
+  }
+
   // -------------------------------------------------------- upgrade e venda
 
   private upgradeSelectedGuardian(branchId: BranchId): void {
@@ -584,8 +625,11 @@ export class GameScene extends Phaser.Scene {
   /** Manda o resultado para a progressão e abre a tela de vitória ou derrota. */
   private applyProgression(victory: boolean): void {
     const snapshot = this.match.snapshot();
+    const encounter = encounterForLevel(this.level.id);
     const matchResult: MatchResult = {
       levelId: this.level.id,
+      kind: this.level.kind === "encounter" ? "encounter" : "campaign",
+      encounterId: encounter?.id ?? this.level.encounterId,
       difficulty: this.difficulty.id,
       victory,
       livesRemaining: snapshot.reef,
@@ -873,6 +917,7 @@ export class GameScene extends Phaser.Scene {
     dataset.debug = String(this.debugFlags.enabled);
     dataset.paused = String(this.clock.paused);
     dataset.tutorial = hud.tutorial?.id ?? "";
+    dataset.interactables = snapshot.interactables.map((item) => `${item.id}:${item.state}:${Math.round(item.progress * 100)}`).join(",");
     dataset.speed = String(this.clock.speed);
     dataset.difficulty = this.difficulty.id;
     dataset.nextWave = hud.nextWave ? hud.nextWave.chips.map((chip) => `${chip.enemyId}:${chip.count}${chip.isElite ? "+" : ""}`).join(",") : "";
@@ -975,7 +1020,7 @@ export class GameScene extends Phaser.Scene {
     }
 
     this.add
-      .text(26, 88, `RECIFE ${levelIndex(this.level.id) + 1}  ·  ${this.level.name.toUpperCase()}`, {
+      .text(26, 88, `${levelIndex(this.level.id) < 0 ? "ENCONTRO" : `RECIFE ${levelIndex(this.level.id) + 1}`}  ·  ${this.level.name.toUpperCase()}`, {
         fontFamily: "Arial, sans-serif",
         fontSize: "17px",
         fontStyle: "bold",

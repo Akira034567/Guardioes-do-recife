@@ -592,6 +592,47 @@ export interface LevelDefinition {
   levelClearBonus?: number;
   /** Três objetivos: o primeiro é concluir a fase, os outros dois valem as estrelas 2 e 3. */
   objectives?: [LevelObjectiveDefinition, LevelObjectiveDefinition, LevelObjectiveDefinition];
+  /** Fase de campanha (padrão) ou Encontro, a fase curta onde um Guardião é achado (item 3). */
+  kind?: "campaign" | "encounter";
+  /** Id do Encontro concluído ao vencer esta fase; alimenta `unlocks.ts`. */
+  encounterId?: string;
+  /** Elementos do mapa com que o jogador interage durante a partida (item 28). */
+  interactables?: InteractableDefinition[];
+}
+
+/** O que o jogador precisa fazer para resolver um interagível. */
+export type InteractableGoal =
+  /** Toques repetidos, com descanso entre eles (cortar uma rede). */
+  | { type: "taps"; taps: number; cooldownMs: number }
+  /** Manter um Guardião por perto durante um tempo (acalmar, escoltar). */
+  | { type: "guardNearby"; radius: number; durationMs: number }
+  /** Derrotar quem guarda o lugar. */
+  | { type: "enemyDefeated"; enemyId: EnemyId; count?: number }
+  /** Um toque só: o segredo escondido no mapa. */
+  | { type: "reveal" };
+
+/**
+ * Elemento interativo do mapa (item 28): a rede que prende a Tartaruga, a pedra que pisca, a gruta do
+ * Tubarão. Puro dado — o motor resolve, a cena só desenha e manda o comando `interact`.
+ */
+export interface InteractableDefinition {
+  id: string;
+  x: number;
+  y: number;
+  /** Raio de toque no mapa. */
+  radius?: number;
+  label: string;
+  goal: InteractableGoal;
+  /** Só pode ser trabalhado a partir desta onda (1 = desde o começo). */
+  availableFromWave?: number;
+  /** Guardião libertado, que entra como aliado gratuito até o fim da partida. */
+  ally?: { guardianId: GuardianId; x: number; y: number; branchId?: BranchId; upgradeLevel?: number };
+  /** Segredo achado: o id vai para `discoveredSecrets` no save. */
+  secretId?: string;
+  /** Corrente temporária criada ao concluir (a Tartaruga virando a água, por exemplo). */
+  current?: { x: number; y: number; radius: number; speedFactor: number; durationMs: number };
+  /** Textos curtos para o mapa e as mensagens do HUD. */
+  messages?: { idle?: string; progress?: string; done?: string };
 }
 
 export interface DebugFlags {

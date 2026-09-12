@@ -30,6 +30,21 @@ Abra `http://localhost:5173`. O jogo usa mouse e touch em layout horizontal 16:9
 - A carta da fase abre a história de abertura (na primeira vez) e depois a preparação: objetivos, dificuldade, ameaças conhecidas e as cinco vagas do esquadrão.
 - Concluir objetivos rende estrelas e Conchas, a moeda permanente gasta fora da partida.
 
+## Encontros do Recife
+
+Os quatro Guardiões além dos cinco fundadores não se compram: eles são **encontrados**. Cada um tem uma fase curta própria em `src/game/data/encounters/`, fora da campanha (não entra em `LEVELS`, não vale estrela, não mexe na contagem de fases).
+
+| Encontro | Guardião | Abre quando | Como resolve |
+| --- | --- | --- | --- |
+| A Gruta do Predador | Tubarão | Recife 2 concluído | Manter um Guardião a 150px da gruta por 10s |
+| Rede Fantasma | Tartaruga | Recife 3 concluído | Cinco cortes na rede, com fôlego entre eles |
+| Emboscada no Coral | Peixe-Pedra | Achar a pedra que pisca no Recife 4 | Um toque no leito |
+| O Chamado | Golfinho | Recife 5 concluído | Um Guardião perto do sino durante a segunda maré |
+
+O Guardião libertado entra **de graça e emprestado** (`ownerId: "npc"`): luta até o fim da partida, não custa pérolas e não pode ser vendido. Vencer a fase conclui o Encontro e é isso que `data/unlocks.ts` espera para entregá-lo à coleção.
+
+Tudo isso roda em `core/Interactables.ts` (regra pura) mais o comando `interact` do motor. Um interagível novo é só uma entrada em `LevelDefinition.interactables`, com `goal` (`taps`, `guardNearby`, `enemyDefeated` ou `reveal`) e a recompensa (`ally`, `current` ou `secretId`).
+
 ## Telas fora da partida
 
 Menus são HTML por cima do canvas (`src/game/ui/dom`), alinhados ao jogo e escalados por `--gr-scale`; o HUD da partida continua em Phaser.
@@ -38,6 +53,7 @@ Menus são HTML por cima do canvas (`src/game/ui/dom`), alinhados ao jogo e esca
 - **Ameaças do Recife**: bestiário. O inimigo só aparece depois do primeiro encontro, com vida, velocidade, fraquezas, resistências e habilidades; chefes ganham página destacada.
 - **Histórias do Recife**: índice dos capítulos já vividos, com releitura.
 - **Configurações**: volumes, silenciar, efeitos reduzidos, tremor de tela e escala da interface. Tudo grava no save na hora.
+- **Mapa do Recife**: a tela inicial. As seis fases em sequência, com estrelas, e os nós de Encontro pendurados nelas; daqui saem o álbum, o bestiário, as histórias e as configurações.
 - **Menu de pause**: o botão Ⅱ pausa e abre continuar, configurações, reiniciar e sair para o mapa.
 
 ## UX da partida
@@ -137,6 +153,7 @@ Uma partida inteira vive em `src/game/core/match/Match.ts`, sem Phaser:
 - Novo elite: uma entrada em `ELITE_BALANCE` e outra em `ELITES`. Ele já pode ser usado em qualquer onda e aparece no preview.
 - Guardião que rende pérolas (Ostra): basta declarar `generatesPearls: { amount, intervalMs }` na definição ou em um upgrade.
 - Texto de coleção/bestiário: uma entrada em `data/guardianLore.ts` ou `data/enemyLore.ts` (`tests/lore.test.ts` cobra a ficha de todo conteúdo novo).
+- Novo Encontro: uma fase em `data/encounters/`, a entrada em `ENCOUNTERS` e a condição `encounterCompleted` no Guardião. `tests/encounters.test.ts` valida rota, plataformas, ondas e o aliado prometido.
 - Nova história: uma entrada em `data/story.ts` com o gatilho (`levelIntro`, `levelOutro` ou `manual`); o save guarda só os ids lidos.
 - Nova configuração: campo em `PlayerSettings`, padrão em `DEFAULT_SETTINGS`, saneamento em `sanitizeProgress` e a linha na tela de configurações.
 - Nova fase: arquivo em `src/game/data/levels/` e inclusão em `LEVELS`; os testes em `tests/levels.test.ts` validam rota, plataformas, correntes e ondas automaticamente.
