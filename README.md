@@ -50,6 +50,24 @@ Tudo isso roda em `core/Interactables.ts` (regra pura) mais o comando `interact`
 - **Conquistas** (`data/achievements.ts` + `core/progression/achievements.ts`): dezesseis medidas sobre o perfil, a coleção e a melhor marca de uma partida. O progresso nunca regride, cada uma paga Conchas uma vez e as escondidas ficam em "???" até caírem. São recalculadas no fim de cada partida e ao abrir o mapa.
 - **Desafios** (`core/progression/challenges.ts`): um do dia e um da semana, sorteados a partir da data com a semente do `Rng` — sem servidor, sem rede. O sorteio só usa fases e Guardiões que o jogador já alcançou; a preparação entra travada, com esquadrão e dificuldade fixos, e a recompensa cai ao cumprir a regra extra.
 
+## Arte dos inimigos
+
+Cada uma das sete ameaças tem sua pasta em `public/assets/enemies/<pasta>/frame-N.png`, declarada em `ENEMIES` pelo campo `art`:
+
+| Inimigo | Pasta | Quadros |
+| --- | --- | --- |
+| Peixinho | `cardume-invasor` | 4 |
+| Peixe Invasor | `lider-do-cardume` | 2 |
+| Peixe-Flecha | `predador-corrompido` | 3 |
+| Peixe-Agulha | `raia-espinhosa` | 4 |
+| Cascudo | `caranguejo-eremita` | 4 |
+| Moreia Sombria | `moreia-das-correntes` | 3 |
+| Quebra-Marés | `baleia-mare-negra` | 1 |
+
+A `EnemyView` alterna os quadros no ritmo de `frameMs`, gira a criatura ao longo da rota e a vira de barriga para baixo quando ela nada para a esquerda; `rotate: "upright"` mantém em pé quem anda no leito (o Cascudo). Faltando a imagem, o inimigo volta sozinho para a silhueta vetorial de `EnemyShapes.ts` (`shapeFallback`). O bestiário usa o primeiro quadro como retrato, em silhueta enquanto a espécie não foi encontrada. As imagens entram na `GameScene`, só para as espécies que aparecem naquela fase.
+
+As outras cinco pastas (`agua-viva-fantasma`, `baiacu-corrompido`, `ladrao-do-recife`, `tartaruga-corrompida`, `carregador`) ficam prontas para os inimigos que ainda não existem.
+
 ## Áudio
 
 Não há arquivo de áudio no projeto: tudo é sintetizado com osciladores em `systems/AudioManager.ts`. Dois barramentos sob o volume geral, efeitos e música, ambos ligados às configurações. A trilha (`systems/audio/MusicBed.ts`) é um acorde grave com respiro lento que muda de clima quando o chefe chega e quando a fase é vencida. Trocar por samples depois é mexer só nessa camada; as regras nunca chamam áudio, quem toca é `systems/MatchEffects.ts`.

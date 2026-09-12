@@ -364,7 +364,21 @@ export type EnemyShapeKey = "fish" | "minnow" | "dart" | "needle" | "shell" | "m
 export type EnemyArtRef =
   | { kind: "procedural"; shape: EnemyShapeKey }
   /** Pasta em `public/assets/enemies/<folder>/frame-N.png`; cai para a forma vetorial se a textura faltar. */
-  | { kind: "sprite"; folder: string; frames: number; frameMs?: number; scale?: number; shapeFallback?: EnemyShapeKey };
+  | {
+      kind: "sprite";
+      folder: string;
+      frames: number;
+      frameMs?: number;
+      scale?: number;
+      /** Para que lado a criatura foi desenhada; a view espelha quando ela nada para o outro. */
+      facing?: "left" | "right";
+      /**
+       * `path` (padrão) gira a criatura ao longo da rota, como um peixe visto de cima.
+       * `upright` mantém o desenho em pé e só espelha: para bichos que andam no leito (caranguejo).
+       */
+      rotate?: "path" | "upright";
+      shapeFallback?: EnemyShapeKey;
+    };
 
 /** Multiplicadores de atributos (elites, fases de chefe). `armorBonus` é aditivo. */
 export interface StatMultipliers {

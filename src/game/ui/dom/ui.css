@@ -624,3 +624,14 @@
   text-transform: uppercase;
   color: var(--gr-pearl);
 }
+
+.gr-enemy-art {
+  height: auto;
+  object-fit: contain;
+  filter: drop-shadow(0 calc(4px * var(--gr-scale)) calc(8px * var(--gr-scale)) rgba(0, 0, 0, 0.45));
+}
+
+/* A silhueta precisa vencer o filtro de sombra do retrato. */
+.gr-enemy-art.gr-node__art--unknown {
+  filter: brightness(0) opacity(0.45);
+}

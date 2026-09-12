@@ -1,4 +1,5 @@
 import Phaser from "phaser";
+import { enemyFrameKeys, hasEnemyArt } from "../assets/enemyArt";
 import { DEPTH } from "../constants";
 import type { MatchEnemy } from "../core/match/MatchEnemy";
 import { ELITES, type EliteId } from "../data/elites";
@@ -11,6 +12,12 @@ import { ENEMY_SHAPES } from "./EnemyShapes";
 export class EnemyView extends Phaser.GameObjects.Container {
   private lastHealth = Number.NaN;
   private statusSignature = "";
+  /** Sprite animado, quando a pasta de arte do inimigo existe; senão o desenho vetorial. */
+  private readonly sprite: Phaser.GameObjects.Image | null;
+  private readonly frameKeys: string[] = [];
+  private readonly frameMs: number;
+  private frameIndex = 0;
+  private frameClockMs = 0;
   private readonly bodyGraphic: Phaser.GameObjects.Graphics;
   private readonly statusGraphic: Phaser.GameObjects.Graphics;
   private readonly healthBar: Phaser.GameObjects.Graphics;
@@ -23,7 +30,21 @@ export class EnemyView extends Phaser.GameObjects.Container {
     this.bodyGraphic = scene.add.graphics();
     this.statusGraphic = scene.add.graphics();
     this.healthBar = scene.add.graphics();
+    const art = enemy.definition.art;
+    if (art.kind === "sprite" && hasEnemyArt(scene, enemy.definition)) {
+      this.frameKeys = enemyFrameKeys(art);
+      this.frameMs = art.frameMs ?? 160;
+      this.sprite = new Phaser.GameObjects.Image(scene, 0, 0, this.frameKeys[0]);
+      this.sprite.setScale((art.scale ?? 0.5) * enemy.definition.scale);
+      // Os desenhos olham para a esquerda por padrão; o espelho põe o nariz em +x de uma vez por todas.
+      this.sprite.setFlipX(art.facing !== "right");
+      this.add(this.sprite);
+    } else {
+      this.sprite = null;
+      this.frameMs = 160;
+    }
     this.add([this.bodyGraphic, this.statusGraphic, this.healthBar]);
+    if (this.sprite) this.bodyGraphic.setVisible(false);
     this.drawBody();
     this.setDepth(DEPTH.enemies + (enemy.definition.isBoss ? 2 : 0));
     scene.add.existing(this);
@@ -34,15 +55,41 @@ export class EnemyView extends Phaser.GameObjects.Container {
     return this.enemy.id;
   }
 
-  sync(now: number): void {
+  sync(now: number, deltaMs = 0): void {
     const enemy = this.enemy;
     this.setPosition(enemy.x, enemy.y);
-    this.bodyGraphic.setRotation(enemy.heading);
+    if (this.sprite) this.animate(enemy.heading, deltaMs);
+    else this.bodyGraphic.setRotation(enemy.heading);
     if (enemy.health !== this.lastHealth) {
       this.lastHealth = enemy.health;
       this.drawHealth();
     }
     this.refreshStatusVisual(now);
+  }
+
+  /** Troca de quadro no ritmo da arte e vira a criatura para o lado em que ela nada. */
+  private animate(heading: number, deltaMs: number): void {
+    const sprite = this.sprite;
+    if (!sprite) return;
+    const art = this.enemy.definition.art;
+    const swimmingLeft = Math.cos(heading) < 0;
+    if (art.kind === "sprite" && art.rotate === "upright") {
+      // Bicho de leito: fica em pé e só olha para o lado em que anda.
+      sprite.setRotation(0);
+      sprite.setFlipY(false);
+      sprite.setFlipX(art.facing === "right" ? swimmingLeft : !swimmingLeft);
+    } else {
+      // O nariz do desenho aponta para +x depois do espelho; daí a criatura gira junto com a rota e
+      // vira de barriga para baixo quando nada para a esquerda (senão apareceria de cabeça para baixo).
+      sprite.setRotation(heading);
+      sprite.setFlipY(swimmingLeft);
+    }
+    if (this.frameKeys.length < 2) return;
+    this.frameClockMs += deltaMs;
+    if (this.frameClockMs < this.frameMs) return;
+    this.frameClockMs = 0;
+    this.frameIndex = (this.frameIndex + 1) % this.frameKeys.length;
+    sprite.setTexture(this.frameKeys[this.frameIndex]);
   }
 
   private refreshStatusVisual(now: number): void {
@@ -137,10 +184,12 @@ export class EnemyView extends Phaser.GameObjects.Container {
     const { definition } = this.enemy;
     const width = definition.isBoss ? 52 : definition.role === "elite" ? 40 : definition.role === "swarm" ? 18 : 30;
     const ratio = this.enemy.health / definition.maxHealth;
+    // Com sprite, a barra sobe até acima do desenho; sem ele, fica na borda do vetor como antes.
+    const top = this.sprite ? -(this.sprite.displayHeight / 2 + 7) : -definition.hitRadius - 12;
     this.healthBar.clear();
     this.healthBar.fillStyle(0x061823, 0.9);
-    this.healthBar.fillRoundedRect(-width / 2, -definition.hitRadius - 12, width, 5, 2);
+    this.healthBar.fillRoundedRect(-width / 2, top, width, 5, 2);
     this.healthBar.fillStyle(ratio > 0.45 ? 0x63e08b : 0xff6b6b, 1);
-    this.healthBar.fillRoundedRect(-width / 2, -definition.hitRadius - 12, width * ratio, 5, 2);
+    this.healthBar.fillRoundedRect(-width / 2, top, width * ratio, 5, 2);
   }
 }

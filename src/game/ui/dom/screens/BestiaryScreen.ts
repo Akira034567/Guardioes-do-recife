@@ -1,3 +1,4 @@
+import { enemyPortraitPath } from "../../../assets/enemyArt";
 import type { ProgressionService } from "../../../core/progression/ProgressionService";
 import { ENEMIES, ENEMY_ORDER, resolveEnemy } from "../../../data/enemies";
 import { ENEMY_LORE } from "../../../data/enemyLore";
@@ -51,8 +52,23 @@ export function bestiaryScreen(progression: ProgressionService, onBack: () => vo
 }
 
 /**
- * Silhueta vetorial do inimigo. O bestiário não reaproveita o desenho da partida (que é Phaser);
- * aqui cada forma de `EnemyShapeKey` vira um SVG simples com as cores da espécie.
+ * Retrato do inimigo. Quando a espécie tem arte (`public/assets/enemies/`), é a própria imagem, em
+ * silhueta enquanto não foi encontrada. Sem arte, cai no desenho vetorial abaixo.
+ */
+function portrait(definition: EnemyDefinition, seen: boolean, size = 92): HTMLElement {
+  const path = enemyPortraitPath(definition);
+  if (!path) return blob(definition, seen, size);
+  return h("img", {
+    class: `gr-enemy-art ${seen ? "" : "gr-node__art--unknown"}`,
+    src: path,
+    alt: seen ? definition.name : "",
+    style: `width:${Math.round(size * 1.1)}px`,
+  });
+}
+
+/**
+ * Silhueta vetorial do inimigo, para quem ainda não tem arte própria: cada forma de `EnemyShapeKey`
+ * vira um SVG simples com as cores da espécie.
  */
 function blob(definition: EnemyDefinition, seen: boolean, size = 92): HTMLElement {
   const shape = resolveEnemy(definition).art;
@@ -105,7 +121,7 @@ function enemyCard(definition: EnemyDefinition, seen: boolean, kills: number, on
       disabled: !seen,
       onClick: onOpen,
     },
-    blob(definition, seen),
+    portrait(definition, seen),
     h("span", { class: "gr-card__name", text: seen ? definition.name : "???" }),
     h("span", { class: "gr-hint", text: seen ? `${kills} derrotados` : "Ainda não encontrado" }),
   );
@@ -128,7 +144,7 @@ export function enemyPage(definition: EnemyDefinition, kills: number, onBack: ()
           h(
             "div",
             { class: "gr-reveal" },
-            h("div", { class: "gr-reveal__art gr-reveal__art--blob" }, blob(definition, true, 180)),
+            h("div", { class: "gr-reveal__art gr-reveal__art--blob" }, portrait(definition, true, 180)),
             h(
               "div",
               { class: "gr-reveal__body" },

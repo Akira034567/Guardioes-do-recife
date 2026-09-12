@@ -16,6 +16,7 @@ export const ENEMIES: Record<EnemyId, EnemyDefinition> = {
     ...ENEMY_BALANCE.minnow,
     hitRadius: 9,
     scale: 0.62,
+    art: { kind: "sprite", folder: "cardume-invasor", frames: 4, frameMs: 150, scale: 0.42, shapeFallback: "minnow" },
   },
   swimmer: {
     id: "swimmer",
@@ -26,6 +27,7 @@ export const ENEMIES: Record<EnemyId, EnemyDefinition> = {
     ...ENEMY_BALANCE.swimmer,
     hitRadius: 14,
     scale: 1,
+    art: { kind: "sprite", folder: "lider-do-cardume", frames: 2, frameMs: 220, scale: 0.36, shapeFallback: "fish" },
   },
   dartfish: {
     id: "dartfish",
@@ -36,6 +38,7 @@ export const ENEMIES: Record<EnemyId, EnemyDefinition> = {
     ...ENEMY_BALANCE.dartfish,
     hitRadius: 11,
     scale: 0.82,
+    art: { kind: "sprite", folder: "predador-corrompido", frames: 3, frameMs: 140, scale: 0.28, shapeFallback: "dart" },
   },
   needlefish: {
     id: "needlefish",
@@ -46,6 +49,7 @@ export const ENEMIES: Record<EnemyId, EnemyDefinition> = {
     ...ENEMY_BALANCE.needlefish,
     hitRadius: 10,
     scale: 0.78,
+    art: { kind: "sprite", folder: "raia-espinhosa", frames: 4, frameMs: 130, scale: 0.34, shapeFallback: "needle" },
   },
   shellback: {
     id: "shellback",
@@ -56,6 +60,7 @@ export const ENEMIES: Record<EnemyId, EnemyDefinition> = {
     ...ENEMY_BALANCE.shellback,
     hitRadius: 18,
     scale: 1.18,
+    art: { kind: "sprite", folder: "caranguejo-eremita", frames: 4, frameMs: 200, scale: 0.42, rotate: "upright", shapeFallback: "shell" },
   },
   moray: {
     id: "moray",
@@ -67,6 +72,7 @@ export const ENEMIES: Record<EnemyId, EnemyDefinition> = {
     hitRadius: 20,
     scale: 1.32,
     slowResistance: 0.5,
+    art: { kind: "sprite", folder: "moreia-das-correntes", frames: 3, frameMs: 180, scale: 0.37, shapeFallback: "moray" },
   },
   tidebreaker: {
     id: "tidebreaker",
@@ -80,6 +86,7 @@ export const ENEMIES: Record<EnemyId, EnemyDefinition> = {
     isBoss: true,
     unblockable: true,
     slowResistance: 0.35,
+    art: { kind: "sprite", folder: "baleia-mare-negra", frames: 1, frameMs: 400, scale: 0.19, shapeFallback: "boss" },
     description: "O chefe das primeiras marés: inverte a corrente do recife em ciclos e não pode ser bloqueado.",
     abilities: [{ type: "reverseCurrents", cycleMs: BOSS_CURRENT.cycleMs, reverseMs: BOSS_CURRENT.reverseMs }],
   },

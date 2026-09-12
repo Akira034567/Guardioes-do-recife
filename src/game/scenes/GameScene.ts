@@ -1,4 +1,5 @@
 import Phaser from "phaser";
+import { preloadEnemyArt } from "../assets/enemyArt";
 import { GUARDIAN_ART, hasGuardianArt, preloadGuardianUpgradeArt } from "../assets/guardianArt";
 import { preloadLevelBackground } from "../assets/levelBackgrounds";
 import { DEPTH, GAME_HEIGHT, GAME_WIDTH, HUD_BOTTOM, HUD_TOP } from "../constants";
@@ -120,6 +121,8 @@ export class GameScene extends Phaser.Scene {
     preloadLevelBackground(this, this.level.backgroundKey);
     // O boot traz só as formas base; as evoluções chegam aqui, apenas para o esquadrão desta partida.
     preloadGuardianUpgradeArt(this, this.launch.loadout);
+    // Mesma ideia para os inimigos: só as espécies que aparecem nas ondas desta fase.
+    preloadEnemyArt(this, [...new Set(this.level.waves.flatMap((wave) => wave.groups.map((group) => group.enemyId)))]);
   }
 
   create(): void {
@@ -318,7 +321,7 @@ export class GameScene extends Phaser.Scene {
       const enemy = this.match.enemy(id);
       return enemy ? { x: enemy.x, y: enemy.y } : null;
     };
-    for (const view of this.enemyViews.values()) view.sync(now);
+    for (const view of this.enemyViews.values()) view.sync(now, deltaMs);
     for (const view of this.guardianViews.values()) view.sync(now, enemyPosition);
     for (const view of this.projectileViews.values()) view.sync();
     for (const view of this.fieldViews.values()) view.sync(now);
