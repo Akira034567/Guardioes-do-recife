@@ -16,6 +16,7 @@ npm test
 npm run build
 npx playwright install chromium
 npm run test:e2e
+npm run test:balance
 ```
 
 Abra `http://localhost:5173`. O jogo usa mouse e touch em layout horizontal 16:9.
@@ -47,13 +48,20 @@ Abra `http://localhost:5173`. O jogo usa mouse e touch em layout horizontal 16:9
 
 ### Camada de controle
 
-Slow, stun, knockback, bloqueio, marca, veneno e vulnerabilidade passam por `src/game/core/CrowdControl.ts`, `EnemyStatus.ts`, `Blocking.ts` e `FlowField.ts`, usados igualmente pela cena e pela simulação. Elites e chefes têm retornos decrescentes configurados em `CROWD_CONTROL` (`balance.ts`): o primeiro controle forte vale 100%, o segundo 60%, o terceiro 30% e depois imunidade temporária. Knockback sempre desloca ao longo da rota; chefes nunca são empurrados (só sofrem slow). Posicionamento (correnteza, água, margem) está em `PLACEMENT` e `core/PlacementRules.ts`.
+Slow, stun, knockback, bloqueio, marca, veneno e vulnerabilidade passam por `src/game/core/StatusEffects.ts` (contêiner central com regra de acúmulo por tipo), pela fachada `EnemyStatus.ts`, por `CrowdControl.ts`, `Blocking.ts` e `CurrentSystem.ts`. Elites e chefes têm retornos decrescentes configurados em `CROWD_CONTROL` (`balance.ts`): o primeiro controle forte vale 100%, o segundo 60%, o terceiro 30% e depois imunidade temporária. Knockback sempre desloca ao longo da rota; chefes nunca são empurrados (só sofrem slow). Posicionamento (correnteza, água, margem) está em `PLACEMENT` e `core/PlacementRules.ts`.
 - **Vender** devolve 25% de tudo investido (custo base + upgrades) e libera a posição.
 - Regra global do projétil do Camarão: um mesmo disparo nunca acerta o mesmo inimigo duas vezes.
 
 ## Inimigos
 
 Peixinho (cardume), Peixe Invasor, Peixe-Flecha, Peixe-Agulha, Cascudo (armadura), Moreia Sombria (elite, resiste a controle) e Quebra-Marés (chefe, inverte a corrente, não pode ser bloqueado).
+
+Cada inimigo é só dados (`ENEMIES` + `ENEMY_BALANCE`). Além dos números, a definição aceita `tags`, `resistances`, `immunities`, `art` e **habilidades** (`abilities`), despachadas por tipo em `core/EnemyAbilities.ts`: `regen`, `enrageBelowHp`, `shieldAllies`, `disruptGuardians`, `stealth`, `splitOnDeath`, `phaseChangeAtHp`, `speedBurst` e `reverseCurrents` (a inversão de corrente do Quebra-Marés). Nenhum código olha o id do inimigo.
+
+### Elites e chefes
+
+- **Elites** (`data/elites.ts`) são modificadores aplicáveis a qualquer inimigo: Blindado, Veloz, Regenerador, Furioso, Resistente e Camuflado. Uma onda pede elites com `elite: "swift"` (todos do grupo) ou `elite: [...] + elitePicks: [1, 3]` (só alguns). O id base não muda, então contagens, `enemyOverrides` e testes seguem valendo.
+- **Chefes** declaram `boss: { phases: [...] }`: cada fase entra abaixo de uma fração de vida e pode mudar atributos, ganhar habilidades e anunciar a virada. Sem `boss`, um chefe tem uma fase só (é o caso do Quebra-Marés). O HUD mostra barra, nome e fase.
 
 ## Balanceamento
 
@@ -62,20 +70,36 @@ Critério de vencibilidade: toda fase deve ser vencível perdendo poucas vidas c
 - `npm test` roda `tests/balance-sim.test.ts`, uma simulação headless da partida (`src/game/core/Simulation.ts`, que roda o MESMO motor da partida real, `src/game/core/match/Match.ts`, sem Phaser) que termina em segundos e imprime `[sim] … vidas X/20 · pérolas Y · vazou: …` por build. `tests/balance-lab.test.ts` imprime rota, cobertura de cada plataforma e vida/renda por onda de cada fase. `tests/match-golden.test.ts` congela o resultado exato de cada build em snapshot: qualquer refatoração precisa mantê-lo.
 - `npm run test:balance` joga os mesmos roteiros no jogo real via Playwright (`tests/e2e/balance.spec.ts`), mais lento; a simulação tende a ser 2 a 4 vidas mais otimista que a partida real.
 
+A dificuldade da partida (`NORMAL`, `DIFÍCIL`, `ABISSAL` em `data/difficulty.ts`) é aplicada **antes** do motor por `resolveLevelForDifficulty`, que devolve uma fase nova com vida, velocidade, quantidade, recompensas, pérolas iniciais e sorteio de elites já resolvidos. `NORMAL` é identidade verificada por teste, então o balanceamento de referência não muda. Até existir a tela de preparação, `?difficulty=abissal` escolhe.
+
 Cada fase controla sua dificuldade em `enemyScaling` (vida, velocidade, recompensa), `enemyOverrides` (ex.: chefe mais fraco) e na composição das ondas; a razão vida-total ÷ (pérolas iniciais + renda) sobe de ~2,7 na fase 1 para ~6,8 na fase 6; as rotas longas com laços (fases 2 e 3) compensam com mais inimigos, e as rotas curtas do naufrágio (fases 5 e 6) com plataformas mais próximas do canal.
 
 Todos os números vivem em `src/game/data/balance.ts`: economia (pérolas iniciais, reembolso, bônus de onda e de fase), custos e habilidades dos Guardiões e a ficha de referência dos inimigos. `guardians.ts` e `enemies.ts` só adicionam nomes, cores e textos; as fases em `src/game/data/levels/` definem geometria e ondas.
+
+## Arquitetura da partida
+
+Uma partida inteira vive em `src/game/core/match/Match.ts`, sem Phaser:
+
+- **Comandos** são a única porta de entrada: `placeGuardian`, `upgradeGuardian`, `sellGuardian`, `startNextWave` e os `debug.*`. Cada um devolve sucesso ou um motivo tipado (`insufficientPearls`, `branchLocked`, ...), que a cena traduz em mensagem.
+- **Eventos de domínio** saem pelo `listener` (`MatchEvents.ts`): ondas, inimigos, Guardiões, projéteis, áreas, chefe, pérolas. A apresentação (`GameScene` + `systems/MatchEffects.ts`) cria e destrói as views e toca som a partir deles; regra nenhuma vive na cena.
+- **Relógio**: `MatchClock` acumula o tempo real e roda `tick()` de passo fixo (60 Hz). Pausa é zero tick; 2× são dois ticks. O motor não conhece relógio de parede, o que mantém o caminho aberto para replay e coop.
+- **Economia**: `Economy` guarda um razão por fonte (`EnemyReward`, `WaveReward`, `LevelReward`, `GuardianGeneration`, `MapReward`, `SpecialReward`, `EarlyWaveBonus`, `SellRefund`) e por destino (`Place`, `Upgrade`), que alimenta `MatchStats`.
+- **Estatísticas**: `MatchStats` acompanha abates, vazamentos, dano por Guardião e por causa, colocações, upgrades, ondas, tempo e pérolas — base das telas de resultado e das conquistas.
+- **Progressão**: `core/save/SaveManager.ts` guarda o documento permanente (versão 2, com migração da chave antiga), separado do estado da partida.
+
+`?difficulty=`, `?level=`, `?guardians=`, `?debug=1` e `?debug=1&wave=N` continuam funcionando como atalhos.
 
 ## Debug
 
 - `F2`: abre ou fecha o modo debug.
 - `?debug=1`: inicia com debug e disponibiliza o botão para dispositivos touch. Em build de produção, F2 só funciona com `?debug=1`.
 - O painel permite alternar rota, alcance, hitboxes, corrente, estados, alvos e áreas de posicionamento separadamente.
+- Ações do painel: +100 pérolas, spawn de inimigo, spawn de elite, pular onda, matar todos e invencibilidade. Elas viram comandos do motor e marcam a partida como testada (`MatchStats.cheated`), para não render progressão.
 
 ## Organização
 
 - `src/game/data`: balanceamento, catálogo de Guardiões e inimigos, registro de fases.
-- `src/game/core`: regras puras e testáveis (rota, corrente, economia, ondas, árvore de upgrades, projétil, status de inimigos, auras).
+- `src/game/core`: regras puras e testáveis (rota, correntes, economia com razão de fontes, ondas, árvore de upgrades, projétil, status, auras, alvo e formas de alcance, habilidades de inimigo, encontro de chefe).
 - `src/game/core/match`: o motor único da partida (`Match`): estado, `tick()` de passo fixo, comandos (`placeGuardian`, `upgradeGuardian`, `sellGuardian`, `startNextWave`), eventos de domínio, `MatchStats`, `MatchClock` (pause e velocidade). Cena e simulação de balanceamento rodam o mesmo motor.
 - `src/game/core/save`: progressão permanente versionada (`PlayerProgress`, `SaveManager`, migrações); nunca se mistura com o estado da partida.
 - `src/game/objects`: views Phaser (`EnemyView`, `GuardianView`, `ProjectileView`, áreas) que só desenham o que o motor diz.
@@ -86,5 +110,7 @@ Todos os números vivem em `src/game/data/balance.ts`: economia (pérolas inicia
 
 - Novo Guardião: entrada em `GUARDIAN_BALANCE`, em `GUARDIANS`, no tipo `GuardianId`, em `GUARDIAN_ORDER` e em `GUARDIAN_ART` (`assets/guardianArt.ts`, com `assetFolder`/`abilityFile` se as pastas seguirem outro nome); mecânicas novas entram como campos de `GuardianUpgrade` resolvidos em `GuardianStats.ts` e como funções em `core/GuardianBehaviors.ts` ou nos sistemas de `core/match/systems`; o visual reage aos eventos em `systems/MatchEffects.ts`. Pastas de arte: `public/assets/guardians/<pasta>/<forma>/{idle,attack,ability,impact}.png`.
 - Regra nova de partida: sempre no motor (`core/match`), nunca na cena. Emita um evento em `MatchEvents.ts` se a apresentação precisar reagir.
-- Novo inimigo: entrada em `ENEMY_BALANCE`, em `ENEMIES`, no tipo `EnemyId` (e um desenho em `Enemy.drawBody`, opcional).
+- Novo inimigo: entrada em `ENEMY_BALANCE`, em `ENEMIES`, no tipo `EnemyId` e, se tiver mecânica, uma entrada em `abilities` (um tipo novo vira um handler em `core/EnemyAbilities.ts`). O desenho vem de `art` (forma vetorial ou pasta de sprites).
+- Novo elite: uma entrada em `ELITE_BALANCE` e outra em `ELITES`. Ele já pode ser usado em qualquer onda e aparece no preview.
+- Guardião que rende pérolas (Ostra): basta declarar `generatesPearls: { amount, intervalMs }` na definição ou em um upgrade.
 - Nova fase: arquivo em `src/game/data/levels/` e inclusão em `LEVELS`; os testes em `tests/levels.test.ts` validam rota, plataformas, correntes e ondas automaticamente.
