@@ -62,6 +62,21 @@ async function waitForPearls(page: Page, canvas: Locator, minimum: number, timeo
   return false;
 }
 
+/**
+ * Espera um atributo chegar ao valor esperado. Se a partida terminar antes (o roteiro estava no último
+ * passo e a onda fechou), devolve `false` para o roteiro parar sem falhar: o que importa é o resultado.
+ */
+async function waitForAttribute(page: Page, canvas: Locator, attribute: string, expected: string, label: string, timeoutMs = 5_000): Promise<boolean> {
+  const started = Date.now();
+  while (Date.now() - started < timeoutMs) {
+    const [value, state] = await Promise.all([canvas.getAttribute(attribute), canvas.getAttribute("data-game-state")]);
+    if (value === expected) return true;
+    if (isOver(state)) return false;
+    await page.waitForTimeout(100);
+  }
+  throw new Error(`${label}: ${attribute} não chegou a ${expected}`);
+}
+
 async function playBuild(page: Page, build: Build) {
   const loadout = build.loadout ?? DEFAULT_LOADOUT;
   const { canvas, clickGame } = await openLevel(page, build.level, loadout);
@@ -73,7 +88,8 @@ async function playBuild(page: Page, build: Build) {
       const before = Number(await canvas.getAttribute("data-guardians"));
       await clickGame(cardX(loadout, step.place), CARD_Y);
       await clickGame(step.at[0], step.at[1]);
-      await expect(canvas, `${build.name}: posicionar ${step.place} em ${key(step.at)}`).toHaveAttribute("data-guardians", String(before + 1));
+      const label = `${build.name}: posicionar ${step.place} em ${key(step.at)}`;
+      if (!(await waitForAttribute(page, canvas, "data-guardians", String(before + 1), label))) break;
       placed.set(key(step.at), { id: step.place, branch: null, level: 0 });
     } else {
       const unit = placed.get(key(step.upgrade));
@@ -83,9 +99,11 @@ async function playBuild(page: Page, build: Build) {
       if (!ready) break;
       const before = Number(await canvas.getAttribute("data-upgrades"));
       await clickGame(step.upgrade[0], step.upgrade[1]);
+      if (isOver(await canvas.getAttribute("data-game-state"))) break;
       await expect(canvas).toHaveAttribute("data-selected", /G\d+/);
       await clickGame(OPTION[step.branch].x, OPTION[step.branch].y);
-      await expect(canvas, `${build.name}: upgrade ${step.branch} em ${key(step.upgrade)}`).toHaveAttribute("data-upgrades", String(before + 1));
+      const label = `${build.name}: upgrade ${step.branch} em ${key(step.upgrade)}`;
+      if (!(await waitForAttribute(page, canvas, "data-upgrades", String(before + 1), label))) break;
       unit.branch = step.branch;
       unit.level += 1;
     }

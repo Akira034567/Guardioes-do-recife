@@ -34,4 +34,20 @@ describe("MatchClock", () => {
     clock.advance(0, () => (ticks += 1));
     expect(ticks).toBe(6);
   });
+
+  it("clamps a slow frame to the same 80 ms the old loop used", () => {
+    const clock = new MatchClock();
+    let ticks = 0;
+    // Um quadro de 500 ms vale 80 ms de partida: 4 ticks inteiros (o resto é descartado).
+    clock.advance(500, () => (ticks += 1));
+    expect(ticks).toBe(4);
+  });
+
+  it("lets 2x run twice as many ticks in the same slow frame", () => {
+    const clock = new MatchClock();
+    clock.speed = 2;
+    let ticks = 0;
+    clock.advance(80, () => (ticks += 1));
+    expect(ticks).toBe(9);
+  });
 });

@@ -253,3 +253,21 @@ test("plays a harder difficulty with elites in the waves", async ({ page }) => {
   await expect(canvas).toHaveAttribute("data-pearls", "144");
   expect(pageErrors).toEqual([]);
 });
+
+test("migrates an old save so existing players keep their levels", async ({ page }) => {
+  // Progresso antigo (`{completed}` na chave v1) precisa continuar valendo depois do save versionado.
+  await page.addInitScript(() => {
+    window.localStorage.setItem("guardioes-do-recife.progress.v1", JSON.stringify({ completed: ["recife-1", "recife-2"] }));
+  });
+  const { canvas, pageErrors } = await openGame(page, "");
+  await expect(canvas).toHaveAttribute("data-screen", "menu");
+  await expect(canvas).toHaveAttribute("data-unlocked-levels", "3");
+  const saved = await page.evaluate(() => JSON.parse(window.localStorage.getItem("guardioes-do-recife.save") ?? "{}"));
+  expect(saved.saveVersion).toBe(2);
+  expect(saved.completedLevels).toEqual(["recife-1", "recife-2"]);
+  expect(saved.levelStars["recife-1"].stars).toBe(1);
+  expect(saved.currency.shells).toBeGreaterThan(0);
+  const legacy = await page.evaluate(() => window.localStorage.getItem("guardioes-do-recife.progress.v1"));
+  expect(legacy, "a chave antiga fica para trás como segurança").not.toBeNull();
+  expect(pageErrors).toEqual([]);
+});

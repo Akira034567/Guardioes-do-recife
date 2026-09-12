@@ -12,16 +12,19 @@ export class MatchClock {
 
   constructor(
     readonly dtMs = 1000 / 60,
-    private readonly maxTicksPerFrame = 6,
-    private readonly maxFrameMs = 100,
+    /** Teto de ticks por quadro em 1×; velocidades maiores rodam proporcionalmente mais. */
+    private readonly maxTicksPerFrame = 5,
+    /** Mesmo limite de quadro do loop antigo: um quadro lento nunca vale mais que isto. */
+    private readonly maxFrameMs = 80,
   ) {}
 
   /** Avança o relógio com o delta real e roda os ticks devidos. Devolve quantos ticks rodaram. */
   advance(realDeltaMs: number, tick: () => void): number {
     if (this.paused) return 0;
     this.accumulatorMs += Math.max(0, Math.min(this.maxFrameMs, realDeltaMs)) * this.speed;
+    const limit = this.maxTicksPerFrame * this.speed;
     let ticks = 0;
-    while (this.accumulatorMs >= this.dtMs && ticks < this.maxTicksPerFrame) {
+    while (this.accumulatorMs >= this.dtMs && ticks < limit) {
       this.accumulatorMs -= this.dtMs;
       tick();
       ticks += 1;
