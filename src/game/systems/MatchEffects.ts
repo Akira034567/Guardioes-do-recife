@@ -10,6 +10,7 @@ import type { ProjectileView } from "../objects/ProjectileView";
 import type { GuardianId } from "../types";
 import type { ArtEffects } from "./ArtEffects";
 import type { AudioManager } from "./AudioManager";
+import { getSettings } from "./settings";
 
 export interface MatchEffectsHost {
   readonly scene: Phaser.Scene;
@@ -28,6 +29,11 @@ export interface MatchEffectsHost {
 export class MatchEffects {
   constructor(private readonly host: MatchEffectsHost) {}
 
+  /** "Efeitos reduzidos" (item 36) tira as partículas decorativas e mantém a leitura do combate. */
+  private get reduced(): boolean {
+    return getSettings().reducedEffects;
+  }
+
   handle(event: MatchEvent): void {
     const { audio } = this.host;
     switch (event.type) {
@@ -37,6 +43,8 @@ export class MatchEffects {
         return;
       case "enemyReachedGoal":
         audio.play("warning");
+        // Um baque curto quando o coral leva dano; desligável nas configurações.
+        if (getSettings().screenShake) this.host.scene.cameras.main.shake(160, 0.004 * Math.min(3, event.reefDamage));
         this.host.showMessage(`${event.name} atingiu o Recife! (-${event.reefDamage})`, 1400);
         return;
       case "bossDefeated":
@@ -305,12 +313,14 @@ export class MatchEffects {
   }
 
   shockwave(x: number, y: number, color: number, radius: number): void {
+    if (this.reduced) return;
     const circle = this.host.scene.add.circle(x, y, 10).setStrokeStyle(4, color, 0.9).setDepth(DEPTH.effects);
     this.host.scene.tweens.add({ targets: circle, radius, alpha: 0, duration: 260, ease: "Quad.Out", onComplete: () => circle.destroy() });
   }
 
   /** Rastro da investida do Tubarão: afterimages entre a margem e o alvo (mais vermelhas no Frenesi). */
   private dashTrail(guardian: MatchGuardian, targetX: number, targetY: number): void {
+    if (this.reduced) return;
     const frenzy = guardian.stats.frenzy !== null;
     const color = frenzy ? 0xff4d5e : 0x9fc9ff;
     const steps = frenzy ? 4 : 2;
@@ -325,6 +335,7 @@ export class MatchEffects {
   }
 
   private poisonPuff(x: number, y: number): void {
+    if (this.reduced) return;
     const puff = this.host.scene.add.circle(x + 6, y - 10, 4, 0x8ef26b, 0.7).setDepth(DEPTH.effects);
     this.host.scene.tweens.add({ targets: puff, y: y - 26, alpha: 0, duration: 420, onComplete: () => puff.destroy() });
   }

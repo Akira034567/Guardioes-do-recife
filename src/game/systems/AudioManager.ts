@@ -1,3 +1,6 @@
+import { DEFAULT_SETTINGS, type PlayerSettings } from "../core/save/PlayerProgress";
+import { getSettings, onSettingsChanged, updateSettings } from "./settings";
+
 export type SoundCue = "shot" | "zap" | "pulse" | "impact" | "buy" | "upgrade" | "wave" | "warning";
 
 const CUES: Record<SoundCue, { frequency: number; duration: number; type: OscillatorType; gain: number }> = {
@@ -13,10 +16,24 @@ const CUES: Record<SoundCue, { frequency: number; duration: number; type: Oscill
 
 export class AudioManager {
   private context: AudioContext | null = null;
-  private muted = false;
+  private muted = DEFAULT_SETTINGS.muted;
+  /** Volume final aplicado a cada efeito: geral x efeitos, 0 quando silenciado. */
+  private gainScale = 1;
+  private readonly unsubscribe: () => void;
+
+  constructor() {
+    this.applySettings(getSettings());
+    this.unsubscribe = onSettingsChanged((settings) => this.applySettings(settings));
+  }
 
   get isMuted(): boolean {
     return this.muted;
+  }
+
+  /** Lê as configurações do jogador (item 36); o botão ♪ do HUD continua valendo como atalho. */
+  private applySettings(settings: PlayerSettings): void {
+    this.muted = settings.muted;
+    this.gainScale = settings.masterVolume * settings.sfxVolume;
   }
 
   unlock(): void {
@@ -27,13 +44,15 @@ export class AudioManager {
     if (this.context?.state === "suspended") void this.context.resume();
   }
 
+  /** Atalho do HUD: silencia e grava a escolha no save. */
   toggleMute(): boolean {
     this.muted = !this.muted;
+    updateSettings({ muted: this.muted });
     return this.muted;
   }
 
   play(cue: SoundCue): void {
-    if (this.muted || !this.context || this.context.state !== "running") return;
+    if (this.muted || this.gainScale <= 0 || !this.context || this.context.state !== "running") return;
     const definition = CUES[cue];
     const now = this.context.currentTime;
     const oscillator = this.context.createOscillator();
@@ -41,7 +60,7 @@ export class AudioManager {
     oscillator.type = definition.type;
     oscillator.frequency.setValueAtTime(definition.frequency, now);
     oscillator.frequency.exponentialRampToValueAtTime(Math.max(45, definition.frequency * 0.72), now + definition.duration);
-    gain.gain.setValueAtTime(definition.gain, now);
+    gain.gain.setValueAtTime(definition.gain * this.gainScale, now);
     gain.gain.exponentialRampToValueAtTime(0.0001, now + definition.duration);
     oscillator.connect(gain);
     gain.connect(this.context.destination);
@@ -50,6 +69,7 @@ export class AudioManager {
   }
 
   destroy(): void {
+    this.unsubscribe();
     if (this.context) void this.context.close();
     this.context = null;
   }

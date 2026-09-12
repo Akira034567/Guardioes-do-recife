@@ -266,3 +266,211 @@
   padding: calc(4px * var(--gr-scale)) calc(10px * var(--gr-scale));
   color: var(--gr-cyan);
 }
+
+/* ---------------------------------------------------------------- coleção e bestiário */
+
+.gr-album {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(calc(128px * var(--gr-scale)), 1fr));
+  gap: calc(10px * var(--gr-scale));
+}
+
+.gr-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: calc(4px * var(--gr-scale));
+  text-align: center;
+  background: rgba(4, 32, 48, 0.62);
+  border: calc(1px * var(--gr-scale)) solid rgba(21, 129, 163, 0.5);
+  border-radius: calc(12px * var(--gr-scale));
+  padding: calc(10px * var(--gr-scale)) calc(8px * var(--gr-scale));
+  color: inherit;
+  font: inherit;
+  cursor: default;
+}
+
+.gr-card--found {
+  cursor: pointer;
+  transition: transform 120ms ease-out, border-color 120ms ease-out;
+}
+
+.gr-card--found:hover,
+.gr-card--found:focus-visible {
+  border-color: var(--gr-cyan);
+  transform: translateY(calc(-2px * var(--gr-scale)));
+}
+
+.gr-card--locked {
+  opacity: 0.86;
+}
+
+.gr-card__art {
+  width: calc(96px * var(--gr-scale));
+  height: calc(96px * var(--gr-scale));
+  object-fit: contain;
+}
+
+.gr-card__art--silhouette {
+  filter: brightness(0) opacity(0.45);
+}
+
+.gr-card__name {
+  font-size: calc(14px * var(--gr-scale));
+  font-weight: bold;
+  color: var(--gr-shell);
+}
+
+.gr-blob {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  filter: drop-shadow(0 calc(4px * var(--gr-scale)) calc(8px * var(--gr-scale)) rgba(0, 0, 0, 0.45));
+}
+
+.gr-progress {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: calc(3px * var(--gr-scale));
+}
+
+.gr-progress__track {
+  height: calc(6px * var(--gr-scale));
+  background: rgba(2, 24, 36, 0.9);
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.gr-progress__fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--gr-line), var(--gr-cyan));
+}
+
+.gr-progress__label {
+  font-size: calc(10px * var(--gr-scale));
+  color: #8dcbd8;
+}
+
+.gr-branches {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(calc(280px * var(--gr-scale)), 1fr));
+  gap: calc(10px * var(--gr-scale));
+}
+
+.gr-branch {
+  display: flex;
+  flex-direction: column;
+  gap: calc(6px * var(--gr-scale));
+  background: rgba(4, 32, 48, 0.62);
+  border: calc(1px * var(--gr-scale)) solid rgba(21, 129, 163, 0.5);
+  border-radius: calc(12px * var(--gr-scale));
+  padding: calc(10px * var(--gr-scale));
+}
+
+.gr-branch__step {
+  display: flex;
+  gap: calc(10px * var(--gr-scale));
+  align-items: center;
+  font-size: calc(12px * var(--gr-scale));
+}
+
+.gr-branch__art {
+  width: calc(56px * var(--gr-scale));
+  height: calc(56px * var(--gr-scale));
+  object-fit: contain;
+  flex: none;
+}
+
+.gr-branch__step p {
+  margin: calc(2px * var(--gr-scale)) 0 0;
+}
+
+.gr-columns {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(calc(220px * var(--gr-scale)), 1fr));
+  gap: calc(10px * var(--gr-scale));
+}
+
+.gr-list {
+  margin: calc(4px * var(--gr-scale)) 0 0;
+  padding-left: calc(16px * var(--gr-scale));
+  font-size: calc(12px * var(--gr-scale));
+}
+
+.gr-list--good {
+  color: var(--gr-success);
+}
+
+.gr-list--bad {
+  color: var(--gr-danger);
+}
+
+.gr-panel--boss {
+  border-color: #ff6f79;
+  box-shadow: 0 0 calc(30px * var(--gr-scale)) rgba(255, 111, 121, 0.25);
+}
+
+.gr-badge--boss {
+  background: rgba(255, 111, 121, 0.18);
+  border-color: rgba(255, 111, 121, 0.6);
+  color: #ffd9dc;
+}
+
+.gr-reveal__art--blob {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* ---------------------------------------------------------------- configurações e pause */
+
+.gr-row {
+  display: flex;
+  align-items: center;
+  gap: calc(12px * var(--gr-scale));
+  border-bottom: calc(1px * var(--gr-scale)) solid rgba(21, 129, 163, 0.35);
+  padding: calc(8px * var(--gr-scale)) 0;
+}
+
+.gr-row__label {
+  flex: 1 1 auto;
+  font-size: calc(14px * var(--gr-scale));
+}
+
+.gr-row__value {
+  min-width: calc(46px * var(--gr-scale));
+  text-align: right;
+  font-size: calc(13px * var(--gr-scale));
+  color: var(--gr-pearl);
+}
+
+.gr-slider {
+  flex: 0 1 calc(240px * var(--gr-scale));
+  accent-color: var(--gr-cyan);
+  min-height: calc(28px * var(--gr-scale));
+}
+
+.gr-actions--stack {
+  flex-direction: column;
+  align-items: stretch;
+}
+
+.gr-actions--stack .gr-button {
+  width: 100%;
+}
+
+/* ---------------------------------------------------------------- histórias */
+
+.gr-panel--story {
+  width: min(100%, calc(680px * var(--gr-scale)));
+  text-align: center;
+  align-items: center;
+}
+
+.gr-story__text {
+  font-size: calc(17px * var(--gr-scale));
+  line-height: 1.55;
+  margin: calc(6px * var(--gr-scale)) 0;
+  max-width: calc(560px * var(--gr-scale));
+}

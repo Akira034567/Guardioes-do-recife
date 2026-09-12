@@ -1,0 +1,55 @@
+import type { EnemyId } from "../types";
+
+/** Texto de bestiário: como a ameaça age e o que costuma derrubá-la. Só apresentação. */
+export interface EnemyLore {
+  description: string;
+  /** O que define o comportamento dele em campo. */
+  trait: string;
+  weaknesses: string[];
+  resistances: string[];
+}
+
+export const ENEMY_LORE: Record<EnemyId, EnemyLore> = {
+  minnow: {
+    description: "Nunca aparece sozinho. Vem em cardume, ocupa a rota inteira e conta com o número para passar.",
+    trait: "Frágil, mas chega em bando e satura defesas de alvo único.",
+    weaknesses: ["Dano em área", "Correnteza contrária"],
+    resistances: [],
+  },
+  swimmer: {
+    description: "O invasor comum das marés novas. Sem pressa, sem truque, direto para o coral.",
+    trait: "Referência do Recife: se um Guardião não dá conta dele, não dá conta de nada.",
+    weaknesses: ["Qualquer dano sustentado"],
+    resistances: [],
+  },
+  dartfish: {
+    description: "Corta a água em linha reta e não desvia de nada. Chega antes de você decidir onde atirar.",
+    trait: "Rápido e magro: atravessa o alcance de um Guardião em poucos segundos.",
+    weaknesses: ["Lentidão", "Bloqueio na rota"],
+    resistances: [],
+  },
+  needlefish: {
+    description: "O mais veloz do cardume invasor e o que mais machuca o coral quando passa.",
+    trait: "Velocidade alta e dano dobrado ao Recife: cada escape custa caro.",
+    weaknesses: ["Atordoamento", "Armadilhas"],
+    resistances: [],
+  },
+  shellback: {
+    description: "Carapaça velha de tanto raspar rocha. Anda devagar porque não precisa correr.",
+    trait: "Armadura pesada: golpes fracos e repetidos quase não o arranham.",
+    weaknesses: ["Quebra de armadura", "Dano alto por golpe"],
+    resistances: ["Tiros fracos e rápidos"],
+  },
+  moray: {
+    description: "Sai da fenda só quando sente que o Recife está mal defendido. Aguenta muito e cobra caro.",
+    trait: "Elite: muita vida, dano forte ao coral e metade da lentidão que os outros sofrem.",
+    weaknesses: ["Foco de vários Guardiões", "Vulnerabilidade"],
+    resistances: ["Lentidão (50%)"],
+  },
+  tidebreaker: {
+    description: "A maré em forma de bicho. Inverte a corrente do Recife em ciclos e atravessa qualquer bloqueio.",
+    trait: "Chefe: não pode ser bloqueado e vira a correnteza contra os Guardiões que dependem dela.",
+    weaknesses: ["Dano concentrado e contínuo"],
+    resistances: ["Bloqueio (imune)", "Lentidão (35%)"],
+  },
+};

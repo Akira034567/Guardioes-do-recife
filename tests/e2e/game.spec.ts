@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { CARD_X, CARD_Y, MENU, MENU_CARD_BUTTON, NEXT_WAVE, openGame, OPTION_A, OPTION_B, PAUSE, RESTART, SELL, SPEED_1X, SPEED_2X } from "./helpers";
+import { CARD_X, CARD_Y, MENU, MENU_CARD_BUTTON, NAV, NEXT_WAVE, openGame, OPTION_A, OPTION_B, PAUSE, RESTART, SELL, SPEED_1X, SPEED_2X } from "./helpers";
 
 test("loads a level directly and places a shrimp on a platform", async ({ page }) => {
   const { canvas, clickGame, pageErrors } = await openGame(page);
@@ -80,7 +80,8 @@ test("locks a unit into one upgrade branch, pauses and restarts without stale st
 
   await clickGame(PAUSE.x, PAUSE.y);
   await expect(canvas).toHaveAttribute("data-paused", "true");
-  await clickGame(PAUSE.x, PAUSE.y);
+  await expect(page.getByTestId("pause-panel")).toBeVisible();
+  await page.getByTestId("pause-resume").click();
   await expect(canvas).toHaveAttribute("data-paused", "false");
 
   await clickGame(RESTART.x, RESTART.y);
@@ -219,9 +220,13 @@ test("level select only opens unlocked levels", async ({ page }) => {
   await page.waitForTimeout(200);
   await expect(canvas).toHaveAttribute("data-screen", "menu");
 
-  // A carta abre a preparação (HTML) e é lá que a partida começa.
+  // A carta abre a história de abertura; a preparação vem logo depois dela.
   const first = MENU_CARD_BUTTON(0);
   await clickGame(first.x, first.y);
+  await expect(page.getByTestId("story-panel")).toHaveAttribute("data-story", "abertura");
+  await page.getByTestId("story-next").click();
+  await expect(page.getByTestId("story-text")).toContainText("corrente virar");
+  await page.getByTestId("story-skip").click();
   await expect(page.getByTestId("prep-panel")).toHaveAttribute("data-level", "recife-1");
   await expect(page.getByTestId("prep-objectives")).toContainText("Proteja o Recife");
   await page.getByTestId("prep-start").click();
@@ -243,7 +248,8 @@ test("switches match speed, pauses and previews the next wave", async ({ page })
   await expect(canvas).toHaveAttribute("data-speed", "2");
   await clickGame(PAUSE.x, PAUSE.y);
   await expect(canvas).toHaveAttribute("data-paused", "true");
-  await clickGame(PAUSE.x, PAUSE.y);
+  await expect(page.getByTestId("pause-panel")).toBeVisible();
+  await page.getByTestId("pause-resume").click();
   await expect(canvas).toHaveAttribute("data-paused", "false");
   await clickGame(SPEED_1X.x, SPEED_1X.y);
   await expect(canvas).toHaveAttribute("data-speed", "1");
@@ -273,5 +279,66 @@ test("migrates an old save so existing players keep their levels", async ({ page
   expect(saved.currency.shells).toBeGreaterThan(0);
   const legacy = await page.evaluate(() => window.localStorage.getItem("guardioes-do-recife.progress.v1"));
   expect(legacy, "a chave antiga fica para trás como segurança").not.toBeNull();
+  expect(pageErrors).toEqual([]);
+});
+
+test("opens the reef album, the bestiary and the settings from the map", async ({ page }) => {
+  // Save com Recife 1 concluído e um inimigo já catalogado.
+  await page.addInitScript(() => {
+    window.localStorage.setItem(
+      "guardioes-do-recife.save",
+      JSON.stringify({
+        saveVersion: 2,
+        completedLevels: ["recife-1"],
+        enemyDiscovery: { swimmer: { firstSeenLevelId: "recife-1", seenAt: "2026-01-01T00:00:00.000Z", kills: 12 } },
+      }),
+    );
+  });
+  const { canvas, clickGame, pageErrors } = await openGame(page, "");
+  await expect(canvas).toHaveAttribute("data-screen", "menu");
+
+  // Álbum do Recife: os cinco fundadores aparecem; o Peixe-Pedra segue oculto em "???".
+  await clickGame(NAV.collection.x, NAV.collection.y);
+  await expect(page.getByTestId("collection-panel")).toBeVisible();
+  await expect(page.getByTestId("collection-card-pistol-shrimp")).toHaveAttribute("data-state", "unlocked");
+  await expect(page.getByTestId("collection-card-stonefish")).toHaveAttribute("data-state", "locked");
+  await expect(page.getByTestId("collection-card-stonefish")).toContainText("???");
+
+  // A ficha traz as duas árvores de evolução e a carreira do Guardião.
+  await page.getByTestId("collection-card-pistol-shrimp").click();
+  await expect(page.getByTestId("guardian-sheet")).toHaveAttribute("data-guardian", "pistol-shrimp");
+  await expect(page.getByTestId("guardian-branch-a")).toBeVisible();
+  await expect(page.getByTestId("guardian-branch-b")).toBeVisible();
+  await expect(page.getByTestId("guardian-career")).toBeVisible();
+  await page.getByTestId("sheet-back").click();
+  await page.getByTestId("collection-back").click();
+
+  // Bestiário: o Quebra-Marés só aparece depois do primeiro encontro.
+  await clickGame(NAV.bestiary.x, NAV.bestiary.y);
+  await expect(page.getByTestId("bestiary-panel")).toBeVisible();
+  await expect(page.getByTestId("bestiary-card-tidebreaker")).toHaveAttribute("data-state", "unknown");
+  await expect(page.getByTestId("bestiary-card-swimmer")).toHaveAttribute("data-state", "seen");
+  await page.getByTestId("bestiary-card-swimmer").click();
+  await expect(page.getByTestId("enemy-page")).toHaveAttribute("data-enemy", "swimmer");
+  await page.getByTestId("enemy-back").click();
+  await page.getByTestId("bestiary-back").click();
+
+  // Histórias: capítulo não vivido fica em "???" no índice.
+  await clickGame(NAV.stories.x, NAV.stories.y);
+  await expect(page.getByTestId("story-index")).toBeVisible();
+  await expect(page.getByTestId("story-entry-abertura")).toHaveAttribute("data-state", "locked");
+  await page.getByTestId("story-index-back").click();
+
+  // Configurações: a escolha vale na hora e fica gravada no save.
+  await clickGame(NAV.settings.x, NAV.settings.y);
+  await expect(page.getByTestId("settings-panel")).toBeVisible();
+  await page.getByTestId("settings-mute").click();
+  await page.getByTestId("settings-scale-large").click();
+  await expect(page.getByTestId("settings-ui-scale")).toHaveAttribute("data-value", "large");
+  const settings = await page.evaluate(() => JSON.parse(window.localStorage.getItem("guardioes-do-recife.save") ?? "{}").settings);
+  expect(settings.muted).toBe(true);
+  expect(settings.uiScale).toBe("large");
+  await page.getByTestId("settings-back").click();
+  await expect(canvas).toHaveAttribute("data-overlay", "");
   expect(pageErrors).toEqual([]);
 });

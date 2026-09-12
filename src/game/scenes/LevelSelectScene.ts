@@ -1,5 +1,6 @@
 import Phaser from "phaser";
 import { GAME_HEIGHT, GAME_WIDTH } from "../constants";
+import { MENU_NAV } from "../hudLayout";
 import type { LevelProgressApi } from "../core/LevelProgress";
 import { difficultyOf } from "../data/difficulty";
 import { LEVELS, LEVEL_IDS } from "../data/levels";
@@ -9,7 +10,12 @@ import { launchConfigFor } from "../match/MatchLaunchConfig";
 import { createLevelProgress } from "../systems/ProgressStore";
 import { getProgression } from "../systems/progression";
 import { getScreenHost } from "../ui/dom/host";
+import { bestiaryScreen } from "../ui/dom/screens/BestiaryScreen";
+import { collectionScreen } from "../ui/dom/screens/CollectionScreen";
 import { preparationScreen } from "../ui/dom/screens/PreparationScreen";
+import { settingsScreen } from "../ui/dom/screens/SettingsScreen";
+import { storyIndexScreen, storyScreen } from "../ui/dom/screens/StoryScreen";
+import { pendingStory } from "../systems/story";
 import type { EnemyId, GuardianId, LevelDefinition } from "../types";
 
 /** Menu de fases: mostra progressão e inicia a fase escolhida. */
@@ -77,26 +83,44 @@ export class LevelSelectScene extends Phaser.Scene {
       if (level) this.openPreparation(level);
     }
 
-    const resetButton = this.add
-      .rectangle(GAME_WIDTH / 2, GAME_HEIGHT - 56, 200, 40, 0x103e50, 1)
-      .setStrokeStyle(2, 0x348ba0, 0.75)
-      .setInteractive({ useHandCursor: true });
-    this.add
-      .text(GAME_WIDTH / 2, GAME_HEIGHT - 56, "LIMPAR PROGRESSO", {
-        fontFamily: "Arial, sans-serif",
-        fontSize: "12px",
-        fontStyle: "bold",
-        color: "#e9fbff",
-      })
-      .setOrigin(0.5);
-    resetButton.on("pointerdown", () => {
+    this.createNavigation();
+  }
+
+  /** Barra de baixo: álbum, bestiário, histórias, configurações e limpar progresso. */
+  private createNavigation(): void {
+    const host = getScreenHost(this.game);
+    const { y, width } = MENU_NAV;
+    this.navButton(MENU_NAV.collection, y, width, "ÁLBUM DO RECIFE", () => host.push(collectionScreen(getProgression(), () => host.clear())));
+    this.navButton(MENU_NAV.bestiary, y, width, "AMEAÇAS DO RECIFE", () => host.push(bestiaryScreen(getProgression(), () => host.clear())));
+    this.navButton(MENU_NAV.stories, y, width, "HISTÓRIAS", () => host.push(storyIndexScreen(() => host.clear())));
+    this.navButton(MENU_NAV.settings, y, width, "CONFIGURAÇÕES", () => host.push(settingsScreen(() => host.clear())));
+    this.navButton(MENU_NAV.reset, y, width, "LIMPAR PROGRESSO", () => {
       this.progress.reset();
       this.scene.restart();
     });
   }
 
-  /** Abre a preparação da fase: informações, dificuldade e escolha do esquadrão. */
+  private navButton(x: number, y: number, width: number, label: string, onClick: () => void): void {
+    const background = this.add
+      .rectangle(x, y, width, 40, 0x103e50, 1)
+      .setStrokeStyle(2, 0x348ba0, 0.75)
+      .setInteractive({ useHandCursor: true });
+    this.add
+      .text(x, y, label, { fontFamily: "Arial, sans-serif", fontSize: "12px", fontStyle: "bold", color: "#e9fbff" })
+      .setOrigin(0.5);
+    background.on("pointerover", () => background.setFillStyle(0x14536c, 1));
+    background.on("pointerout", () => background.setFillStyle(0x103e50, 1));
+    background.on("pointerdown", onClick);
+  }
+
+  /** Abre a preparação da fase, depois da história de abertura quando ela ainda não foi lida. */
   private openPreparation(level: LevelDefinition): void {
+    const intro = pendingStory({ type: "levelIntro", levelId: level.id });
+    if (intro) {
+      const host = getScreenHost(this.game);
+      host.replace(storyScreen(intro, () => this.openPreparation(level)));
+      return;
+    }
     const progression = getProgression();
     const host = getScreenHost(this.game);
     const saved = progression.progress;

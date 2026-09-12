@@ -27,6 +27,18 @@ Abra `http://localhost:5173`. O jogo usa mouse e touch em layout horizontal 16:9
 - `?level=recife-3` abre uma fase diretamente (útil para testes e balanceamento).
 - Fase 1 usa o fundo pintado; as demais desenham um fundo procedural a partir da rota, plataformas e correntes.
 - Cada fase define rota, plataformas, correntes, pérolas iniciais, escala de inimigos e composição de ondas.
+- A carta da fase abre a história de abertura (na primeira vez) e depois a preparação: objetivos, dificuldade, ameaças conhecidas e as cinco vagas do esquadrão.
+- Concluir objetivos rende estrelas e Conchas, a moeda permanente gasta fora da partida.
+
+## Telas fora da partida
+
+Menus são HTML por cima do canvas (`src/game/ui/dom`), alinhados ao jogo e escalados por `--gr-scale`; o HUD da partida continua em Phaser.
+
+- **Álbum do Recife**: uma carta por Guardião. Bloqueado vira silhueta com "???" e a pista de onde encontrá-lo; encontrado abre ficha com história, números, carreira e as duas árvores de evolução.
+- **Ameaças do Recife**: bestiário. O inimigo só aparece depois do primeiro encontro, com vida, velocidade, fraquezas, resistências e habilidades; chefes ganham página destacada.
+- **Histórias do Recife**: índice dos capítulos já vividos, com releitura.
+- **Configurações**: volumes, silenciar, efeitos reduzidos, tremor de tela e escala da interface. Tudo grava no save na hora.
+- **Menu de pause**: o botão Ⅱ pausa e abre continuar, configurações, reiniciar e sair para o mapa.
 
 ## Guardiões
 
@@ -104,7 +116,9 @@ Uma partida inteira vive em `src/game/core/match/Match.ts`, sem Phaser:
 - `src/game/core/save`: progressão permanente versionada (`PlayerProgress`, `SaveManager`, migrações); nunca se mistura com o estado da partida.
 - `src/game/objects`: views Phaser (`EnemyView`, `GuardianView`, `ProjectileView`, áreas) que só desenham o que o motor diz.
 - `src/game/scenes`: carregamento, menu de fases, apresentação da partida (`GameScene`) e HUD.
-- `src/game/systems`: `MatchEffects` (evento → efeito/som/mensagem), áudio provisório, overlay de debug, fundo procedural e `ProgressStore`.
+- `src/game/systems`: `MatchEffects` (evento → efeito/som/mensagem), áudio provisório, overlay de debug, fundo procedural, `ProgressStore`, `settings` e `story`.
+- `src/game/ui/dom`: camada de telas em HTML (`ScreenHost`, `h`, `ui.css`) e as telas de preparação, resultado, coleção, bestiário, histórias, configurações e pause.
+- `src/game/core/progression`: objetivos, estrelas, recompensas, desbloqueios e o `ProgressionService` que aplica o resultado de uma partida.
 
 ## Como estender
 
@@ -113,4 +127,7 @@ Uma partida inteira vive em `src/game/core/match/Match.ts`, sem Phaser:
 - Novo inimigo: entrada em `ENEMY_BALANCE`, em `ENEMIES`, no tipo `EnemyId` e, se tiver mecânica, uma entrada em `abilities` (um tipo novo vira um handler em `core/EnemyAbilities.ts`). O desenho vem de `art` (forma vetorial ou pasta de sprites).
 - Novo elite: uma entrada em `ELITE_BALANCE` e outra em `ELITES`. Ele já pode ser usado em qualquer onda e aparece no preview.
 - Guardião que rende pérolas (Ostra): basta declarar `generatesPearls: { amount, intervalMs }` na definição ou em um upgrade.
+- Texto de coleção/bestiário: uma entrada em `data/guardianLore.ts` ou `data/enemyLore.ts` (`tests/lore.test.ts` cobra a ficha de todo conteúdo novo).
+- Nova história: uma entrada em `data/story.ts` com o gatilho (`levelIntro`, `levelOutro` ou `manual`); o save guarda só os ids lidos.
+- Nova configuração: campo em `PlayerSettings`, padrão em `DEFAULT_SETTINGS`, saneamento em `sanitizeProgress` e a linha na tela de configurações.
 - Nova fase: arquivo em `src/game/data/levels/` e inclusão em `LEVELS`; os testes em `tests/levels.test.ts` validam rota, plataformas, correntes e ondas automaticamente.

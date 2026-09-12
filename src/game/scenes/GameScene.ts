@@ -16,6 +16,9 @@ import { launchConfigFromUrl, type MatchLaunchConfig } from "../match/MatchLaunc
 import { getProgression } from "../systems/progression";
 import { getScreenHost } from "../ui/dom/host";
 import { defeatScreen, unlockRevealScreen, victoryScreen } from "../ui/dom/screens/ResultScreens";
+import { pauseScreen } from "../ui/dom/screens/PauseScreen";
+import { storyScreen } from "../ui/dom/screens/StoryScreen";
+import { pendingStory } from "../systems/story";
 import { GUARDIANS } from "../data/guardians";
 import { getLevel, LEVELS, levelIndex, nextLevelId } from "../data/levels";
 import { EventBus, Events } from "../EventBus";
@@ -573,12 +576,51 @@ export class GameScene extends Phaser.Scene {
     // As apresentações de Guardiões novos entram por cima, uma de cada vez.
     const pending = getProgression().takePendingReveals();
     [...pending].reverse().forEach((guardianId) => host.push(unlockRevealScreen(guardianId, () => host.pop())));
+    // A história de encerramento vem antes de tudo: é ela que o jogador lê primeiro.
+    const outro = outcome.victory && outcome.counted ? pendingStory({ type: "levelOutro", levelId: this.level.id }) : undefined;
+    if (outro) host.push(storyScreen(outro, () => host.pop()));
   }
 
+  /** O botão Ⅱ pausa a partida e abre o menu (item 36); sair do menu é o que despausa. */
   private togglePause(): void {
     if (this.match.status !== "running") return;
-    this.clock.paused = !this.clock.paused;
-    if (this.clock.paused) this.tweens.pauseAll();
+    const host = getScreenHost(this.game);
+    if (host.isOpen) {
+      this.setPaused(false);
+      host.clear();
+      return;
+    }
+    this.setPaused(true);
+    const snapshot = this.match.snapshot();
+    host.push(
+      pauseScreen(
+        {
+          levelName: this.level.name,
+          waveLabel: `${snapshot.wave}/${snapshot.totalWaves}`,
+          reefLabel: `${snapshot.reef}/${snapshot.maxReef}`,
+          pearls: snapshot.pearls,
+        },
+        {
+          onResume: () => {
+            host.clear();
+            this.setPaused(false);
+          },
+          onRestart: () => {
+            host.clear();
+            this.restartGame();
+          },
+          onExit: () => {
+            host.clear();
+            this.openLevelSelect();
+          },
+        },
+      ),
+    );
+  }
+
+  private setPaused(paused: boolean): void {
+    this.clock.paused = paused;
+    if (paused) this.tweens.pauseAll();
     else this.tweens.resumeAll();
     this.emitHud();
   }

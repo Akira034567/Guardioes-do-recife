@@ -1,5 +1,6 @@
 import type Phaser from "phaser";
 import { GAME_WIDTH } from "../../constants";
+import { getSettings, onSettingsChanged, UI_SCALE_FACTOR } from "../../systems/settings";
 import "./ui.css";
 
 /**
@@ -23,12 +24,16 @@ export class ScreenHost {
   private readonly root: HTMLDivElement;
   private readonly stack: Array<{ screen: Screen; element: HTMLElement }> = [];
 
+  private readonly unsubscribeSettings: () => void;
+
   constructor(private readonly game: Phaser.Game) {
     this.root = document.createElement("div");
     this.root.id = "ui-layer";
     (this.game.canvas.parentElement ?? document.body).append(this.root);
     this.game.scale.on("resize", this.align, this);
     window.addEventListener("resize", this.align);
+    // A escala da interface é uma configuração do jogador (item 36).
+    this.unsubscribeSettings = onSettingsChanged(this.align);
     this.align();
   }
 
@@ -70,6 +75,7 @@ export class ScreenHost {
 
   destroy(): void {
     this.clear();
+    this.unsubscribeSettings();
     this.game.scale.off("resize", this.align, this);
     window.removeEventListener("resize", this.align);
     this.root.remove();
@@ -84,7 +90,8 @@ export class ScreenHost {
     this.root.style.top = `${bounds.y - (origin?.y ?? 0)}px`;
     this.root.style.width = `${bounds.width}px`;
     this.root.style.height = `${bounds.height}px`;
-    this.root.style.setProperty("--gr-scale", String(Math.max(0.55, bounds.width / GAME_WIDTH)));
+    const fit = Math.max(0.55, bounds.width / GAME_WIDTH);
+    this.root.style.setProperty("--gr-scale", String(fit * UI_SCALE_FACTOR[getSettings().uiScale]));
   };
 
   /** Enquanto houver tela modal aberta, o jogo não recebe cliques. */
