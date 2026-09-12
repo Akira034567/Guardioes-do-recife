@@ -123,12 +123,15 @@ export const GUARDIAN_ART: Record<GuardianId, GuardianArtProfile> = {
   },
   // Novos Guardiões: pastas exatamente como na especificação; arquivos idle/attack/ability/impact/portrait
   // (recortes de `scripts/slice-neon-sheet.py`).
+  // Tubarão e Tartaruga são corpo a corpo: nada aqui vira projétil. A "Habilidade" deles é exibida como
+  // `ring` (centrada no Guardião) ou `burst` (no ponto do golpe), nunca voando até o alvo.
   shark: {
     scale: 0.72,
     effectScale: 0.55,
     assetFolder: "tubarao",
     abilityFile: "ability",
-    base: { folder: "base", ability: "burst" },
+    // O redemoinho da base gira sob o Tubarão; os rastros do Frenesi e a mira do Alfa surgem no alvo.
+    base: { folder: "base", ability: "ring" },
     branches: {
       a: [
         { folder: "frenesi_1", ability: "burst" },
@@ -145,7 +148,9 @@ export const GUARDIAN_ART: Record<GuardianId, GuardianArtProfile> = {
     effectScale: 0.55,
     assetFolder: "tartaruga",
     abilityFile: "ability",
-    base: { folder: "base", ability: "burst" },
+    // Todas as habilidades da Tartaruga são anéis de água em volta dela (a base já mostra a tartaruga no
+    // meio do anel), então nenhuma variante usa `burst` no alvo.
+    base: { folder: "base", ability: "ring" },
     branches: {
       a: [
         { folder: "casco_1", ability: "ring" },
@@ -236,7 +241,7 @@ export function artFileName(guardianId: GuardianId, kind: ArtKind): string {
   return kind;
 }
 
-/** Tipos de imagem que este Guardião possui (os novos não têm retrato). */
+/** Tipos de imagem que este Guardião possui. */
 export function artKindsFor(guardianId: GuardianId): ArtKind[] {
   const profile = GUARDIAN_ART[guardianId];
   return ART_KINDS.filter((kind) => kind !== "portrait" || profile.hasPortrait !== false);

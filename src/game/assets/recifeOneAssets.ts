@@ -1,11 +1,15 @@
 import type Phaser from "phaser";
 import { GUARDIAN_ART_ASSETS } from "./guardianArt";
+import { LEVEL_BACKGROUND_ASSETS, LEVEL_BACKGROUND_KEYS } from "./levelBackgrounds";
 
-export const RECIFE_ONE_BACKGROUND_KEY = "recife-one-background";
+export const RECIFE_ONE_BACKGROUND_KEY = LEVEL_BACKGROUND_KEYS["recife-1"];
 
-/** Fundo pintado do Recife 1 mais toda a arte dos Guardiões (ver `guardianArt.ts`). */
+/**
+ * Fundo pintado do Recife 1 mais toda a arte dos Guardiões (ver `guardianArt.ts`).
+ * Os fundos das demais fases ficam em `levelBackgrounds.ts`.
+ */
 export const RECIFE_ONE_IMAGE_ASSETS: ReadonlyArray<{ key: string; path: string }> = [
-  { key: RECIFE_ONE_BACKGROUND_KEY, path: "assets/levels/recife-one/background.png" },
+  ...LEVEL_BACKGROUND_ASSETS.filter(({ key }) => key === RECIFE_ONE_BACKGROUND_KEY),
   ...GUARDIAN_ART_ASSETS,
 ];
 

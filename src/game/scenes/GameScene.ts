@@ -1,5 +1,6 @@
 import Phaser from "phaser";
 import { artTextureKey, artVariant, GUARDIAN_ART, hasGuardianArt, type AbilityStyle } from "../assets/guardianArt";
+import { preloadLevelBackground } from "../assets/levelBackgrounds";
 import { DEPTH, GAME_HEIGHT, GAME_WIDTH, HUD_BOTTOM, HUD_TOP } from "../constants";
 import { resolveAura, type AuraSource } from "../core/Auras";
 import { BlockingSystem } from "../core/Blocking";
@@ -157,6 +158,10 @@ export class GameScene extends Phaser.Scene {
   init(data: { levelId?: string } = {}): void {
     const requested = data.levelId ?? new URLSearchParams(window.location.search).get("level");
     this.level = getLevel(requested) ?? LEVELS[0];
+  }
+
+  preload(): void {
+    preloadLevelBackground(this, this.level.backgroundKey);
   }
 
   create(): void {
@@ -723,8 +728,14 @@ export class GameScene extends Phaser.Scene {
       if (vulnerability) enemy.applyVulnerability(vulnerability.multiplier, vulnerability.durationMs, this.simulationTimeMs);
       if (stats.slowFactor !== null) enemy.applySlow(stats.slowFactor, stats.slowDurationMs, this.simulationTimeMs);
     });
+    // Corpo a corpo não dispara nada: a imagem "Habilidade" é um anel em volta do Guardião (giro do
+    // Caranguejo, água da Tartaruga, redemoinho do Tubarão base) ou surge no ponto do golpe (rastros do
+    // Frenesi, mira do Alfa), conforme o estilo da variante em GUARDIAN_ART.
+    const abilityStyle = artVariant(guardian.definition.id, guardian.progress).ability;
     if (stats.areaAttack || spinning) {
       this.effects.ring(this.abilityKeyFor(guardian, "ring"), guardian.x, guardian.y + 8, radius * 2, { spin: spinning });
+    } else if (abilityStyle === "ring") {
+      this.effects.ring(this.abilityKeyFor(guardian, "ring"), guardian.x, guardian.y + 8, guardian.range * 2, { alpha: 0.75 });
     } else {
       const profile = GUARDIAN_ART[guardian.definition.id];
       this.effects.burst(this.abilityKeyFor(guardian, "burst"), target.x, target.y, {

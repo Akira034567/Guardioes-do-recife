@@ -481,7 +481,10 @@ export class UIScene extends Phaser.Scene {
       this.portraitCard.setTexture(key);
     }
     const frame = this.textures.getFrame(key);
-    const scale = Math.min(84 / frame.height, 280 / frame.width);
+    // Os cinco primeiros retratos são faixas largas (~290x105); os dos novos Guardiões são cards em pé
+    // (~200x250) e precisam de mais altura para o texto continuar legível.
+    const portraitOrientation = frame.height > frame.width;
+    const scale = portraitOrientation ? Math.min(150 / frame.height, 130 / frame.width) : Math.min(84 / frame.height, 280 / frame.width);
     this.portraitCard.setScale(scale).setPosition(GAME_WIDTH - 10, HUD_TOP + 8).setVisible(true);
   }
 

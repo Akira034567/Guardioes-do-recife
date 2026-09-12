@@ -13,6 +13,7 @@ export class BootScene extends Phaser.Scene {
     this.load.on(Phaser.Loader.Events.FILE_LOAD_ERROR, (file: Phaser.Loader.File) => {
       if (!file.key.includes("-")) console.warn(`[assets] falha ao carregar ${file.key}`);
     });
+    // Os fundos das outras fases são carregados pela GameScene ao abrir cada fase.
     preloadRecifeOneAssets(this);
   }
 

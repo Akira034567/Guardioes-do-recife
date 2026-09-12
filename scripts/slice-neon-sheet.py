@@ -14,6 +14,10 @@
 #   linha fica na imagem) e o arquivo é listado como "SOBREPOSTO" para ajuste manual.
 # - Nos cantos arredondados dos painéis (linhas 0 e 4) o resto do arco amarelo é apagado, e em todos os
 #   cantos o filete amarelo onde as linhas se encontram.
+# - No golfinho, idle e attack mostram dois golfinhos: o da esquerda é apagado (componentes conexos com
+#   centro na metade esquerda; se os dois estão colados, corte na coluna menos coberta entre 40% e 50%
+#   da largura) e o que sobra é recentralizado na horizontal. Células coladas são listadas como
+#   "DOIS PERSONAGENS COLADOS" para retoque manual.
 from PIL import Image
 import numpy as np
 import os
@@ -27,6 +31,8 @@ SHEETS = {
     "golfinho": ["base", "coro_1", "coro_2", "sonar_1", "sonar_2"],
 }
 NAMES = ["portrait", "idle", "attack", "ability", "impact"]
+# Células com dois personagens lado a lado: fica só o da direita (o que tem o efeito), recentralizado.
+KEEP_RIGHT = {"golfinho": ["idle", "attack"]}
 PREVIEW_DIR = os.environ.get("SLICE_PREVIEW")
 INSET = 2        # depois da linha amarela (medida por célula), 1 px de anti-alias + 1 px de folga
 EXTEND_FRAC = 0.25  # a linha continua enquanto >= 25% do vão da célula ainda for amarelo forte
@@ -53,6 +59,34 @@ def merge(bs, dist):
         else:
             out.append([b])
     return out
+
+
+def keep_right(cell):
+    """Apaga o personagem da esquerda e recentraliza o que sobra. Devolve True se precisou cortar na coluna."""
+    h, w = cell.shape[:2]
+    op = cell[:, :, 3] > 40
+    lab, n = ndimage.label(op, structure=np.ones((3, 3)))
+    cut = False
+    for i, sl in enumerate(ndimage.find_objects(lab)):
+        x0, x1 = sl[1].start, sl[1].stop - 1
+        if x0 < w * 0.3 and x1 > w * 0.7:
+            prof = (lab == i + 1).sum(axis=0)
+            lo, hi = int(w * 0.4), int(w * 0.5)
+            split = lo + int(prof[lo:hi + 1].argmin())
+            piece = lab == i + 1
+            piece[:, split:] = False
+            cell[piece] = 0
+            cut = True
+        elif (x0 + x1) / 2 < w / 2:
+            cell[lab == i + 1] = 0
+    xs = np.where((cell[:, :, 3] > 40).any(axis=0))[0]
+    shift = w // 2 - (xs.min() + xs.max() + 1) // 2
+    cell[:] = np.roll(cell, shift, axis=1)
+    if shift > 0:
+        cell[:, :shift] = 0
+    elif shift < 0:
+        cell[:, shift:] = 0
+    return cut
 
 
 def slice_sheet(folder, variants):
@@ -209,10 +243,13 @@ def slice_sheet(folder, variants):
                     if lab[py, px]:
                         sq[lab == lab[py, px]] = 0
             cell[cell[:, :, 3] <= 8] = 0
+            tag = "SOBREPOSTO " + "/".join(sides) if sides else ""
+            if name in KEEP_RIGHT.get(folder, []):
+                if keep_right(cell):
+                    tag = (tag + " " if tag else "") + "DOIS PERSONAGENS COLADOS (corte em coluna)"
             img = Image.fromarray(cell)
             path = f"{out}/{var}/{name}.png"
             img.save(path)
-            tag = "SOBREPOSTO " + "/".join(sides) if sides else ""
             results.append((path, img.size, tag))
             print(f"{img.size[0]:4d}x{img.size[1]:<4d} {path} {tag}")
             sheet.alpha_composite(img, (sx, sy))
@@ -230,6 +267,6 @@ if __name__ == "__main__":
     flagged = []
     for g in wanted:
         flagged += [(p, t) for p, _, t in slice_sheet(g, SHEETS[g]) if t]
-    print("\nCélulas com sprite por cima da moldura (recortadas por fora da linha amarela):")
+    print("\nCélulas para retoque manual (sprite por cima da moldura, recortada por fora da linha; ou dois personagens colados):")
     for p, t in flagged:
         print(f"  {p}  {t}")

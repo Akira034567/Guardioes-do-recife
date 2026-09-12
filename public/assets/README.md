@@ -93,12 +93,16 @@ mesma altura. Pastas e nomes de arquivo seguem `GUARDIAN_ART` em `src/game/asset
 | `guardians/golfinho` | `base`, `coro_1`, `coro_2`, `sonar_1`, `sonar_2` | idem |
 
 `portrait.png` é o card inteiro da primeira linha (ícone, título e texto) e é carregado como card do
-Guardião selecionado, igual aos outros cinco.
+Guardião selecionado, igual aos outros cinco (por ser um card em pé, o HUD o exibe maior que as faixas).
+
+No Golfinho, `idle` e `attack` da tabela mostram dois golfinhos: o script apaga o da esquerda e
+recentraliza o da direita (o que carrega o efeito). Em `coro_2/idle`, `coro_2/attack` e `sonar_1/attack`
+os dois estão colados e o corte é por coluna, com um resto do golfinho da esquerda para retoque manual.
 
 Quando um sprite passa por cima da linha amarela, a célula é recortada 1 px para FORA da moldura (a linha
 fica na imagem) para não perder o desenho; o script lista essas células como `SOBREPOSTO`, e elas são
 ajustadas à mão depois: `tartaruga/corrente_2/idle` (nadadeira embaixo), `tartaruga/casco_1/ability`
-(cúpula em cima), `peixe_pedra/veneno_1/attack` e `peixe_pedra/emboscada_1/attack` (areia embaixo).
+(cúpula em cima) e `peixe_pedra/veneno_1/attack` (areia embaixo).
 
 ## Inimigos
 

@@ -11,7 +11,8 @@ const RESTART = { x: 1190, y: 640 } as const;
 const MENU = { x: 1190, y: 684 } as const;
 const PAUSE = { x: 1143, y: 36 } as const;
 const RESULT_NEXT = { x: 640, y: 408 } as const;
-const MENU_CARD_BUTTON = (index: number) => ({ x: 156 + index * 242, y: 478 });
+/** Seis cartas de 192px com 16px de espaço, centralizadas (ver `LevelSelectScene`). */
+const MENU_CARD_BUTTON = (index: number) => ({ x: 120 + index * 208, y: 478 });
 
 async function openGame(page: Page, query = "level=recife-1") {
   const pageErrors: string[] = [];
@@ -116,22 +117,24 @@ test("locks a unit into one upgrade branch, pauses and restarts without stale st
   expect(pageErrors).toEqual([]);
 });
 
-test("enforces water and route placement rules on a procedural level", async ({ page }) => {
+test("enforces water and route placement rules on the shipwreck level", async ({ page }) => {
   const { canvas, clickGame, pageErrors } = await openGame(page, "level=recife-5");
   await expect(canvas).toHaveAttribute("data-level", "recife-5");
   await expect(canvas).toHaveAttribute("data-pearls", "340");
 
+  // Água-viva: em cima da correnteza é inválido; água livre longe da rota é válido.
   await clickGame(CARD_X.jellyfish, CARD_Y);
-  await clickGame(175, 510);
+  await clickGame(900, 492);
   await expect(canvas).toHaveAttribute("data-guardians", "0");
   await clickGame(700, 150);
   await expect(canvas).toHaveAttribute("data-guardians", "1");
   await expect(canvas).toHaveAttribute("data-pearls", "240");
 
+  // Caranguejo: longe da correnteza é inválido; em cima dela "snapa" para a linha central.
   await clickGame(CARD_X.crab, CARD_Y);
-  await clickGame(1100, 520);
+  await clickGame(1100, 150);
   await expect(canvas).toHaveAttribute("data-guardians", "1");
-  await clickGame(175, 510);
+  await clickGame(900, 492);
   await expect(canvas).toHaveAttribute("data-guardians", "2");
   await expect(canvas).toHaveAttribute("data-pearls", "150");
   await expect(canvas).toHaveAttribute("data-selected", "G2");
@@ -140,7 +143,7 @@ test("enforces water and route placement rules on a procedural level", async ({ 
   await expect(canvas).toHaveAttribute("data-selected", "G1");
   await clickGame(1100, 150);
   await expect(canvas).toHaveAttribute("data-selected", "");
-  await clickGame(175, 510);
+  await clickGame(900, 492);
   await expect(canvas).toHaveAttribute("data-selected", "G2");
   expect(pageErrors).toEqual([]);
 });
@@ -199,7 +202,7 @@ test("places the dolphin in open water and the turtle on the route", async ({ pa
   await clickGame(squadCard(4), CARD_Y);
   await clickGame(950, 340);
   await expect(canvas).toHaveAttribute("data-guardians", "0");
-  await clickGame(720, 300);
+  await clickGame(640, 180);
   await expect(canvas).toHaveAttribute("data-guardians", "1");
   await expect(canvas).toHaveAttribute("data-pearls", "100");
 

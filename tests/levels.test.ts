@@ -23,9 +23,9 @@ const threatOf = (level: LevelDefinition): number =>
   );
 
 describe("level registry", () => {
-  it("exposes five ordered levels with unique ids and a linear next-level chain", () => {
-    expect(LEVELS).toHaveLength(5);
-    expect(new Set(LEVEL_IDS).size).toBe(5);
+  it("exposes six ordered levels with unique ids and a linear next-level chain", () => {
+    expect(LEVELS).toHaveLength(6);
+    expect(new Set(LEVEL_IDS).size).toBe(6);
     LEVELS.forEach((level, index) => {
       expect(getLevel(level.id)).toBe(level);
       expect(nextLevelId(level.id)).toBe(index < LEVELS.length - 1 ? LEVELS[index + 1].id : null);
@@ -128,6 +128,6 @@ describe("level registry", () => {
       expect(level.waves.length).toBeGreaterThanOrEqual(LEVELS[index].waves.length);
     });
     const mixedWaves = LEVELS.map((level) => level.waves.filter((wave) => new Set(wave.groups.map((group) => group.enemyId)).size >= 2).length);
-    expect(mixedWaves[4]).toBeGreaterThan(mixedWaves[0]);
+    expect(mixedWaves[LEVELS.length - 1]).toBeGreaterThan(mixedWaves[0]);
   });
 });

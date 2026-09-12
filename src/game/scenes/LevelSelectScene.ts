@@ -37,8 +37,9 @@ export class LevelSelectScene extends Phaser.Scene {
       })
       .setOrigin(0.5);
 
-    const cardWidth = 224;
-    const gap = 18;
+    // Seis cartas precisam caber em 1280px; a largura encolhe com o número de fases.
+    const gap = 16;
+    const cardWidth = Math.min(224, Math.floor((GAME_WIDTH - 48 - (LEVELS.length - 1) * gap) / LEVELS.length));
     const totalWidth = LEVELS.length * cardWidth + (LEVELS.length - 1) * gap;
     const startX = (GAME_WIDTH - totalWidth) / 2 + cardWidth / 2;
     LEVELS.forEach((level, index) => this.createCard(level, index, startX + index * (cardWidth + gap), 360, cardWidth));
@@ -83,8 +84,10 @@ export class LevelSelectScene extends Phaser.Scene {
     });
     preview.strokePath();
 
+    // Cartas estreitas (seis fases) usam nome menor para caber em uma linha.
+    const nameSize = width >= 210 ? "17px" : "14px";
     this.add
-      .text(x, y - 24, `FASE ${index + 1}`, {
+      .text(x, y - 34, `FASE ${index + 1}`, {
         fontFamily: "Arial, sans-serif",
         fontSize: "11px",
         fontStyle: "bold",
@@ -93,16 +96,16 @@ export class LevelSelectScene extends Phaser.Scene {
       })
       .setOrigin(0.5);
     this.add
-      .text(x, y - 2, level.name, {
+      .text(x, y - 10, level.name, {
         fontFamily: "Arial Black, Arial, sans-serif",
-        fontSize: "17px",
+        fontSize: nameSize,
         color: unlocked ? "#f3fbff" : "#7d98a3",
         align: "center",
         wordWrap: { width: width - 28 },
       })
       .setOrigin(0.5);
     this.add
-      .text(x, y + 30, level.subtitle, {
+      .text(x, y + 34, level.subtitle, {
         fontFamily: "Arial, sans-serif",
         fontSize: "12px",
         color: unlocked ? "#a7e4f0" : "#5f7a84",
@@ -113,7 +116,7 @@ export class LevelSelectScene extends Phaser.Scene {
 
     const enemyIds = [...new Set(level.waves.flatMap((wave) => wave.groups.map((group) => group.enemyId)))] as EnemyId[];
     this.add
-      .text(x, y + 66, `${level.waves.length} ondas · ${enemyIds.map((id) => ENEMIES[id].name).join(", ")}`, {
+      .text(x, y + 72, `${level.waves.length} ondas · ${enemyIds.map((id) => ENEMIES[id].name).join(", ")}`, {
         fontFamily: "Arial, sans-serif",
         fontSize: "10px",
         color: unlocked ? "#8dcbd8" : "#4f6a74",
