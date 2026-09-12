@@ -68,6 +68,9 @@ export interface GuardianStats {
 export interface StatModifiers {
   /** Bônus temporário de velocidade de ataque (Frenesi): 0.35 = +35%. */
   attackSpeedBonus?: number;
+  /** Multiplicadores vindos de status no Guardião (buff aliado ou interferência inimiga); 1 = neutro. */
+  attackSpeedMultiplier?: number;
+  damageMultiplier?: number;
 }
 
 export function resolveGuardianStats(
@@ -78,9 +81,9 @@ export function resolveGuardianStats(
 ): GuardianStats {
   const applied = appliedUpgrades(definition, progress);
   const baseDamage = resolveLast(applied, "damage") ?? definition.damage;
-  const damage = baseDamage > 0 ? baseDamage * aura.damageMultiplier : 0;
+  const damage = baseDamage > 0 ? baseDamage * aura.damageMultiplier * (modifiers.damageMultiplier ?? 1) : 0;
   const blocks = definition.placementMode === "route" && Boolean(resolveLast(applied, "blocks") ?? definition.blocks);
-  const attackSpeed = aura.attackSpeedMultiplier * (1 + Math.max(0, modifiers.attackSpeedBonus ?? 0));
+  const attackSpeed = aura.attackSpeedMultiplier * (1 + Math.max(0, modifiers.attackSpeedBonus ?? 0)) * Math.max(0.05, modifiers.attackSpeedMultiplier ?? 1);
   const vulnerability = resolveLast(applied, "vulnerability") ?? definition.vulnerability ?? null;
   const trap = resolveLast(applied, "trap") ?? definition.trap ?? null;
   return {

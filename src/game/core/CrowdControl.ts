@@ -1,6 +1,7 @@
 import { CROWD_CONTROL } from "../data/balance";
 import type { BossSlow, ControlResistance, ControlTier, EnemyDefinition, PoisonEffect, Vec2 } from "../types";
 import type { EnemyStatus } from "./EnemyStatus";
+import { STATUS_REGISTRY, type ApplyOutcome, type StatusEffectInput } from "./StatusEffects";
 
 /**
  * Camada única de controle. Toda habilidade que atordoa, empurra, envenena ou marca passa por aqui,
@@ -132,4 +133,21 @@ export function applyMarkTo(target: ControlTarget, sourceId: string, multiplier:
 export function applyVulnerabilityTo(target: ControlTarget, multiplier: number, durationMs: number, now: number): void {
   if (target.dead || target.reachedGoal) return;
   target.status.applyVulnerability(multiplier, durationMs, now);
+}
+
+/**
+ * Aplicação genérica de um status a um inimigo. Controles fortes passam pelos retornos decrescentes de
+ * elites/chefes; resistências por tipo reduzem a duração. Devolve o resultado do container.
+ */
+export function applyStatusTo(target: ControlTarget, input: StatusEffectInput, now: number, config: ControlConfig = CROWD_CONTROL): ApplyOutcome {
+  if (target.dead || target.reachedGoal) return "ignored";
+  const spec = STATUS_REGISTRY[input.type];
+  const tier = controlTier(target.definition);
+  const resistance = spec.countsAsControl ? resistanceFor(tier, config) : null;
+  const scale = spec.countsAsControl ? target.status.controlScale(now, tier, resistance) : 1;
+  const durationMs = input.durationMs * scale * (1 - target.status.resistance(input.type));
+  if (durationMs <= 0) return "ignored";
+  const outcome = target.status.container.apply({ ...input, durationMs }, now);
+  if (spec.countsAsControl && outcome === "applied") target.status.registerControl(now, tier, resistance);
+  return outcome;
 }

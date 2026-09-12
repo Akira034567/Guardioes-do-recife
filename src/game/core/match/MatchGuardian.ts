@@ -43,6 +43,8 @@ export class MatchGuardian {
   readonly fsm: GuardianStateMachine;
   readonly runtime = new GuardianRuntime();
   private cachedStats: GuardianStats | null = null;
+  private statusAttackSpeed = 1;
+  private statusDamage = 1;
 
   constructor(
     readonly id: string,
@@ -69,7 +71,11 @@ export class MatchGuardian {
 
   get stats(): GuardianStats {
     if (!this.cachedStats) {
-      this.cachedStats = resolveGuardianStats(this.definition, this.progress, this.aura, { attackSpeedBonus: this.runtime.attackSpeedBonus });
+      this.cachedStats = resolveGuardianStats(this.definition, this.progress, this.aura, {
+        attackSpeedBonus: this.runtime.attackSpeedBonus,
+        attackSpeedMultiplier: this.statusAttackSpeed,
+        damageMultiplier: this.statusDamage,
+      });
     }
     return this.cachedStats;
   }
@@ -141,6 +147,17 @@ export class MatchGuardian {
   setAttackSpeedBonus(bonus: number): void {
     if (Math.abs(this.runtime.attackSpeedBonus - bonus) < 1e-6) return;
     this.runtime.attackSpeedBonus = bonus;
+    this.invalidate();
+  }
+
+  /** Expira status e reflete buffs/debuffs ativos nos stats (só invalida quando algo mudou). */
+  syncStatus(now: number): void {
+    this.runtime.status.update(now);
+    const attackSpeed = this.runtime.status.strength("attackSpeedBuff", now) ?? 1;
+    const damage = this.runtime.status.strength("damageBuff", now) ?? 1;
+    if (Math.abs(attackSpeed - this.statusAttackSpeed) < 1e-6 && Math.abs(damage - this.statusDamage) < 1e-6) return;
+    this.statusAttackSpeed = attackSpeed;
+    this.statusDamage = damage;
     this.invalidate();
   }
 

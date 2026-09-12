@@ -419,6 +419,7 @@ export class Match {
     for (const guardian of this.guardianList) updateTrap(guardian, this.enemyList, hooks);
     this.updateAuras();
     for (const guardian of this.guardianList) {
+      guardian.syncStatus(this.nowMs);
       updateFrenzy(guardian, this.enemyList, this.nowMs);
       updateMark(guardian, this.enemyList, hooks);
       guardian.tick(this.nowMs, this.enemyList, (attacker, target) => this.resolveAttack(attacker, target));

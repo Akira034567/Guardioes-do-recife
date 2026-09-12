@@ -2,6 +2,7 @@ import { AbilityCooldown } from "./AbilityCooldown";
 import { ChorusState } from "./Chorus";
 import type { GuardianStats } from "./GuardianStats";
 import { SonarCore } from "./Sonar";
+import { StatusContainer } from "./StatusEffects";
 import { TrapCore } from "./TrapCore";
 
 /** Chaves de recarga por habilidade: cada Guardião pode ter várias ao mesmo tempo. */
@@ -13,6 +14,8 @@ export type AbilityKey = "electricField" | "inkCloud" | "mark" | "pushWave";
  */
 export class GuardianRuntime {
   private readonly cooldowns = new Map<AbilityKey, AbilityCooldown>();
+  /** Buffs e debuffs recebidos pelo Guardião (velocidade de ataque, dano, interferência de inimigos). */
+  readonly status = new StatusContainer("guardian");
   trap: TrapCore | null = null;
   sonar: SonarCore | null = null;
   chorus: ChorusState | null = null;
