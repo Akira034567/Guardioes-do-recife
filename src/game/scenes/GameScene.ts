@@ -35,6 +35,7 @@ import { MatchEffects } from "../systems/MatchEffects";
 import { PlacementGhost } from "../objects/PlacementGhost";
 import { InteractableView } from "../objects/InteractableView";
 import { encounterForLevel } from "../data/encounters";
+import { currentChallenges } from "../core/progression/challenges";
 import type { MatchSnapshot } from "../core/match/MatchSnapshot";
 import { TutorialDirector } from "../core/tutorial/TutorialDirector";
 import { createLevelProgress, getSaveManager } from "../systems/ProgressStore";
@@ -90,7 +91,11 @@ export class GameScene extends Phaser.Scene {
   private debugAccumulatorMs = 0;
   private tutorial: TutorialDirector | null = null;
   private tutorialSaved = "";
-  private readonly unlockAudio = (): void => this.audio?.unlock();
+  private readonly unlockAudio = (): void => {
+    this.audio?.unlock();
+    // A trilha só pode começar depois do primeiro toque do jogador (regra do navegador).
+    this.audio?.startMusic(this.match?.snapshot().boss ? "tense" : "calm");
+  };
 
   constructor() {
     super("GameScene");
@@ -617,6 +622,8 @@ export class GameScene extends Phaser.Scene {
     this.message = result === "victory" ? `RECIFE PROTEGIDO! +${ECONOMY.levelClearBonus} pérolas` : "O RECIFE PRECISA DE REFORÇOS";
     this.messageUntilMs = Number.POSITIVE_INFINITY;
     this.audio.play(result === "victory" ? "upgrade" : "warning");
+    if (result === "victory") this.audio.setMusicMood("victory");
+    else this.audio.stopMusic();
     this.syncViews(0);
     this.applyProgression(result === "victory");
     this.emitHud();
@@ -626,6 +633,14 @@ export class GameScene extends Phaser.Scene {
   private applyProgression(victory: boolean): void {
     const snapshot = this.match.snapshot();
     const encounter = encounterForLevel(this.level.id);
+    // O desafio é redescoberto pela data: a rotação é determinística, então o id continua batendo.
+    const challenge = this.launch.challengeId
+      ? currentChallenges(
+          new Date(),
+          getProgression().progress.unlockedGuardians as GuardianId[],
+          LEVELS.filter((level) => this.progress.isUnlocked(level.id)).map((level) => level.id),
+        ).find((candidate) => candidate.id === this.launch.challengeId)
+      : undefined;
     const matchResult: MatchResult = {
       levelId: this.level.id,
       kind: this.level.kind === "encounter" ? "encounter" : "campaign",
@@ -636,6 +651,7 @@ export class GameScene extends Phaser.Scene {
       maxLives: snapshot.maxReef,
       loadout: [...this.loadout],
       loadoutOverride: this.launch.loadoutOverride,
+      challenge: challenge ? { id: challenge.id, objective: challenge.objective, shells: challenge.shells } : undefined,
       stats: snapshot.stats,
     };
     const progression = getProgression();

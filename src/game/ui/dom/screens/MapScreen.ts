@@ -1,7 +1,9 @@
 import { artPath, GUARDIAN_ART } from "../../../assets/guardianArt";
 import type { ProgressionService } from "../../../core/progression/ProgressionService";
+import { challengeRule, currentChallenges, type ChallengeDefinition } from "../../../core/progression/challenges";
 import { ENCOUNTERS, type EncounterDefinition } from "../../../data/encounters";
 import { GUARDIANS } from "../../../data/guardians";
+import { DIFFICULTIES } from "../../../data/difficulty";
 import { LEVELS } from "../../../data/levels";
 import { GLOBAL_CURRENCY } from "../../../data/progression";
 import type { LevelDefinition } from "../../../types";
@@ -13,6 +15,8 @@ export type NodeState = "locked" | "available" | "completed" | "perfect";
 export interface MapActions {
   onPlayLevel(level: LevelDefinition): void;
   onPlayEncounter(encounter: EncounterDefinition): void;
+  onPlayChallenge(challenge: ChallengeDefinition): void;
+  onOpenAchievements(): void;
   onOpenCollection(): void;
   onOpenBestiary(): void;
   onOpenStories(): void;
@@ -76,12 +80,14 @@ export function mapScreen(progression: ProgressionService, isUnlocked: (levelId:
             { class: "gr-map", testId: "map-track" },
             ...LEVELS.map((level, index) => column(level, index, progression, isUnlocked, actions)),
           ),
+          challengeRow(progression, isUnlocked, actions),
           h(
             "div",
             { class: "gr-actions gr-map__nav" },
             button("ÁLBUM DO RECIFE", actions.onOpenCollection, { testId: "map-collection" }),
             button("AMEAÇAS DO RECIFE", actions.onOpenBestiary, { testId: "map-bestiary" }),
             button("HISTÓRIAS", actions.onOpenStories, { testId: "map-stories" }),
+            button("CONQUISTAS", actions.onOpenAchievements, { testId: "map-achievements" }),
             button("CONFIGURAÇÕES", actions.onOpenSettings, { testId: "map-settings" }),
             button("LIMPAR PROGRESSO", () => host.push(confirmResetScreen(() => host.pop(), actions.onResetProgress)), { testId: "map-reset" }),
           ),
@@ -89,6 +95,36 @@ export function mapScreen(progression: ProgressionService, isUnlocked: (levelId:
       );
     },
   };
+}
+
+/** Desafios do dia e da semana: a mesma rotação para todo mundo, sorteada a partir da data. */
+function challengeRow(progression: ProgressionService, isUnlocked: (levelId: string) => boolean, actions: MapActions): HTMLElement {
+  const reachable = LEVELS.filter((level) => isUnlocked(level.id)).map((level) => level.id);
+  const challenges = currentChallenges(new Date(), progression.progress.unlockedGuardians as never, reachable);
+  return h(
+    "div",
+    { class: "gr-columns", testId: "map-challenges" },
+    ...challenges.map((challenge) => {
+      const done = progression.progress.challenges.completed.includes(challenge.id);
+      const level = LEVELS.find((candidate) => candidate.id === challenge.levelId);
+      const squad = challenge.loadout.map((guardianId) => GUARDIANS[guardianId].shortName).join(", ");
+      return h(
+        "button",
+        {
+          class: "gr-node gr-node--challenge",
+          testId: `map-challenge-${challenge.kind}`,
+          dataState: done ? "completed" : "available",
+          type: "button",
+          disabled: done,
+          onClick: () => actions.onPlayChallenge(challenge),
+        },
+        h("span", { class: "gr-node__index", text: `${challenge.name} · ${challenge.rotation}` }),
+        h("span", { class: "gr-node__name", text: `${level?.name ?? challenge.levelId} · ${DIFFICULTIES[challenge.difficulty].name}` }),
+        h("span", { class: "gr-hint", text: done ? "Cumprido. Volte amanhã." : `Vença ${challengeRule(challenge)}, com ${squad}.` }),
+        h("span", { class: "gr-node__stars", text: `${GLOBAL_CURRENCY.symbol} ${challenge.shells}` }),
+      );
+    }),
+  );
 }
 
 function column(

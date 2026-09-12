@@ -3,12 +3,15 @@ import { GAME_HEIGHT, GAME_WIDTH } from "../constants";
 import type { LevelProgressApi } from "../core/LevelProgress";
 import { difficultyOf } from "../data/difficulty";
 import { ENCOUNTERS, type EncounterDefinition } from "../data/encounters";
-import { LEVELS, LEVEL_IDS } from "../data/levels";
+import type { ChallengeDefinition } from "../core/progression/challenges";
+import { getLevel, LEVELS, LEVEL_IDS } from "../data/levels";
 import { launchConfigFor } from "../match/MatchLaunchConfig";
 import { createLevelProgress } from "../systems/ProgressStore";
 import { getProgression } from "../systems/progression";
+import { challengeRule } from "../core/progression/challenges";
 import { pendingStory } from "../systems/story";
 import { getScreenHost } from "../ui/dom/host";
+import { achievementsScreen } from "../ui/dom/screens/AchievementsScreen";
 import { bestiaryScreen } from "../ui/dom/screens/BestiaryScreen";
 import { collectionScreen } from "../ui/dom/screens/CollectionScreen";
 import { mapScreen } from "../ui/dom/screens/MapScreen";
@@ -56,6 +59,8 @@ export class LevelSelectScene extends Phaser.Scene {
       mapScreen(progression, (levelId) => this.progress.isUnlocked(levelId), {
         onPlayLevel: (level) => this.openPreparation(level),
         onPlayEncounter: (encounter) => this.openPreparation(encounter.level, encounter),
+        onPlayChallenge: (challenge) => this.openChallenge(challenge),
+        onOpenAchievements: () => host.push(achievementsScreen(progression, () => host.pop())),
         onOpenCollection: () => host.push(collectionScreen(progression, () => host.pop())),
         onOpenBestiary: () => host.push(bestiaryScreen(progression, () => host.pop())),
         onOpenStories: () => host.push(storyIndexScreen(() => host.pop())),
@@ -72,6 +77,37 @@ export class LevelSelectScene extends Phaser.Scene {
       this.prepareLevelId = null;
       if (level) this.openPreparation(level);
     }
+  }
+
+  /**
+   * Desafio do dia ou da semana: fase, dificuldade e esquadrão já vêm decididos pelo sorteio, então a
+   * preparação entra travada — só resta aceitar ou voltar.
+   */
+  private openChallenge(challenge: ChallengeDefinition): void {
+    const level = getLevel(challenge.levelId);
+    if (!level) return;
+    const host = getScreenHost(this.game);
+    const progression = getProgression();
+    host.push(
+      preparationScreen(
+        level,
+        LEVELS.indexOf(level),
+        progression,
+        {
+          onBack: () => host.pop(),
+          onStart: (difficulty, loadout) => {
+            host.clear();
+            this.scene.start("GameScene", launchConfigFor(level, difficulty, loadout, { challengeId: challenge.id }));
+          },
+        },
+        {
+          difficulty: challenge.difficulty,
+          loadout: [...challenge.loadout],
+          locked: true,
+          challenge: { name: challenge.name, rule: challengeRule(challenge), shells: challenge.shells },
+        },
+      ),
+    );
   }
 
   /** Fundo do menu: faixas de água e o nome do jogo, atrás da camada HTML. */

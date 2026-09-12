@@ -63,6 +63,19 @@ function rewardBox(outcome: MatchOutcome): HTMLElement | null {
   );
 }
 
+/** Conquistas e desafio que caíram nesta partida (itens 37 e 38). */
+function achievementToast(outcome: MatchOutcome): HTMLElement | null {
+  const lines: string[] = outcome.achievements.map((definition) => `★ ${definition.name} — ${definition.description}`);
+  if (outcome.challengeCompleted) lines.unshift("✦ Desafio cumprido");
+  if (lines.length === 0) return null;
+  return h(
+    "div",
+    { class: "gr-toast", testId: "result-achievements" },
+    h("span", { class: "gr-toast__title", text: lines.length > 1 ? "novidades" : "novidade" }),
+    ...lines.map((line) => h("span", { text: line })),
+  );
+}
+
 /** Tela de vitória (item 34): estrelas, objetivos, números da partida e recompensa. */
 export function victoryScreen(result: MatchResult, outcome: MatchOutcome, levelName: string, actions: ResultActions): Screen {
   return {
@@ -86,6 +99,7 @@ export function victoryScreen(result: MatchResult, outcome: MatchOutcome, levelN
             ["Guardiões usados", String(result.stats.distinctGuardiansUsed.length)],
             ["Tempo", seconds(result.stats.timeMs)],
           ]),
+          achievementToast(outcome),
           rewardBox(outcome),
           outcome.counted ? null : h("p", { class: "gr-hint", text: "Partida com ferramentas de debug: nada foi salvo na progressão." }),
           h(
@@ -133,6 +147,7 @@ export function defeatScreen(result: MatchResult, outcome: MatchOutcome, levelNa
             ["Tempo", seconds(result.stats.timeMs)],
           ]),
           h("div", { class: "gr-reward", testId: "defeat-hint" }, h("span", { text: defeatHint(result) })),
+          achievementToast(outcome),
           outcome.objectives.length > 0 ? objectiveList(outcome) : null,
           h(
             "div",

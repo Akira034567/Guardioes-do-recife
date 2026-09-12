@@ -12,6 +12,8 @@ export interface MatchLaunchConfig {
   loadoutOverride: boolean;
   /** Dicas do tutorial ligadas; `?tutorial=0` desliga (testes e e2e). */
   tutorial: boolean;
+  /** Desafio do dia/semana que esta partida está cumprindo (item 38). */
+  challengeId?: string;
   debug: { enabled: boolean; startWave: number };
 }
 
@@ -41,13 +43,19 @@ export function launchConfigFromUrl(search: URLSearchParams, context: LaunchCont
 }
 
 /** Configuração de uma partida escolhida na tela de preparação. */
-export function launchConfigFor(level: LevelDefinition, difficulty: DifficultyId, loadout: readonly GuardianId[]): MatchLaunchConfig {
+export function launchConfigFor(
+  level: LevelDefinition,
+  difficulty: DifficultyId,
+  loadout: readonly GuardianId[],
+  options: { challengeId?: string } = {},
+): MatchLaunchConfig {
   return {
     levelId: level.id,
     difficulty,
     loadout: [...loadout],
     loadoutOverride: false,
     tutorial: true,
+    challengeId: options.challengeId,
     debug: { enabled: false, startWave: 0 },
   };
 }

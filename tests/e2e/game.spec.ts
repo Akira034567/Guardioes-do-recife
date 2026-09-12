@@ -398,3 +398,36 @@ test("rescues a guardian in an encounter and adds him to the collection", async 
   await expect(canvas).toHaveAttribute("data-pearls", "210");
   expect(pageErrors).toEqual([]);
 });
+
+test("tracks achievements and offers the rotating challenges", async ({ page }) => {
+  await page.addInitScript(() => {
+    window.localStorage.setItem(
+      "guardioes-do-recife.save",
+      JSON.stringify({
+        saveVersion: 2,
+        completedLevels: ["recife-1", "recife-2"],
+        totals: { matches: 9, victories: 4, defeats: 5, kills: 260, playTimeMs: 1_800_000, wavesCleared: 30 },
+        storyProgress: { seen: ["abertura", "canal-estreito"] },
+      }),
+    );
+  });
+  const { canvas, pageErrors } = await openGame(page, "");
+  await expect(canvas).toHaveAttribute("data-screen", "menu");
+
+  // As conquistas são recalculadas ao abrir o mapa: um perfil com histórico não vê a lista zerada.
+  await page.getByTestId("map-achievements").click();
+  await expect(page.getByTestId("achievements-panel")).toBeVisible();
+  await expect(page.getByTestId("achievement-primeira-mare")).toHaveAttribute("data-state", "unlocked");
+  await expect(page.getByTestId("achievement-faxina")).toContainText("260/500");
+  await expect(page.getByTestId("achievement-sozinho-no-escuro"), "conquista escondida").toContainText("???");
+  await page.getByTestId("achievements-back").click();
+
+  // O desafio do dia vem com fase, dificuldade e esquadrão já decididos.
+  await page.getByTestId("map-challenge-daily").click();
+  await expect(page.getByTestId("prep-challenge")).toContainText("Desafio do dia");
+  await expect(page.getByTestId("prep-slot-0")).not.toHaveAttribute("data-guardian", "");
+  await expect(page.getByTestId("prep-difficulty")).toHaveCount(0);
+  await page.getByTestId("prep-back").click();
+  await expect(canvas).toHaveAttribute("data-overlay", "map");
+  expect(pageErrors).toEqual([]);
+});

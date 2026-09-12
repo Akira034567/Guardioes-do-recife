@@ -29,6 +29,7 @@ export function settingsScreen(onBack: () => void): Screen {
           h("p", { class: "gr-subtitle", text: "Tudo é salvo na hora." }),
           slider("Volume geral", "settings-master", settings.masterVolume, (value) => updateSettings({ masterVolume: value })),
           slider("Efeitos sonoros", "settings-sfx", settings.sfxVolume, (value) => updateSettings({ sfxVolume: value })),
+          slider("Trilha sonora", "settings-music", settings.musicVolume, (value) => updateSettings({ musicVolume: value })),
           toggle("Silenciar tudo", "settings-mute", settings.muted, (value) => apply({ muted: value })),
           toggle("Efeitos reduzidos", "settings-reduced", settings.reducedEffects, (value) => apply({ reducedEffects: value })),
           toggle("Tremor de tela", "settings-shake", settings.screenShake, (value) => apply({ screenShake: value })),
@@ -45,7 +46,6 @@ export function settingsScreen(onBack: () => void): Screen {
               ),
             ),
           ),
-          h("p", { class: "gr-hint", text: "A trilha sonora chega com a próxima etapa." }),
           h("div", { class: "gr-actions" }, button("VOLTAR", onBack, { testId: "settings-back", variant: "primary" })),
         );
       };

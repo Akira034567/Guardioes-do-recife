@@ -1,4 +1,4 @@
-import type { GuardianId } from "../../types";
+import type { GuardianId, LevelObjectiveDefinition } from "../../types";
 import type { MatchStatsSnapshot } from "../match/MatchStats";
 
 /**
@@ -17,6 +17,8 @@ export interface MatchResult {
   loadout: GuardianId[];
   /** O esquadrão veio de `?guardians=` (teste/balanceamento), não da progressão do jogador. */
   loadoutOverride: boolean;
+  /** Desafio do dia ou da semana que esta partida estava cumprindo (item 38). */
+  challenge?: { id: string; objective: LevelObjectiveDefinition; shells: number };
   stats: MatchStatsSnapshot;
 }
 

@@ -119,7 +119,12 @@ export class MatchEffects {
         if (getSettings().screenShake) this.host.scene.cameras.main.shake(160, 0.004 * Math.min(3, event.reefDamage));
         this.host.showMessage(`${event.name} atingiu o Recife! (-${event.reefDamage})`, 1400);
         return;
+      case "bossStarted":
+        audio.setMusicMood("tense");
+        this.host.showMessage(`${event.name} chegou.`, 2200);
+        return;
       case "bossDefeated":
+        audio.setMusicMood("calm");
         this.host.showMessage(`${event.name} caiu! A corrente se estabilizou.`, 2400);
         return;
       case "currentsReversed":

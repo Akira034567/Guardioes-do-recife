@@ -45,6 +45,15 @@ O Guardião libertado entra **de graça e emprestado** (`ownerId: "npc"`): luta 
 
 Tudo isso roda em `core/Interactables.ts` (regra pura) mais o comando `interact` do motor. Um interagível novo é só uma entrada em `LevelDefinition.interactables`, com `goal` (`taps`, `guardNearby`, `enemyDefeated` ou `reveal`) e a recompensa (`ally`, `current` ou `secretId`).
 
+## Conquistas e desafios
+
+- **Conquistas** (`data/achievements.ts` + `core/progression/achievements.ts`): dezesseis medidas sobre o perfil, a coleção e a melhor marca de uma partida. O progresso nunca regride, cada uma paga Conchas uma vez e as escondidas ficam em "???" até caírem. São recalculadas no fim de cada partida e ao abrir o mapa.
+- **Desafios** (`core/progression/challenges.ts`): um do dia e um da semana, sorteados a partir da data com a semente do `Rng` — sem servidor, sem rede. O sorteio só usa fases e Guardiões que o jogador já alcançou; a preparação entra travada, com esquadrão e dificuldade fixos, e a recompensa cai ao cumprir a regra extra.
+
+## Áudio
+
+Não há arquivo de áudio no projeto: tudo é sintetizado com osciladores em `systems/AudioManager.ts`. Dois barramentos sob o volume geral, efeitos e música, ambos ligados às configurações. A trilha (`systems/audio/MusicBed.ts`) é um acorde grave com respiro lento que muda de clima quando o chefe chega e quando a fase é vencida. Trocar por samples depois é mexer só nessa camada; as regras nunca chamam áudio, quem toca é `systems/MatchEffects.ts`.
+
 ## Telas fora da partida
 
 Menus são HTML por cima do canvas (`src/game/ui/dom`), alinhados ao jogo e escalados por `--gr-scale`; o HUD da partida continua em Phaser.
@@ -55,6 +64,7 @@ Menus são HTML por cima do canvas (`src/game/ui/dom`), alinhados ao jogo e esca
 - **Configurações**: volumes, silenciar, efeitos reduzidos, tremor de tela e escala da interface. Tudo grava no save na hora.
 - **Mapa do Recife**: a tela inicial. As seis fases em sequência, com estrelas, e os nós de Encontro pendurados nelas; daqui saem o álbum, o bestiário, as histórias e as configurações.
 - **Menu de pause**: o botão Ⅱ pausa e abre continuar, configurações, reiniciar e sair para o mapa.
+- **Conquistas do Recife**: a lista com barra de progresso, o que já caiu e o que falta.
 
 ## UX da partida
 
@@ -120,6 +130,7 @@ Uma partida inteira vive em `src/game/core/match/Match.ts`, sem Phaser:
 - **Comandos** são a única porta de entrada: `placeGuardian`, `upgradeGuardian`, `sellGuardian`, `startNextWave` e os `debug.*`. Cada um devolve sucesso ou um motivo tipado (`insufficientPearls`, `branchLocked`, ...), que a cena traduz em mensagem.
 - **Eventos de domínio** saem pelo `listener` (`MatchEvents.ts`): ondas, inimigos, Guardiões, projéteis, áreas, chefe, pérolas. A apresentação (`GameScene` + `systems/MatchEffects.ts`) cria e destrói as views e toca som a partir deles; regra nenhuma vive na cena.
 - **Relógio**: `MatchClock` acumula o tempo real e roda `tick()` de passo fixo (60 Hz). Pausa é zero tick; 2× são dois ticks. O motor não conhece relógio de parede, o que mantém o caminho aberto para replay e coop.
+- **Jogadores**: todo comando carrega `playerId` e cada Guardião guarda o `ownerId` de quem o colocou. `economyMode` escolhe entre um caixa para a mesa (`shared`, o padrão de hoje) e um por jogador (`individual`), e `snapshot(playerId)` devolve a visão de cada um. É o que falta ligar quando houver rede; as regras já não dependem de quem está na frente da tela.
 - **Economia**: `Economy` guarda um razão por fonte (`EnemyReward`, `WaveReward`, `LevelReward`, `GuardianGeneration`, `MapReward`, `SpecialReward`, `EarlyWaveBonus`, `SellRefund`) e por destino (`Place`, `Upgrade`), que alimenta `MatchStats`.
 - **Estatísticas**: `MatchStats` acompanha abates, vazamentos, dano por Guardião e por causa, colocações, upgrades, ondas, tempo e pérolas — base das telas de resultado e das conquistas.
 - **Progressão**: `core/save/SaveManager.ts` guarda o documento permanente (versão 2, com migração da chave antiga), separado do estado da partida.
@@ -155,5 +166,6 @@ Uma partida inteira vive em `src/game/core/match/Match.ts`, sem Phaser:
 - Texto de coleção/bestiário: uma entrada em `data/guardianLore.ts` ou `data/enemyLore.ts` (`tests/lore.test.ts` cobra a ficha de todo conteúdo novo).
 - Novo Encontro: uma fase em `data/encounters/`, a entrada em `ENCOUNTERS` e a condição `encounterCompleted` no Guardião. `tests/encounters.test.ts` valida rota, plataformas, ondas e o aliado prometido.
 - Nova história: uma entrada em `data/story.ts` com o gatilho (`levelIntro`, `levelOutro` ou `manual`); o save guarda só os ids lidos.
+- Nova conquista: uma entrada em `ACHIEVEMENTS` com a medida e a meta; a avaliação e a tela se viram sozinhas.
 - Nova configuração: campo em `PlayerSettings`, padrão em `DEFAULT_SETTINGS`, saneamento em `sanitizeProgress` e a linha na tela de configurações.
 - Nova fase: arquivo em `src/game/data/levels/` e inclusão em `LEVELS`; os testes em `tests/levels.test.ts` validam rota, plataformas, correntes e ondas automaticamente.

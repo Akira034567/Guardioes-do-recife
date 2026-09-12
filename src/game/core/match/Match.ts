@@ -58,7 +58,18 @@ export interface MatchOptions {
   seed?: number | string;
   players?: PlayerConfig[];
   controller?: MatchController | null;
+  /**
+   * Como as pérolas são divididas no coop (item 47). `shared` (padrão) é o jogo de hoje: um caixa só.
+   * `individual` dá um caixa por jogador; cada um paga o que coloca e recebe a própria parte.
+   */
+  economyMode?: "shared" | "individual";
 }
+
+/** Chave do caixa único no modo compartilhado. */
+const SHARED_WALLET: PlayerId = "shared";
+
+/** Ganhos que pertencem à mesa inteira: no modo individual, todo jogador recebe. */
+const SHARED_SOURCES: PearlSource[] = ["EnemyReward", "WaveReward", "LevelReward", "MapReward", "SpecialReward", "EarlyWaveBonus"];
 
 interface RouteUnit {
   x: number;
@@ -78,7 +89,9 @@ export class Match {
   /** Rota principal (compatibilidade); todas as rotas ficam em `routes`. */
   readonly route: RoutePath;
   readonly routes: ReadonlyMap<string, RoutePath>;
-  private readonly economy: Economy;
+  /** Um caixa no modo compartilhado; um por jogador no individual. */
+  private readonly economies = new Map<PlayerId, Economy>();
+  readonly economyMode: "shared" | "individual";
   private readonly scheduler: WaveScheduler;
   private readonly enemyList: MatchEnemy[] = [];
   private readonly guardianList: MatchGuardian[] = [];
@@ -115,7 +128,13 @@ export class Match {
     const paths = resolveLevelPaths(level);
     this.routes = new Map(paths.map((path) => [path.id, new RoutePath(path.waypoints)]));
     this.route = this.routes.get(paths[0].id) as RoutePath;
-    this.economy = new Economy(level.startingPearls);
+    this.economyMode = options.economyMode ?? "shared";
+    if (this.economyMode === "individual") {
+      // Cada jogador começa com o caixa cheio: a fase não fica mais pobre por ter mais gente.
+      for (const player of this.players) this.economies.set(player.id, new Economy(level.startingPearls));
+    } else {
+      this.economies.set(SHARED_WALLET, new Economy(level.startingPearls));
+    }
     this.scheduler = new WaveScheduler(level.waves, level.initialWaveDelayMs, level.betweenWaveDelayMs, options.startWaveIndex ?? 0);
     this.currents = CurrentSystem.fromLevel(level.currents);
     this.reefValue = level.reefHealth;
@@ -168,12 +187,22 @@ export class Match {
     return this.players.map((player) => player.id);
   }
 
-  pearls(_playerId: PlayerId = DEFAULT_PLAYER_ID): number {
-    return this.economy.pearls;
+  pearls(playerId: PlayerId = DEFAULT_PLAYER_ID): number {
+    return this.walletOf(playerId).pearls;
   }
 
-  economySnapshot() {
-    return this.economy.snapshot();
+  economySnapshot(playerId: PlayerId = DEFAULT_PLAYER_ID) {
+    return this.walletOf(playerId).snapshot();
+  }
+
+  /** Caixa de um jogador: o compartilhado quando o modo é `shared`. */
+  private walletOf(playerId: PlayerId): Economy {
+    if (this.economyMode === "shared") return this.economies.get(SHARED_WALLET) as Economy;
+    const wallet = this.economies.get(playerId);
+    if (wallet) return wallet;
+    const created = new Economy(this.level.startingPearls);
+    this.economies.set(playerId, created);
+    return created;
   }
 
   guardian(id: string): MatchGuardian | undefined {
@@ -227,14 +256,15 @@ export class Match {
     this.listener = listener;
   }
 
-  snapshot(): MatchSnapshot {
+  /** Estado para a apresentação. No coop, cada jogador pede o seu (as pérolas mudam por jogador). */
+  snapshot(playerId: PlayerId = DEFAULT_PLAYER_ID): MatchSnapshot {
     const bossState = this.bossEncounter.snapshot();
     const boss = bossState ? (this.enemy(bossState.id) ?? null) : null;
     const trap = this.guardianList.find((guardian) => guardian.trapPhase !== null);
     return {
       status: this.statusValue,
       now: this.nowMs,
-      pearls: this.economy.pearls,
+      pearls: this.pearls(playerId),
       reef: this.reefValue,
       maxReef: this.level.reefHealth,
       wave: this.scheduler.currentWave,
@@ -275,7 +305,7 @@ export class Match {
         tappable: runtime.definition.goal.type === "taps" || runtime.definition.goal.type === "reveal",
         hint: this.interactableHint(runtime),
       })),
-      stats: this.stats.snapshot(this.economy.snapshot()),
+      stats: this.stats.snapshot(this.economySnapshot(playerId)),
     };
   }
 
@@ -415,7 +445,7 @@ export class Match {
   private placeGuardian(command: Extract<MatchCommand, { type: "placeGuardian" }>): CommandResult {
     const definition: GuardianDefinition = GUARDIANS[command.guardianId];
     const playerId = command.playerId ?? DEFAULT_PLAYER_ID;
-    if (!this.economy.canAfford(definition.cost)) {
+    if (!this.walletOf(playerId).canAfford(definition.cost)) {
       return { ok: false, reason: "insufficientPearls", message: `Faltam pérolas para ${definition.name}.` };
     }
     let placement: GuardianPlacement;
@@ -474,7 +504,7 @@ export class Match {
       }
       return { ok: false, reason: "noOption", message: "Nenhum upgrade disponível neste ramo." };
     }
-    if (!this.economy.canAfford(option.cost)) {
+    if (!this.walletOf(command.playerId ?? DEFAULT_PLAYER_ID).canAfford(option.cost)) {
       return { ok: false, reason: "insufficientPearls", message: "Pérolas insuficientes para este upgrade." };
     }
     if (!guardian.applyUpgrade(command.branchId, this.nowMs)) return { ok: false, reason: "noOption", message: "Upgrade indisponível." };
@@ -831,14 +861,29 @@ export class Match {
     for (const guardian of this.guardianList) if (!owners.has(guardian.id)) this.currents.setOwnerZones(guardian.id, []);
   }
 
+  /**
+   * Crédito de pérolas. No modo individual, o que a partida gera (recompensa de inimigo, de onda) vai
+   * para todo mundo; no compartilhado, para o caixa único.
+   */
   private earn(amount: number, source: PearlSource, playerId: PlayerId): number {
-    const credited = this.economy.earn(amount, source);
-    if (credited > 0) this.emit({ type: "pearlsChanged", now: this.nowMs, playerId, pearls: this.economy.pearls, delta: credited, source });
+    if (this.economyMode === "individual" && SHARED_SOURCES.includes(source)) {
+      let credited = 0;
+      for (const player of this.players) {
+        const value = this.walletOf(player.id).earn(amount, source);
+        if (value > 0) this.emit({ type: "pearlsChanged", now: this.nowMs, playerId: player.id, pearls: this.pearls(player.id), delta: value, source });
+        if (player.id === playerId) credited = value;
+      }
+      return credited || amount;
+    }
+    const wallet = this.walletOf(playerId);
+    const credited = wallet.earn(amount, source);
+    if (credited > 0) this.emit({ type: "pearlsChanged", now: this.nowMs, playerId, pearls: wallet.pearls, delta: credited, source });
     return credited;
   }
 
   private spend(cost: number, sink: PearlSink, playerId: PlayerId): void {
-    this.economy.spend(cost, sink);
-    this.emit({ type: "pearlsChanged", now: this.nowMs, playerId, pearls: this.economy.pearls, delta: -cost, source: sink });
+    const wallet = this.walletOf(playerId);
+    wallet.spend(cost, sink);
+    this.emit({ type: "pearlsChanged", now: this.nowMs, playerId, pearls: wallet.pearls, delta: -cost, source: sink });
   }
 }

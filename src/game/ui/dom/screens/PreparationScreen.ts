@@ -22,7 +22,14 @@ export function preparationScreen(
   levelIndex: number,
   progression: ProgressionService,
   actions: PreparationActions,
-  initial: { difficulty: DifficultyId; loadout: GuardianId[]; encounter?: { guardianId: GuardianId; teaser: string } },
+  initial: {
+    difficulty: DifficultyId;
+    loadout: GuardianId[];
+    encounter?: { guardianId: GuardianId; teaser: string };
+    /** Desafio: fase, dificuldade e esquadrão vêm decididos; o jogador não escolhe. */
+    locked?: boolean;
+    challenge?: { name: string; rule: string; shells: number };
+  },
 ): Screen {
   let difficulty = initial.difficulty;
   const squad: GuardianId[] = initial.loadout.filter((id) => progression.isUnlocked(id)).slice(0, LOADOUT_SIZE);
@@ -45,14 +52,21 @@ export function preparationScreen(
           ...(initial.encounter
             ? [h("p", { class: "gr-hint", testId: "prep-encounter", text: `${initial.encounter.teaser} Vencer aqui traz ${GUARDIANS[initial.encounter.guardianId].name} para a coleção.` })]
             : []),
+          ...(initial.challenge
+            ? [h("p", { class: "gr-hint", testId: "prep-challenge", text: `${initial.challenge.name}: vença ${initial.challenge.rule}. Vale ${GLOBAL_CURRENCY.symbol} ${initial.challenge.shells}.` })]
+            : []),
           statsRow(level, record?.stars ?? 0),
           objectives(level),
-          difficultyPicker(difficulty, (next) => {
-            difficulty = next;
-            draw();
-          }),
+          ...(initial.locked
+            ? [h("p", { class: "gr-subtitle", text: `DIFICULDADE ${DIFFICULTIES[difficulty].name.toUpperCase()} · ESQUADRÃO FIXO` })]
+            : [
+                difficultyPicker(difficulty, (next) => {
+                  difficulty = next;
+                  draw();
+                }),
+              ]),
           knownEnemies(level, progression),
-          squadPicker(squad, statuses, progression, draw),
+          ...(initial.locked ? [fixedSquad(squad)] : [squadPicker(squad, statuses, progression, draw)]),
           h(
             "div",
             { class: "gr-actions" },
@@ -70,6 +84,22 @@ export function preparationScreen(
       return root;
     },
   };
+}
+
+/** Esquadrão do desafio: mostrado, não escolhido. */
+function fixedSquad(squad: readonly GuardianId[]): HTMLElement {
+  return h(
+    "div",
+    { class: "gr-grid", testId: "prep-slots" },
+    ...squad.map((guardianId, index) =>
+      h(
+        "div",
+        { class: "gr-stat", testId: `prep-slot-${index}`, dataGuardian: guardianId },
+        h("span", { class: "gr-stat__label", text: `Vaga ${index + 1}` }),
+        h("span", { class: "gr-stat__value", text: GUARDIANS[guardianId].shortName }),
+      ),
+    ),
+  );
 }
 
 function statsRow(level: LevelDefinition, stars: number): HTMLElement {

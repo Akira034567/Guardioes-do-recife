@@ -36,7 +36,11 @@ describe("ProgressionService", () => {
     expect(outcome.starsBefore).toBe(0);
     expect(outcome.objectives.map((objective) => objective.achieved)).toEqual([true, true, true]);
     expect(outcome.objectives.every((objective) => objective.isNew)).toBe(true);
-    expect(outcome.rewards.shells).toBe(REWARDS.firstCompletion + REWARDS.perNewStar * 3 + REWARDS.firstPerfect);
+    // O total soma a fase e as conquistas que caíram junto; as linhas separam uma coisa da outra.
+    const levelShells = REWARDS.firstCompletion + REWARDS.perNewStar * 3 + REWARDS.firstPerfect;
+    const achievementShells = outcome.achievements.reduce((total, definition) => total + definition.shells, 0);
+    expect(outcome.achievements.map((definition) => definition.id)).toContain("primeira-mare");
+    expect(outcome.rewards.shells).toBe(levelShells + achievementShells);
     expect(outcome.nextLevelId).toBe("recife-2");
     expect(save.progress.currency.shells).toBe(outcome.rewards.shells);
     expect(save.progress.currency.lifetimeShells).toBe(outcome.rewards.shells);
@@ -51,8 +55,12 @@ describe("ProgressionService", () => {
     const again = progression.applyMatchResult(makeResult({ livesRemaining: 2, stats: { maxSimultaneousGuardians: 9 } }), OBJECTIVES);
     expect(again.stars, "estrela conquistada não volta atrás").toBe(3);
     expect(again.objectives.every((objective) => !objective.isNew)).toBe(true);
-    expect(again.rewards.shells).toBe(REWARDS.replayVictory);
-    expect(save.progress.currency.shells).toBe(shells + REWARDS.replayVictory);
+    // A fase repetida paga pouco, mas a partida bateu um recorde: 9 Guardiões em campo.
+    const replayAchievements = again.achievements.map((definition) => definition.id);
+    expect(replayAchievements).toEqual(["arsenal"]);
+    const bonus = again.achievements.reduce((total, definition) => total + definition.shells, 0);
+    expect(again.rewards.shells).toBe(REWARDS.replayVictory + bonus);
+    expect(save.progress.currency.shells).toBe(shells + REWARDS.replayVictory + bonus);
     expect(save.progress.levelStars["recife-1"].completions).toBe(2);
   });
 

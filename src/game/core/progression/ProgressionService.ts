@@ -2,6 +2,8 @@ import type { GuardianUnlockDefinition } from "../../data/unlocks";
 import type { GuardianId, LevelObjectiveDefinition } from "../../types";
 import type { SaveManager } from "../save/SaveManager";
 import type { LevelRecord, PlayerProgress, Stars } from "../save/PlayerProgress";
+import type { AchievementDefinition } from "../../data/achievements";
+import { achievementShells, applyAchievements } from "./achievements";
 import { countsForProgression, type MatchResult } from "./MatchResult";
 import { evaluateObjectives } from "./objectives";
 import { computeLevelRewards, encounterRewards, type RewardBreakdown } from "./rewards";
@@ -26,6 +28,10 @@ export interface MatchOutcome {
   rewards: RewardBreakdown;
   /** Guardiões que acabaram de entrar na coleção, para a apresentação. */
   unlocked: GuardianId[];
+  /** Conquistas obtidas nesta partida (item 37). */
+  achievements: AchievementDefinition[];
+  /** Desafio cumprido agora (item 38). */
+  challengeCompleted: string | null;
   /** Fase seguinte liberada, quando houver. */
   nextLevelId: string | null;
   /** Falso quando a partida usou comandos de debug: nada é salvo além da descoberta de inimigos. */
@@ -65,6 +71,12 @@ export class ProgressionService {
     // Encontro não vale estrela: paga uma recompensa própria e entrega o Guardião.
     const rewards = !counted || !result.victory ? { shells: 0, lines: [] } : isEncounter ? encounterRewards(this.save.progress, result) : computeLevelRewards(merge, result.difficulty);
     const unlocked: GuardianId[] = [];
+    const achievements: AchievementDefinition[] = [];
+    // Desafio: a partida só conta se cumpriu a regra extra e não usou ferramentas de debug.
+    const challenge = result.challenge;
+    const challengeDone =
+      Boolean(challenge) && counted && result.victory && evaluateObjectives([challenge!.objective], result)[0] === true;
+    let challengeCompleted: string | null = null;
 
     this.save.update((draft) => {
       // Descobrir um inimigo vale para o bestiário mesmo em partida de teste.
@@ -77,20 +89,44 @@ export class ProgressionService {
       }
       if (!result.loadoutOverride) draft.lastLoadout = [...result.loadout];
       draft.lastDifficulty = result.difficulty;
-      if (!result.victory) return;
 
-      if (isEncounter) {
-        const encounterId = result.encounterId ?? result.levelId;
-        if (!draft.completedEncounters.includes(encounterId)) draft.completedEncounters.push(encounterId);
-      } else {
-        draft.levelStars[result.levelId] = merge.next;
-        if (!draft.completedLevels.includes(result.levelId)) draft.completedLevels.push(result.levelId);
+      if (result.victory) {
+        if (isEncounter) {
+          const encounterId = result.encounterId ?? result.levelId;
+          if (!draft.completedEncounters.includes(encounterId)) draft.completedEncounters.push(encounterId);
+        } else {
+          draft.levelStars[result.levelId] = merge.next;
+          if (!draft.completedLevels.includes(result.levelId)) draft.completedLevels.push(result.levelId);
+        }
+        draft.currency.shells += rewards.shells;
+        draft.currency.lifetimeShells += rewards.shells;
+        unlocked.push(...reconcileUnlocks(this.context.unlocks, draft));
+        draft.pendingUnlockReveals.push(...unlocked.filter((guardianId) => !draft.pendingUnlockReveals.includes(guardianId)));
       }
-      draft.currency.shells += rewards.shells;
-      draft.currency.lifetimeShells += rewards.shells;
-      unlocked.push(...reconcileUnlocks(this.context.unlocks, draft));
-      draft.pendingUnlockReveals.push(...unlocked.filter((guardianId) => !draft.pendingUnlockReveals.includes(guardianId)));
+
+      if (challenge && challengeDone && !draft.challenges.completed.includes(challenge.id)) {
+        draft.challenges.completed.push(challenge.id);
+        draft.challenges.lastSeenRotation = challenge.id;
+        draft.currency.shells += challenge.shells;
+        draft.currency.lifetimeShells += challenge.shells;
+        challengeCompleted = challenge.id;
+      }
+
+      // As conquistas medem o save já atualizado, então entram por último — e contam na derrota também
+      // (tempo de jogo, abates, segredos achados antes de o Recife cair).
+      achievements.push(...applyAchievements(draft, result));
+      const bonus = achievementShells(achievements);
+      draft.currency.shells += bonus;
+      draft.currency.lifetimeShells += bonus;
     });
+    if (challengeCompleted && challenge) {
+      rewards.lines.push({ label: "Desafio cumprido", shells: challenge.shells });
+      rewards.shells += challenge.shells;
+    }
+    if (achievements.length > 0) {
+      rewards.lines.push(...achievements.map((definition) => ({ label: `Conquista: ${definition.name}`, shells: definition.shells })));
+      rewards.shells += achievementShells(achievements);
+    }
 
     return {
       levelId: result.levelId,
@@ -105,17 +141,26 @@ export class ProgressionService {
       })),
       rewards,
       unlocked,
+      achievements,
+      challengeCompleted,
       nextLevelId: result.victory && !isEncounter ? this.nextLevelId(result.levelId) : null,
       counted,
     };
   }
 
-  /** Desbloqueia o que as condições já permitem (abertura do menu, migração de save antigo). */
+  /**
+   * Desbloqueia o que as condições já permitem e recalcula as conquistas (abertura do menu, migração
+   * de save antigo). Sem isso, um perfil que já fez o suficiente veria a lista zerada.
+   */
   reconcile(): GuardianId[] {
     const unlocked: GuardianId[] = [];
     this.save.update((draft) => {
       unlocked.push(...reconcileUnlocks(this.context.unlocks, draft));
       draft.pendingUnlockReveals.push(...unlocked.filter((guardianId) => !draft.pendingUnlockReveals.includes(guardianId)));
+      const gained = applyAchievements(draft);
+      const bonus = achievementShells(gained);
+      draft.currency.shells += bonus;
+      draft.currency.lifetimeShells += bonus;
     });
     return unlocked;
   }
