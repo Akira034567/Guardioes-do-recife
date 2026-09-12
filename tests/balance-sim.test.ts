@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { simulateLevel, type SimResult } from "../src/game/core/Simulation";
 import { getLevel } from "../src/game/data/levels";
 import { BALANCE_BUILDS, RAW_BUILD, type BalanceBuild } from "./balance-builds";
+import { BALANCE_SUITES_ON, BALANCE_SWITCH_HINT } from "./balanceSwitch";
 
 /**
  * Contrato de balanceamento: cada fase deve ser vencível por builds diversos
@@ -24,7 +25,10 @@ function describeResult(build: BalanceBuild, result: SimResult): string {
   return `${build.level} · ${build.name} · ${result.state} · vidas ${result.reef}/${REEF_MAX} · pérolas ${result.pearls} · ${result.guardians} un / ${result.upgrades} up · ${(result.timeMs / 1000).toFixed(0)}s · vazou: ${leaks || "-"}`;
 }
 
-describe("balance simulation", () => {
+// Ligada/desligada em `tests/balanceSwitch.ts`.
+const suite = BALANCE_SUITES_ON ? describe : describe.skip;
+
+suite(`balance simulation${BALANCE_SUITES_ON ? "" : ` (pulado — ${BALANCE_SWITCH_HINT})`}`, () => {
   const results = BALANCE_BUILDS.map((build) => ({ build, result: play(build) }));
 
   it("prints the balance table", () => {

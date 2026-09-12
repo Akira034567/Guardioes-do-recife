@@ -4,6 +4,7 @@ import { DEFAULT_LOADOUT, GUARDIANS } from "../../src/game/data/guardians";
 import { cardCenterX, HUD_LAYOUT } from "../../src/game/hudLayout";
 import type { BranchId, GuardianId } from "../../src/game/types";
 import { BALANCE_BUILDS, RAW_BUILD, type BalanceBuild } from "../balance-builds";
+import { BALANCE_SUITES_ON, BALANCE_SWITCH_HINT } from "../balanceSwitch";
 
 /**
  * Sondas de balanceamento (@balance): cada build joga uma fase inteira e precisa
@@ -16,6 +17,11 @@ import { BALANCE_BUILDS, RAW_BUILD, type BalanceBuild } from "../balance-builds"
 // Partidas de 5 a 8 minutos geram traces enormes e, em máquinas com antivírus, o arquivo some antes
 // do navegador fechar ("browserContext.close: ENOENT ... .trace"). Sem trace/vídeo a sonda fica estável.
 test.use({ trace: "off", video: "off" });
+
+// A chave de `tests/balanceSwitch.ts` vale aqui também: desligada, nenhuma sonda joga.
+test.beforeEach(() => {
+  test.skip(!BALANCE_SUITES_ON, BALANCE_SWITCH_HINT);
+});
 
 const CARD_Y = HUD_LAYOUT.cardY;
 const OPTION = {

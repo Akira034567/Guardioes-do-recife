@@ -130,6 +130,8 @@ Cada inimigo é só dados (`ENEMIES` + `ENEMY_BALANCE`). Além dos números, a d
 
 ## Balanceamento
 
+> **As suítes de balanceamento estão desligadas.** A chave é `BALANCE_SUITES_ON`, em `tests/balanceSwitch.ts`: hoje `false`, ela pula `balance-sim.test.ts`, `balance-lab.test.ts` e as 22 sondas de `e2e/balance.spec.ts`. Continuam rodando sempre `match-golden.test.ts` (congela o resultado de cada build e pega deriva do motor) e `balance.test.ts` (tabela de preços). Para voltar ao balanceamento, troque a constante para `true`.
+
 Critério de vencibilidade: toda fase deve ser vencível perdendo poucas vidas com builds diversas, sem ficar fácil demais. Os roteiros de compra ficam em `tests/balance-builds.ts` (dois ou mais por fase) e são verificados de duas formas:
 
 - `npm test` roda `tests/balance-sim.test.ts`, uma simulação headless da partida (`src/game/core/Simulation.ts`, que roda o MESMO motor da partida real, `src/game/core/match/Match.ts`, sem Phaser) que termina em segundos e imprime `[sim] … vidas X/20 · pérolas Y · vazou: …` por build. `tests/balance-lab.test.ts` imprime rota, cobertura de cada plataforma e vida/renda por onda de cada fase. `tests/match-golden.test.ts` congela o resultado exato de cada build em snapshot: qualquer refatoração precisa mantê-lo.

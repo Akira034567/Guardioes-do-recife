@@ -3,9 +3,12 @@ import { RoutePath } from "../src/game/core/RoutePath";
 import { ECONOMY } from "../src/game/data/balance";
 import { ENEMIES, scaleEnemy } from "../src/game/data/enemies";
 import { LEVELS } from "../src/game/data/levels";
+import { BALANCE_SUITES_ON, BALANCE_SWITCH_HINT } from "./balanceSwitch";
 
-// Laboratório temporário: geometria e orçamento de cada fase.
-describe("balance lab", () => {
+// Laboratório temporário: geometria e orçamento de cada fase. Ligado em `tests/balanceSwitch.ts`.
+const suite = BALANCE_SUITES_ON ? describe : describe.skip;
+
+suite(`balance lab${BALANCE_SUITES_ON ? "" : ` (pulado — ${BALANCE_SWITCH_HINT})`}`, () => {
   it("prints geometry and budgets", () => {
     for (const level of LEVELS) {
       const route = new RoutePath(level.waypoints);
