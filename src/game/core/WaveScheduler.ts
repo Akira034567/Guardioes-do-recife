@@ -42,7 +42,7 @@ export class WaveScheduler {
   }
 
   /** Milissegundos restantes da contagem (0 fora dela). */
-  get countdownRemainingMs(): number {
+  get countdownMs(): number {
     return this.currentState === "countdown" ? Math.max(0, this.countdownRemainingMs) : 0;
   }
 

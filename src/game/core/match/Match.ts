@@ -364,7 +364,7 @@ export class Match {
 
   private startNextWave(): CommandResult {
     if (this.scheduler.state !== "countdown") return { ok: false, reason: "notInCountdown", message: "A onda já está em curso." };
-    const remainingMs = this.scheduler.countdownRemainingMs;
+    const remainingMs = this.scheduler.countdownMs;
     if (!this.scheduler.skipCountdown()) return { ok: false, reason: "notInCountdown", message: "A onda já está em curso." };
     this.stats.earlyWaveCalls += 1;
     return { ok: true, earlyStartMs: remainingMs };
