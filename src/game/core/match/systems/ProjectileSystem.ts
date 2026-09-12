@@ -1,7 +1,6 @@
 import { GAME_HEIGHT, GAME_WIDTH } from "../../../constants";
 import { GUARDIAN_BALANCE } from "../../../data/balance";
-import type { CurrentZoneDefinition } from "../../../types";
-import { containsPoint, projectileDrift } from "../../CurrentField";
+import type { CurrentSystem } from "../../CurrentSystem";
 import type { DamageOptions } from "../../GuardianBehaviors";
 import { ProjectileCore, type ProjectileTarget } from "../../ProjectileCore";
 import type { MatchEnemy } from "../MatchEnemy";
@@ -24,8 +23,7 @@ interface Projectile extends ProjectileView {
 export interface ProjectileContext {
   now: number;
   enemies: readonly MatchEnemy[];
-  currents: readonly CurrentZoneDefinition[];
-  currentReversed: boolean;
+  currents: CurrentSystem;
   damage(enemy: MatchEnemy, amount: number, options?: DamageOptions): void;
   emit(event: MatchEvent): void;
 }
@@ -74,12 +72,9 @@ export class ProjectileSystem {
     for (let index = this.list.length - 1; index >= 0; index -= 1) {
       const projectile = this.list[index];
       const result = projectile.core.step(deltaMs, targets);
-      const zone = context.currents.find((candidate) => containsPoint(candidate, projectile.core));
-      if (zone) {
-        const drift = projectileDrift(zone, deltaMs / 1000, context.currentReversed);
-        projectile.core.x += drift.x;
-        projectile.core.y += drift.y;
-      }
+      const drift = context.currents.projectileDrift(projectile.core, deltaMs / 1000);
+      projectile.core.x += drift.x;
+      projectile.core.y += drift.y;
       projectile.x = projectile.core.x;
       projectile.y = projectile.core.y;
       projectile.rotation = projectile.core.rotation;

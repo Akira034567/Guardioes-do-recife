@@ -5,6 +5,7 @@ import type { GuardianDefinition, LevelDefinition, PlayerId, TeamId } from "../.
 import { resolveAura, type AuraSource } from "../Auras";
 import { BlockingSystem } from "../Blocking";
 import { controlTier } from "../CrowdControl";
+import { CurrentSystem, zoneFromFlowField } from "../CurrentSystem";
 import { Economy, type PearlSink, type PearlSource } from "../Economy";
 import type { FlowField } from "../FlowField";
 import {
@@ -83,7 +84,7 @@ export class Match {
   private readonly platformOccupants = new Map<string, string>();
   private readonly players: PlayerConfig[];
   private readonly controller: MatchController | null;
-  private flowFieldList: FlowField[] = [];
+  readonly currents: CurrentSystem;
   private reefValue: number;
   private statusValue: MatchStatus = "running";
   private nowMs = 0;
@@ -102,6 +103,7 @@ export class Match {
     this.route = new RoutePath(level.waypoints);
     this.economy = new Economy(level.startingPearls);
     this.scheduler = new WaveScheduler(level.waves, level.initialWaveDelayMs, level.betweenWaveDelayMs, options.startWaveIndex ?? 0);
+    this.currents = CurrentSystem.fromLevel(level.currents);
     this.reefValue = level.reefHealth;
     this.stats.totalWaves = level.waves.length;
   }
@@ -141,11 +143,11 @@ export class Match {
   }
 
   get flowFields(): readonly FlowField[] {
-    return this.flowFieldList;
+    return this.currents.flowFields;
   }
 
   get currentReversed(): boolean {
-    return this.bossCurrent.reversed;
+    return this.currents.reversed;
   }
 
   get playerIds(): readonly PlayerId[] {
@@ -351,6 +353,7 @@ export class Match {
       if (this.routeUnits[unit].guardianId === guardian.id) this.routeUnits.splice(unit, 1);
     }
     this.areas.removeOwner(guardian.id, this.nowMs, this.emitBound);
+    this.currents.setOwnerZones(guardian.id, []);
     this.blocking.forget(guardian.id);
     for (const enemy of this.enemyList) {
       if (enemy.blockedById === guardian.id) enemy.clearBlocked();
@@ -404,14 +407,15 @@ export class Match {
       }
     }
 
-    this.flowFieldList = flowFieldsFor(this.guardianList);
+    this.currents.update(this.nowMs);
+    this.syncGuardianCurrents();
     this.blocking.update(this.guardianList, this.enemyList, this.nowMs, deltaMs, {
       damage: (enemy, amount) => this.damage(enemy, amount, { continuous: true, cause: "contact" }),
       onBossHeld: (blocker, enemy) => this.emit({ type: "enemyHeld", now: this.nowMs, blockerId: blocker.id, enemyId: enemy.id, x: enemy.x, y: enemy.y }),
       onReleased: (blocker, enemy) => this.emit({ type: "enemyReleased", now: this.nowMs, blockerId: blocker.id, enemyId: enemy.id, x: enemy.x, y: enemy.y }),
     });
     for (const enemy of this.enemyList) {
-      if (enemy.tick(this.nowMs, deltaMs, this.level.currents, this.bossCurrent.reversed, this.flowFieldList)) this.leak(enemy);
+      if (enemy.tick(this.nowMs, deltaMs, this.currents)) this.leak(enemy);
     }
     this.drainPoison();
 
@@ -430,14 +434,7 @@ export class Match {
     }
     const damage = (enemy: MatchEnemy, amount: number, options?: DamageOptions) => this.damage(enemy, amount, options);
     this.areas.update({ now: this.nowMs, enemies: this.enemyList, damage, emit: this.emitBound });
-    this.projectileSystem.update(deltaMs, {
-      now: this.nowMs,
-      enemies: this.enemyList,
-      currents: this.level.currents,
-      currentReversed: this.bossCurrent.reversed,
-      damage,
-      emit: this.emitBound,
-    });
+    this.projectileSystem.update(deltaMs, { now: this.nowMs, enemies: this.enemyList, currents: this.currents, damage, emit: this.emitBound });
 
     for (let index = this.enemyList.length - 1; index >= 0; index -= 1) {
       if (this.enemyList[index].dead || this.enemyList[index].reachedGoal) this.enemyList.splice(index, 1);
@@ -556,6 +553,7 @@ export class Match {
     });
     if (enemy.definition.isBoss) {
       this.bossCurrent.onBossKilled();
+      this.currents.setReversed("boss", false);
       this.emit({ type: "bossDefeated", now: this.nowMs, id: enemy.id, enemyId: enemy.definition.id, name: enemy.definition.name, x: enemy.x, y: enemy.y });
     }
   }
@@ -573,8 +571,19 @@ export class Match {
     );
   }
 
+  /** Zonas de corrente presas a Guardiões (Tartaruga): recalculadas a cada tick a partir dos stats. */
+  private syncGuardianCurrents(): void {
+    const owners = new Set<string>();
+    for (const field of flowFieldsFor(this.guardianList)) {
+      owners.add(field.ownerId);
+      this.currents.setOwnerZones(field.ownerId, [zoneFromFlowField(field)]);
+    }
+    for (const guardian of this.guardianList) if (!owners.has(guardian.id)) this.currents.setOwnerZones(guardian.id, []);
+  }
+
   private updateBossCurrent(deltaMs: number): void {
     const change = this.bossCurrent.update(deltaMs, this.enemyList);
+    this.currents.setReversed("boss", this.bossCurrent.reversed);
     if (change) this.emit({ type: "currentsReversed", now: this.nowMs, reversed: change.reversed, bossName: change.boss?.definition.name ?? null });
   }
 

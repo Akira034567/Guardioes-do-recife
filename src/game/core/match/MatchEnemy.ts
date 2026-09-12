@@ -1,8 +1,7 @@
-import type { CurrentZoneDefinition, EnemyDefinition, Vec2 } from "../../types";
+import type { EnemyDefinition, Vec2 } from "../../types";
 import { mitigatedDamage } from "../Combat";
-import { containsPoint, enemySpeedMultiplier } from "../CurrentField";
+import type { CurrentSystem } from "../CurrentSystem";
 import { EnemyStatus } from "../EnemyStatus";
-import { flowSpeedMultiplier, type FlowField } from "../FlowField";
 import type { DamageOptions } from "../GuardianBehaviors";
 import type { RoutePath } from "../RoutePath";
 
@@ -84,7 +83,7 @@ export class MatchEnemy {
   }
 
   /** Avança um passo; devolve true no instante em que chega ao Recife. */
-  tick(now: number, deltaMs: number, currents: readonly CurrentZoneDefinition[], reversed: boolean, flowFields: readonly FlowField[]): boolean {
+  tick(now: number, deltaMs: number, currents: CurrentSystem): boolean {
     if (this.dead || this.reachedGoal) return false;
     this.now = now;
     this.status.update(now);
@@ -94,10 +93,8 @@ export class MatchEnemy {
       this.effectiveSpeed = 0;
       return false;
     }
-    const zone = currents.find((candidate) => containsPoint(candidate, this));
-    const currentMultiplier = zone ? enemySpeedMultiplier(zone, tangent, reversed) : 1;
-    const flowMultiplier = flowSpeedMultiplier(flowFields, this, this.definition.slowResistance ?? 0);
-    this.effectiveSpeed = this.definition.speed * this.status.speedMultiplier(now) * currentMultiplier * flowMultiplier;
+    const currentMultiplier = currents.enemySpeedMultiplier(this, tangent, this.status.resistance("slow"));
+    this.effectiveSpeed = this.definition.speed * this.status.speedMultiplier(now) * currentMultiplier;
     this.pathDistance += this.effectiveSpeed * (deltaMs / 1000);
     const point = this.route.getPointAtDistance(this.pathDistance);
     this.x = point.x;

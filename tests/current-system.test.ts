@@ -1,0 +1,69 @@
+import { describe, expect, it } from "vitest";
+import { CurrentSystem, zoneFromFlowField, type CurrentZone } from "../src/game/core/CurrentSystem";
+import { MIN_FLOW_MULTIPLIER } from "../src/game/core/FlowField";
+import { RECIFE_ONE } from "../src/game/data/levels";
+
+const inside = { x: 600, y: 300 };
+const alongFlow = { x: 1, y: 0.16 };
+const againstFlow = { x: -1, y: -0.16 };
+
+describe("CurrentSystem", () => {
+  it("reproduces the map current speed modifiers and reverses them per source", () => {
+    const currents = CurrentSystem.fromLevel(RECIFE_ONE.currents);
+    expect(currents.enemySpeedMultiplier(inside, alongFlow)).toBeCloseTo(1.25);
+    expect(currents.enemySpeedMultiplier(inside, againstFlow)).toBeCloseTo(0.75);
+    expect(currents.enemySpeedMultiplier({ x: 100, y: 100 }, alongFlow)).toBe(1);
+    currents.setReversed("boss", true);
+    expect(currents.reversed).toBe(true);
+    expect(currents.enemySpeedMultiplier(inside, alongFlow)).toBeCloseTo(0.75);
+    currents.setReversed("event", true);
+    currents.setReversed("boss", false);
+    expect(currents.reversed, "duas fontes: continua invertida até as duas soltarem").toBe(true);
+    currents.setReversed("event", false);
+    expect(currents.enemySpeedMultiplier(inside, alongFlow)).toBeCloseTo(1.25);
+  });
+
+  it("multiplies map currents by the strongest guardian zone and respects slow resistance", () => {
+    const currents = CurrentSystem.fromLevel(RECIFE_ONE.currents);
+    currents.setOwnerZones("G1", [zoneFromFlowField({ ownerId: "G1", x: 600, y: 300, radius: 120, speedFactor: 0.75, mode: "counter" })]);
+    currents.setOwnerZones("G2", [zoneFromFlowField({ ownerId: "G2", x: 600, y: 300, radius: 120, speedFactor: 0.9, mode: "counter" })]);
+    expect(currents.enemySpeedMultiplier(inside, alongFlow)).toBeCloseTo(1.25 * 0.75);
+    expect(currents.enemySpeedMultiplier(inside, alongFlow, 0.5)).toBeCloseTo(1.25 * 0.875);
+    currents.setOwnerZones("G1", []);
+    expect(currents.enemySpeedMultiplier(inside, alongFlow)).toBeCloseTo(1.25 * 0.9);
+    expect(currents.flowFields.map((field) => field.ownerId)).toEqual(["G2"]);
+  });
+
+  it("clamps stacked slow zones to the flow floor", () => {
+    const currents = new CurrentSystem();
+    currents.setOwnerZones("G1", [zoneFromFlowField({ ownerId: "G1", x: 0, y: 0, radius: 50, speedFactor: 0.2, mode: "counter" })]);
+    expect(currents.enemySpeedMultiplier({ x: 0, y: 0 }, { x: 1, y: 0 })).toBe(MIN_FLOW_MULTIPLIER);
+  });
+
+  it("expires temporary currents and only drifts projectiles in directional zones", () => {
+    const currents = new CurrentSystem();
+    const temporary: CurrentZone = {
+      id: "gêiser",
+      ownerId: null,
+      origin: "interactable",
+      shape: { kind: "circle", x: 0, y: 0, radius: 40 },
+      direction: { x: 0, y: -1 },
+      strength: 0.5,
+      projectileDrift: 100,
+      affects: ["enemy", "projectile"],
+      reversible: false,
+      expiresAt: 1000,
+      respectsSlowResistance: false,
+    };
+    currents.addTemporary(temporary);
+    expect(currents.enemySpeedMultiplier({ x: 0, y: 0 }, { x: 0, y: -1 })).toBeCloseTo(1.5);
+    expect(currents.projectileDrift({ x: 0, y: 0 }, 0.5)).toEqual({ x: 0, y: -50 });
+    currents.setReversed("boss", true);
+    expect(currents.projectileDrift({ x: 0, y: 0 }, 0.5), "zona não reversível ignora a inversão").toEqual({ x: 0, y: -50 });
+    currents.update(1000);
+    expect(currents.zones()).toHaveLength(0);
+    expect(currents.projectileDrift({ x: 0, y: 0 }, 0.5)).toEqual({ x: 0, y: 0 });
+    currents.setOwnerZones("G1", [zoneFromFlowField({ ownerId: "G1", x: 0, y: 0, radius: 50, speedFactor: 0.75, mode: "counter" })]);
+    expect(currents.projectileDrift({ x: 0, y: 0 }, 0.5), "zona isotrópica não desloca projéteis").toEqual({ x: 0, y: 0 });
+  });
+});
