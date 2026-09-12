@@ -20,6 +20,11 @@ export const RECIFE_SIX: LevelDefinition = {
   betweenWaveDelayMs: 8_000,
   enemyScaling: { health: 1, speed: 1.05, reward: 1.2 },
   enemyOverrides: { tidebreaker: { maxHealth: 600 } },
+  objectives: [
+    { id: "completar", kind: "complete" },
+    { id: "vidas", kind: "minLivesRemaining", value: 8 },
+    { id: "especies", kind: "maxDistinctGuardians", value: 3 },
+  ],
   waypoints: [
     { x: 607, y: -19 },
     { x: 607, y: 21 },

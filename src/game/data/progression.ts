@@ -11,6 +11,13 @@ export const GLOBAL_CURRENCY = {
   symbol: "◈",
 } as const;
 
+/** Dificuldades maiores pagam mais Conchas pelo mesmo feito. */
+export const DIFFICULTY_REWARD_MULTIPLIER: Record<string, number> = {
+  normal: 1,
+  dificil: 1.35,
+  abissal: 1.75,
+};
+
 export const REWARDS = {
   /** Primeira conclusão de uma fase. */
   firstCompletion: 50,

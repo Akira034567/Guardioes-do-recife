@@ -20,6 +20,11 @@ export const RECIFE_ONE: LevelDefinition = {
   enemyScaling: { health: 0.75, speed: 1, reward: 1.2 },
   /** Primeiro chefe: 360 de vida de base (270 após a escala) para que qualquer build razoável o derrube. */
   enemyOverrides: { tidebreaker: { maxHealth: 360 } },
+  objectives: [
+    { id: "completar", kind: "complete" },
+    { id: "vidas", kind: "minLivesRemaining", value: 15 },
+    { id: "poucos", kind: "maxGuardians", value: 3 },
+  ],
   waypoints: [
     { x: -40, y: 315 },
     { x: 100, y: 310 },

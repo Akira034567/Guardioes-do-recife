@@ -21,6 +21,11 @@ export const RECIFE_FIVE: LevelDefinition = {
   betweenWaveDelayMs: 8_000,
   enemyScaling: { health: 0.95, speed: 1.05, reward: 1.2 },
   enemyOverrides: { tidebreaker: { maxHealth: 550 } },
+  objectives: [
+    { id: "completar", kind: "complete" },
+    { id: "vidas", kind: "minLivesRemaining", value: 10 },
+    { id: "poucos", kind: "maxGuardians", value: 6 },
+  ],
   waypoints: [
     { x: 243, y: -30 },
     { x: 255, y: 20 },

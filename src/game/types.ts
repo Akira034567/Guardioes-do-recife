@@ -495,6 +495,28 @@ export interface WaveDefinition {
   isBossWave?: boolean;
 }
 
+/**
+ * Objetivo secundário de uma fase (item 21). Cada fase declara três; o primeiro é sempre `complete`.
+ * `value` é o número que o tipo pede (vidas, Guardiões, milissegundos); tipos sem número o ignoram.
+ */
+export type ObjectiveKind =
+  | "complete"
+  | "minLivesRemaining"
+  | "noLeaks"
+  | "noEliteLeaks"
+  | "maxGuardians"
+  | "maxDistinctGuardians"
+  | "underTimeMs"
+  | "noFinalEvolution"
+  | "noSell"
+  | "noEarlyCall";
+
+export interface LevelObjectiveDefinition {
+  id: string;
+  kind: ObjectiveKind;
+  value?: number;
+}
+
 /** Uma rota da fase. A primeira é a principal e coincide com `waypoints`. */
 export interface PathDefinition {
   id: string;
@@ -568,6 +590,8 @@ export interface LevelDefinition {
   goalPoints?: GoalPointDefinition[];
   /** Bônus de conclusão próprio; ausente = `ECONOMY.levelClearBonus`. */
   levelClearBonus?: number;
+  /** Três objetivos: o primeiro é concluir a fase, os outros dois valem as estrelas 2 e 3. */
+  objectives?: [LevelObjectiveDefinition, LevelObjectiveDefinition, LevelObjectiveDefinition];
 }
 
 export interface DebugFlags {

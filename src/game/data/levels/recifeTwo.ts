@@ -20,6 +20,11 @@ export const RECIFE_TWO: LevelDefinition = {
   betweenWaveDelayMs: 8_000,
   enemyScaling: { health: 0.9, speed: 1.03, reward: 1.15 },
   enemyOverrides: { tidebreaker: { maxHealth: 480 } },
+  objectives: [
+    { id: "completar", kind: "complete" },
+    { id: "intacto", kind: "noLeaks" },
+    { id: "rapido", kind: "underTimeMs", value: 360_000 },
+  ],
   waypoints: [
     { x: 397, y: 681 },
     { x: 397, y: 655 },

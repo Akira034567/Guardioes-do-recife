@@ -20,6 +20,11 @@ export const RECIFE_FOUR: LevelDefinition = {
   betweenWaveDelayMs: 8_000,
   enemyScaling: { health: 0.95, speed: 1.06, reward: 1.1 },
   enemyOverrides: { tidebreaker: { maxHealth: 550 } },
+  objectives: [
+    { id: "completar", kind: "complete" },
+    { id: "intacto", kind: "noLeaks" },
+    { id: "poucos", kind: "maxGuardians", value: 5 },
+  ],
   waypoints: [
     { x: 428, y: -20 },
     { x: 428, y: 20 },

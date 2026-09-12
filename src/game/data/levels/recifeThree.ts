@@ -20,6 +20,11 @@ export const RECIFE_THREE: LevelDefinition = {
   betweenWaveDelayMs: 8_000,
   enemyScaling: { health: 0.95, speed: 1.03, reward: 1.1 },
   enemyOverrides: { tidebreaker: { maxHealth: 520 } },
+  objectives: [
+    { id: "completar", kind: "complete" },
+    { id: "vidas", kind: "minLivesRemaining", value: 12 },
+    { id: "poucos", kind: "maxGuardians", value: 4 },
+  ],
   waypoints: [
     { x: -40, y: 257 },
     { x: 0, y: 256 },
