@@ -1,6 +1,8 @@
 import Phaser from "phaser";
 import { DEPTH } from "../constants";
 import type { MatchEnemy } from "../core/match/MatchEnemy";
+import { ELITES, type EliteId } from "../data/elites";
+import { ENEMY_SHAPES } from "./EnemyShapes";
 
 /**
  * Desenho de um inimigo. Nenhuma regra vive aqui: `sync()` lê o `MatchEnemy` do motor e redesenha
@@ -114,53 +116,21 @@ export class EnemyView extends Phaser.GameObjects.Container {
     this.bodyGraphic.fillEllipse(-2, 4, radius * 2.5, radius * 1.45);
     this.bodyGraphic.fillStyle(color, 1);
 
-    switch (definition.id) {
-      case "minnow":
-        this.bodyGraphic.fillEllipse(0, 0, radius * 2.2, radius * 1.2);
-        this.bodyGraphic.fillTriangle(-radius * 0.8, 0, -radius * 1.5, -radius * 0.6, -radius * 1.5, radius * 0.6);
-        break;
-      case "dartfish":
-        this.bodyGraphic.fillTriangle(-radius, -radius * 0.65, radius * 1.25, 0, -radius, radius * 0.65);
-        break;
-      case "needlefish":
-        this.bodyGraphic.fillTriangle(-radius * 1.6, -radius * 0.4, radius * 1.9, 0, -radius * 1.6, radius * 0.4);
-        this.bodyGraphic.fillStyle(accent, 1);
-        this.bodyGraphic.fillTriangle(-radius * 1.6, -radius * 0.7, -radius * 1.1, 0, -radius * 1.6, radius * 0.7);
-        break;
-      case "shellback":
-        this.bodyGraphic.fillCircle(0, 0, radius);
-        this.bodyGraphic.lineStyle(4, accent, 1);
-        this.bodyGraphic.strokeCircle(0, 0, radius * 0.72);
-        this.bodyGraphic.lineBetween(-radius * 0.5, -radius * 0.5, radius * 0.5, radius * 0.5);
-        break;
-      case "moray":
-        this.bodyGraphic.fillEllipse(0, 0, radius * 2.6, radius * 1.1);
-        this.bodyGraphic.fillTriangle(-radius * 1.1, 0, -radius * 2, -radius * 0.7, -radius * 2, radius * 0.7);
-        this.bodyGraphic.fillStyle(accent, 1);
-        for (let index = -2; index <= 2; index += 1) {
-          this.bodyGraphic.fillCircle(index * radius * 0.42, -radius * 0.45, radius * 0.14);
-        }
-        this.bodyGraphic.fillStyle(color, 1);
-        this.bodyGraphic.fillTriangle(radius * 0.9, -radius * 0.35, radius * 1.45, -radius * 0.1, radius * 0.9, radius * 0.1);
-        break;
-      default:
-        if (definition.isBoss) {
-          this.bodyGraphic.fillCircle(0, 0, radius);
-          this.bodyGraphic.fillStyle(accent, 1);
-          for (let index = 0; index < 8; index += 1) {
-            const angle = (Math.PI * 2 * index) / 8;
-            this.bodyGraphic.fillCircle(Math.cos(angle) * radius * 0.78, Math.sin(angle) * radius * 0.78, 4);
-          }
-        } else {
-          this.bodyGraphic.fillEllipse(0, 0, radius * 2.2, radius * 1.35);
-          this.bodyGraphic.fillTriangle(-radius * 0.85, 0, -radius * 1.55, -radius * 0.65, -radius * 1.55, radius * 0.65);
-        }
-    }
+    // A silhueta vem dos dados (`art.shape`); sprites, quando existirem, substituem o vetor.
+    const shape = definition.art.kind === "procedural" ? definition.art.shape : (definition.art.shapeFallback ?? "fish");
+    ENEMY_SHAPES[shape](this.bodyGraphic, radius, color, accent);
 
     this.bodyGraphic.fillStyle(accent, 1);
     this.bodyGraphic.fillCircle(radius * 0.45, -radius * 0.2, Math.max(2.5, radius * 0.16));
     this.bodyGraphic.fillStyle(0x082438, 1);
     this.bodyGraphic.fillCircle(radius * 0.49, -radius * 0.2, Math.max(1.4, radius * 0.08));
+
+    // Elites ganham um anel com a cor do modificador para serem reconhecidos de longe.
+    const elite = definition.eliteId ? ELITES[definition.eliteId as EliteId] : null;
+    if (elite) {
+      this.bodyGraphic.lineStyle(2, elite.tagColor, 0.95);
+      this.bodyGraphic.strokeCircle(0, 0, radius + 5);
+    }
   }
 
   private drawHealth(): void {
