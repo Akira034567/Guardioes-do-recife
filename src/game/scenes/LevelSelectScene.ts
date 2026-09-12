@@ -1,21 +1,36 @@
 import Phaser from "phaser";
 import { GAME_HEIGHT, GAME_WIDTH } from "../constants";
 import type { LevelProgressApi } from "../core/LevelProgress";
+import { difficultyOf } from "../data/difficulty";
 import { LEVELS, LEVEL_IDS } from "../data/levels";
 import { ENEMIES } from "../data/enemies";
+import { GLOBAL_CURRENCY } from "../data/progression";
+import { launchConfigFor } from "../match/MatchLaunchConfig";
 import { createLevelProgress } from "../systems/ProgressStore";
-import type { EnemyId, LevelDefinition } from "../types";
+import { getProgression } from "../systems/progression";
+import { getScreenHost } from "../ui/dom/host";
+import { preparationScreen } from "../ui/dom/screens/PreparationScreen";
+import type { EnemyId, GuardianId, LevelDefinition } from "../types";
 
 /** Menu de fases: mostra progressão e inicia a fase escolhida. */
 export class LevelSelectScene extends Phaser.Scene {
   private progress!: LevelProgressApi;
+  private prepareLevelId: string | null = null;
 
   constructor() {
     super("LevelSelectScene");
   }
 
+  init(data: { prepareLevelId?: string } = {}): void {
+    this.prepareLevelId = data.prepareLevelId ?? null;
+  }
+
   create(): void {
     this.progress = createLevelProgress();
+    const progression = getProgression();
+    // Um save antigo (ou uma fase concluída fora daqui) pode ter deixado desbloqueios pendentes.
+    progression.reconcile();
+    getScreenHost(this.game).clear();
     this.cameras.main.setBackgroundColor("#052f49");
     this.game.canvas.dataset.screen = "menu";
     this.game.canvas.dataset.gameState = "menu";
@@ -44,6 +59,24 @@ export class LevelSelectScene extends Phaser.Scene {
     const startX = (GAME_WIDTH - totalWidth) / 2 + cardWidth / 2;
     LEVELS.forEach((level, index) => this.createCard(level, index, startX + index * (cardWidth + gap), 360, cardWidth));
 
+    // Conchas do jogador, no canto de cima (a moeda global vive fora da partida).
+    this.add
+      .text(GAME_WIDTH - 26, 26, `${GLOBAL_CURRENCY.symbol} ${progression.progress.currency.shells} ${GLOBAL_CURRENCY.name}`, {
+        fontFamily: "Arial, sans-serif",
+        fontSize: "15px",
+        fontStyle: "bold",
+        color: "#ffe69a",
+      })
+      .setOrigin(1, 0);
+    this.game.canvas.dataset.shells = String(progression.progress.currency.shells);
+    this.game.canvas.dataset.stars = String(Object.values(progression.progress.levelStars).reduce((total, record) => total + record.stars, 0));
+
+    if (this.prepareLevelId) {
+      const level = LEVELS.find((candidate) => candidate.id === this.prepareLevelId);
+      this.prepareLevelId = null;
+      if (level) this.openPreparation(level);
+    }
+
     const resetButton = this.add
       .rectangle(GAME_WIDTH / 2, GAME_HEIGHT - 56, 200, 40, 0x103e50, 1)
       .setStrokeStyle(2, 0x348ba0, 0.75)
@@ -60,6 +93,31 @@ export class LevelSelectScene extends Phaser.Scene {
       this.progress.reset();
       this.scene.restart();
     });
+  }
+
+  /** Abre a preparação da fase: informações, dificuldade e escolha do esquadrão. */
+  private openPreparation(level: LevelDefinition): void {
+    const progression = getProgression();
+    const host = getScreenHost(this.game);
+    const saved = progression.progress;
+    host.replace(
+      preparationScreen(
+        level,
+        LEVELS.indexOf(level),
+        progression,
+        {
+          onBack: () => host.clear(),
+          onStart: (difficulty, loadout) => {
+            host.clear();
+            this.scene.start("GameScene", launchConfigFor(level, difficulty, loadout));
+          },
+        },
+        {
+          difficulty: difficultyOf(saved.lastDifficulty).id,
+          loadout: (saved.lastLoadout.length > 0 ? saved.lastLoadout : saved.unlockedGuardians) as GuardianId[],
+        },
+      ),
+    );
   }
 
   private createCard(level: LevelDefinition, index: number, x: number, y: number, width: number): void {
@@ -138,10 +196,20 @@ export class LevelSelectScene extends Phaser.Scene {
       })
       .setOrigin(0.5);
 
+    // Estrelas conquistadas ficam embaixo do nome da fase.
+    const stars = getProgression().record(level.id)?.stars ?? 0;
+    this.add
+      .text(x, y + 96, "★★★".slice(0, stars).padEnd(3, "☆"), {
+        fontFamily: "Arial, sans-serif",
+        fontSize: "16px",
+        color: stars > 0 ? "#ffe69a" : "#3f5f6b",
+      })
+      .setOrigin(0.5);
+
     if (!unlocked) return;
     [background, button].forEach((target) => {
       target.setInteractive({ useHandCursor: true });
-      target.on("pointerdown", () => this.scene.start("GameScene", { levelId: level.id }));
+      target.on("pointerdown", () => this.openPreparation(level));
       target.on("pointerover", () => background.setFillStyle(0x17617a, 1));
       target.on("pointerout", () => background.setFillStyle(0x0a3c53, 1));
     });

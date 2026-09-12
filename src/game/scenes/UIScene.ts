@@ -73,16 +73,6 @@ export class UIScene extends Phaser.Scene {
   private debugActionButtons: Array<{ background: Phaser.GameObjects.Rectangle; label: Phaser.GameObjects.Text }> = [];
   private debugPanelCollapsed = false;
   private debugEnabled = false;
-  private resultShade!: Phaser.GameObjects.Rectangle;
-  private resultTitle!: Phaser.GameObjects.Text;
-  private resultSubtitle!: Phaser.GameObjects.Text;
-  private resultRestart!: Phaser.GameObjects.Rectangle;
-  private resultRestartText!: Phaser.GameObjects.Text;
-  private resultNext!: Phaser.GameObjects.Rectangle;
-  private resultNextText!: Phaser.GameObjects.Text;
-  private resultMenu!: Phaser.GameObjects.Rectangle;
-  private resultMenuText!: Phaser.GameObjects.Text;
-  private nextLevelId: string | null = null;
   private debugFromQuery = false;
 
   constructor() {
@@ -98,7 +88,6 @@ export class UIScene extends Phaser.Scene {
     this.createTopHud();
     this.createBottomHud();
     this.createDebugPanel();
-    this.createResultOverlay();
 
     EventBus.on(Events.hudUpdate, this.renderSnapshot, this);
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
@@ -392,40 +381,6 @@ export class UIScene extends Phaser.Scene {
     });
   }
 
-  private createResultOverlay(): void {
-    this.resultShade = this.add.rectangle(GAME_WIDTH / 2, GAME_HEIGHT / 2, GAME_WIDTH, GAME_HEIGHT, 0x00111b, 0.74).setVisible(false);
-    this.resultTitle = this.add
-      .text(GAME_WIDTH / 2, 282, "", {
-        fontFamily: "Arial Black, Arial, sans-serif",
-        fontSize: "48px",
-        color: "#ffffff",
-        align: "center",
-      })
-      .setOrigin(0.5)
-      .setVisible(false);
-    this.resultSubtitle = this.add
-      .text(GAME_WIDTH / 2, 340, "", {
-        fontFamily: "Arial, sans-serif",
-        fontSize: "19px",
-        color: "#a7e4f0",
-        align: "center",
-      })
-      .setOrigin(0.5)
-      .setVisible(false);
-    this.resultRestart = this.button(GAME_WIDTH / 2 - 210, 408, 180, 54, "JOGAR DE NOVO", () => EventBus.emit(Events.restart));
-    this.resultRestartText = this.resultRestart.getData("label") as Phaser.GameObjects.Text;
-    this.resultNext = this.button(GAME_WIDTH / 2, 408, 180, 54, "PRÓXIMA FASE", () => {
-      if (this.nextLevelId) EventBus.emit(Events.startLevel, this.nextLevelId);
-    });
-    this.resultNextText = this.resultNext.getData("label") as Phaser.GameObjects.Text;
-    this.resultNext.setFillStyle(0x13728a, 1).setStrokeStyle(2, 0x67f2ac, 0.9);
-    this.resultMenu = this.button(GAME_WIDTH / 2 + 210, 408, 180, 54, "FASES", () => EventBus.emit(Events.openLevelSelect));
-    this.resultMenuText = this.resultMenu.getData("label") as Phaser.GameObjects.Text;
-    [this.resultRestart, this.resultRestartText, this.resultNext, this.resultNextText, this.resultMenu, this.resultMenuText].forEach(
-      (item) => item.setVisible(false),
-    );
-  }
-
   private renderSnapshot(snapshot: HudSnapshot): void {
     this.pearlText.setText(`◉ ${snapshot.pearls}`);
     this.healthText.setText(`RECIFE ♥ ${snapshot.reefHealth}/${snapshot.maxReefHealth}`);
@@ -443,7 +398,6 @@ export class UIScene extends Phaser.Scene {
     this.renderWavePreview(snapshot);
     this.renderBossBar(snapshot);
     this.levelLabel.setText(`FASE ${snapshot.levelIndex + 1}/${snapshot.levelCount} · ${snapshot.levelName.toUpperCase()}`);
-    this.nextLevelId = snapshot.nextLevelId;
 
     this.cards.forEach((card) => {
       const selected = snapshot.selectedGuardianId === card.id;
@@ -457,7 +411,6 @@ export class UIScene extends Phaser.Scene {
 
     this.renderUpgradePanel(snapshot);
     this.renderDebugState(snapshot.debug);
-    this.renderResult(snapshot);
   }
 
   /** Os botões 1×/2× acendem conforme a velocidade; pausado, nenhum fica aceso. */
@@ -671,31 +624,6 @@ export class UIScene extends Phaser.Scene {
       button.background.setVisible(expanded);
       button.label.setVisible(expanded);
     });
-  }
-
-  private renderResult(snapshot: HudSnapshot): void {
-    const result = snapshot.gameOver;
-    const visible = result !== null;
-    this.resultShade.setVisible(visible);
-    this.resultTitle.setVisible(visible);
-    this.resultSubtitle.setVisible(visible);
-    this.resultRestart.setVisible(visible);
-    this.resultRestartText.setVisible(visible);
-    this.resultMenu.setVisible(visible);
-    this.resultMenuText.setVisible(visible);
-    const showNext = visible && result === "victory" && snapshot.nextLevelId !== null;
-    this.resultNext.setVisible(showNext);
-    this.resultNextText.setVisible(showNext);
-    if (!result) return;
-    this.resultTitle.setText(result === "victory" ? "RECIFE PROTEGIDO!" : "O RECIFE CAIU");
-    this.resultTitle.setColor(result === "victory" ? "#8dffd0" : "#ff858b");
-    this.resultSubtitle.setText(
-      result === "victory"
-        ? snapshot.nextLevelId
-          ? `${snapshot.levelName}: ${snapshot.totalWaves} ondas vencidas. A próxima fase foi liberada!`
-          : `${snapshot.levelName}: ${snapshot.totalWaves} ondas vencidas. Você protegeu todo o Recife!`
-        : "Reposicione sua defesa e tente novamente.",
-    );
   }
 
   private button(

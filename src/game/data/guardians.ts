@@ -659,28 +659,41 @@ export const GUARDIAN_ORDER: GuardianId[] = [
 /** Quantos Guardiões vão para uma partida (cartas do HUD). */
 export const LOADOUT_SIZE = 5;
 
-/** Esquadrão padrão até existir a tela de seleção. */
+/** Esquadrão inicial: os cinco Guardiões que já vivem no Recife. */
 export const DEFAULT_LOADOUT: GuardianId[] = ["pistol-shrimp", "jellyfish", "pufferfish", "reef-crab", "ink-octopus"];
 
 export function isGuardianId(value: string): value is GuardianId {
   return (GUARDIAN_ORDER as string[]).includes(value);
 }
 
+export interface LoadoutOptions {
+  /** Guardiões que o jogador já encontrou; ausente = qualquer um vale (testes e balanceamento). */
+  unlocked?: readonly GuardianId[];
+  /** Esquadrão preferido (o último usado), tentado antes do padrão. */
+  fallback?: readonly GuardianId[];
+}
+
 /**
- * Esquadrão a partir de `?guardians=a,b,c` (ids inválidos e repetidos são ignorados; vagas restantes são
- * preenchidas com o padrão). Sempre devolve exatamente `LOADOUT_SIZE` ids.
+ * Esquadrão a partir de `?guardians=a,b,c` (ids inválidos e repetidos são ignorados; vagas restantes
+ * vêm do último esquadrão e depois do padrão). Sempre devolve exatamente `LOADOUT_SIZE` ids.
+ * Com `unlocked`, só entram Guardiões já desbloqueados — exceto os pedidos explicitamente na URL,
+ * que continuam valendo para testes e sondas de balanceamento.
  */
-export function resolveLoadout(query: string | null | undefined): GuardianId[] {
+export function resolveLoadout(query: string | null | undefined, options: LoadoutOptions = {}): GuardianId[] {
   const chosen: GuardianId[] = [];
+  const add = (id: GuardianId): void => {
+    if (!chosen.includes(id) && chosen.length < LOADOUT_SIZE) chosen.push(id);
+  };
   (query ?? "")
     .split(",")
     .map((token) => token.trim())
     .forEach((token) => {
-      if (isGuardianId(token) && !chosen.includes(token) && chosen.length < LOADOUT_SIZE) chosen.push(token);
+      if (isGuardianId(token)) add(token);
     });
-  for (const id of DEFAULT_LOADOUT) {
-    if (chosen.length >= LOADOUT_SIZE) break;
-    if (!chosen.includes(id)) chosen.push(id);
-  }
+  const allowed = (id: GuardianId): boolean => !options.unlocked || options.unlocked.includes(id);
+  for (const id of options.fallback ?? []) if (allowed(id)) add(id);
+  for (const id of DEFAULT_LOADOUT) if (allowed(id)) add(id);
+  // Último recurso (todos os padrões bloqueados, caso de save estranho): completa com o catálogo.
+  for (const id of GUARDIAN_ORDER) if (allowed(id)) add(id);
   return chosen;
 }

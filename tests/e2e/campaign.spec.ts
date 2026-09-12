@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { CARD_X, CARD_Y, MENU, openGame, OPTION_B, RESULT_NEXT } from "./helpers";
+import { CARD_X, CARD_Y, MENU, openGame, OPTION_B } from "./helpers";
 
 /**
  * Partida completa do Recife 1: leva minutos e gera um trace enorme. Em máquinas com antivírus o
@@ -47,7 +47,10 @@ test("a balanced defense can finish all five waves and unlock the next level", a
   console.log(`[balance] recife-1 victory · pearls left: ${finalPearls} · reef: ${finalReef}/20`);
   await expect(canvas).toHaveAttribute("data-next-level", "recife-2");
 
-  await clickGame(RESULT_NEXT.x, RESULT_NEXT.y);
+  // A tela de vitória é HTML por cima do canvas: estrelas, objetivos e recompensa em Conchas.
+  await expect(page.getByTestId("result-stars")).toBeVisible();
+  await expect(page.getByTestId("result-rewards")).toContainText("Conchas");
+  await page.getByTestId("result-next").click();
   await expect(canvas).toHaveAttribute("data-level", "recife-2");
   await expect(canvas).toHaveAttribute("data-game-state", "countdown");
   await expect(canvas).toHaveAttribute("data-pearls", "220");
@@ -55,5 +58,6 @@ test("a balanced defense can finish all five waves and unlock the next level", a
   await clickGame(MENU.x, MENU.y);
   await expect(canvas).toHaveAttribute("data-screen", "menu");
   await expect(canvas).toHaveAttribute("data-unlocked-levels", "2");
+  await expect(canvas).toHaveAttribute("data-stars", /[1-3]/);
   expect(pageErrors).toEqual([]);
 });

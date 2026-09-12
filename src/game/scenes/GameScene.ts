@@ -10,7 +10,13 @@ import type { MatchEvent } from "../core/match/MatchEvents";
 import { PLACEMENT_HINTS, validatePlacement } from "../core/PlacementRules";
 import { ECONOMY, PLACEMENT } from "../data/balance";
 import { difficultyOf, resolveLevelForDifficulty, type DifficultyDefinition } from "../data/difficulty";
-import { GUARDIANS, resolveLoadout } from "../data/guardians";
+import type { MatchResult } from "../core/progression/MatchResult";
+import type { MatchOutcome } from "../core/progression/ProgressionService";
+import { launchConfigFromUrl, type MatchLaunchConfig } from "../match/MatchLaunchConfig";
+import { getProgression } from "../systems/progression";
+import { getScreenHost } from "../ui/dom/host";
+import { defeatScreen, unlockRevealScreen, victoryScreen } from "../ui/dom/screens/ResultScreens";
+import { GUARDIANS } from "../data/guardians";
 import { getLevel, LEVELS, levelIndex, nextLevelId } from "../data/levels";
 import { EventBus, Events } from "../EventBus";
 import { CloudGfx, FieldGfx, FlowGfx } from "../objects/AreaEffectViews";
@@ -40,6 +46,7 @@ export class GameScene extends Phaser.Scene {
   /** Fase já ajustada pela dificuldade; é ela que o motor recebe. */
   private resolvedLevel: LevelDefinition = LEVELS[0];
   private difficulty: DifficultyDefinition = difficultyOf("normal");
+  private launch!: MatchLaunchConfig;
   private progress!: LevelProgressApi;
   private match!: Match;
   private readonly clock = new MatchClock();
@@ -77,12 +84,18 @@ export class GameScene extends Phaser.Scene {
     super("GameScene");
   }
 
-  init(data: { levelId?: string; difficulty?: string } = {}): void {
+  init(data: Partial<MatchLaunchConfig> = {}): void {
+    const progress = getProgression().progress;
     const query = new URLSearchParams(window.location.search);
-    const requested = data.levelId ?? query.get("level");
-    this.level = getLevel(requested) ?? LEVELS[0];
-    // Enquanto a tela de preparação não existe, a dificuldade vem da URL (`?difficulty=abissal`).
-    this.difficulty = difficultyOf(data.difficulty ?? query.get("difficulty"));
+    // A tela de preparação manda a configuração pronta; sem ela, valem os atalhos da URL.
+    const fromUrl = launchConfigFromUrl(query, {
+      unlockedGuardians: progress.unlockedGuardians as GuardianId[],
+      lastLoadout: progress.lastLoadout as GuardianId[],
+      lastDifficulty: progress.lastDifficulty,
+    });
+    this.launch = { ...fromUrl, ...data, debug: data.debug ?? fromUrl.debug };
+    this.level = getLevel(this.launch.levelId) ?? LEVELS[0];
+    this.difficulty = difficultyOf(this.launch.difficulty);
     this.resolvedLevel = resolveLevelForDifficulty(this.level, this.difficulty);
   }
 
@@ -113,14 +126,11 @@ export class GameScene extends Phaser.Scene {
     this.hudAccumulatorMs = 0;
     this.debugAccumulatorMs = 0;
 
-    const query = new URLSearchParams(window.location.search);
-    // Esquadrão da partida: `?guardians=shark,dolphin,...` (até a tela de seleção existir).
-    this.loadout = resolveLoadout(query.get("guardians"));
-    const debugFromQuery = query.get("debug") === "1";
-    this.debugAllowed = isDebugAllowed(query);
-    // Atalho de debug: `?debug=1&wave=5` começa direto na onda indicada.
-    const startWave = debugFromQuery ? Number(query.get("wave") ?? 1) - 1 : 0;
-    this.match = new Match(this.resolvedLevel, { startWaveIndex: Number.isFinite(startWave) ? Math.max(0, startWave) : 0 });
+    // O esquadrão, a dificuldade e os atalhos de debug vêm prontos da preparação ou da URL.
+    this.loadout = [...this.launch.loadout];
+    const debugFromQuery = this.launch.debug.enabled;
+    this.debugAllowed = isDebugAllowed(new URLSearchParams(window.location.search));
+    this.match = new Match(this.resolvedLevel, { startWaveIndex: this.launch.debug.startWave });
     this.match.setListener((event) => this.pendingEvents.push(event));
 
     this.audio = new AudioManager();
@@ -513,7 +523,56 @@ export class GameScene extends Phaser.Scene {
     this.messageUntilMs = Number.POSITIVE_INFINITY;
     this.audio.play(result === "victory" ? "upgrade" : "warning");
     this.syncViews(0);
+    this.applyProgression(result === "victory");
     this.emitHud();
+  }
+
+  /** Manda o resultado para a progressão e abre a tela de vitória ou derrota. */
+  private applyProgression(victory: boolean): void {
+    const snapshot = this.match.snapshot();
+    const matchResult: MatchResult = {
+      levelId: this.level.id,
+      difficulty: this.difficulty.id,
+      victory,
+      livesRemaining: snapshot.reef,
+      maxLives: snapshot.maxReef,
+      loadout: [...this.loadout],
+      loadoutOverride: this.launch.loadoutOverride,
+      stats: snapshot.stats,
+    };
+    const progression = getProgression();
+    const outcome = progression.applyMatchResult(matchResult, this.level.objectives ?? []);
+    this.unlockedNextLevelId = outcome.nextLevelId;
+    this.showResultScreen(matchResult, outcome);
+  }
+
+  private showResultScreen(result: MatchResult, outcome: MatchOutcome): void {
+    const host = getScreenHost(this.game);
+    const actions = {
+      onRetry: () => {
+        host.clear();
+        this.restartGame();
+      },
+      onNextLevel: () => {
+        host.clear();
+        if (outcome.nextLevelId) this.startLevel(outcome.nextLevelId);
+      },
+      onChangeSquad: () => {
+        host.clear();
+        this.openLevelSelect(this.level.id);
+      },
+      onMap: () => {
+        host.clear();
+        this.openLevelSelect();
+      },
+    };
+    const screen = outcome.victory
+      ? victoryScreen(result, outcome, this.level.name, actions)
+      : defeatScreen(result, outcome, this.level.name, actions);
+    host.push(screen);
+    // As apresentações de Guardiões novos entram por cima, uma de cada vez.
+    const pending = getProgression().takePendingReveals();
+    [...pending].reverse().forEach((guardianId) => host.push(unlockRevealScreen(guardianId, () => host.pop())));
   }
 
   private togglePause(): void {
@@ -538,18 +597,18 @@ export class GameScene extends Phaser.Scene {
 
   private restartGame(): void {
     this.scene.stop("UIScene");
-    this.scene.restart({ levelId: this.level.id });
+    this.scene.restart({ ...this.launch });
   }
 
   private startLevel(levelId: string): void {
     if (!getLevel(levelId)) return;
     this.scene.stop("UIScene");
-    this.scene.restart({ levelId });
+    this.scene.restart({ ...this.launch, levelId });
   }
 
-  private openLevelSelect(): void {
+  private openLevelSelect(prepareLevelId?: string): void {
     this.scene.stop("UIScene");
-    this.scene.start("LevelSelectScene");
+    this.scene.start("LevelSelectScene", prepareLevelId ? { prepareLevelId } : undefined);
   }
 
   private startNextWave(): void {

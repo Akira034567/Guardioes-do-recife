@@ -219,8 +219,12 @@ test("level select only opens unlocked levels", async ({ page }) => {
   await page.waitForTimeout(200);
   await expect(canvas).toHaveAttribute("data-screen", "menu");
 
+  // A carta abre a preparação (HTML) e é lá que a partida começa.
   const first = MENU_CARD_BUTTON(0);
   await clickGame(first.x, first.y);
+  await expect(page.getByTestId("prep-panel")).toHaveAttribute("data-level", "recife-1");
+  await expect(page.getByTestId("prep-objectives")).toContainText("Proteja o Recife");
+  await page.getByTestId("prep-start").click();
   await expect(canvas).toHaveAttribute("data-screen", "game");
   await expect(canvas).toHaveAttribute("data-level", "recife-1");
 
