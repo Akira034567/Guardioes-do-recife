@@ -1,9 +1,11 @@
 import { ECONOMY, PLACEMENT } from "../../data/balance";
 import { ENEMIES, scaleEnemy } from "../../data/enemies";
+import { applyElite, ELITES, type EliteId } from "../../data/elites";
 import { GUARDIANS } from "../../data/guardians";
 import type { EnemyId, GuardianDefinition, LevelDefinition, PlayerId, TeamId } from "../../types";
 import { resolveAura, type AuraSource } from "../Auras";
 import { BlockingSystem } from "../Blocking";
+import { BossEncounter, type BossEncounterEvent } from "../BossEncounter";
 import { controlTier } from "../CrowdControl";
 import { CurrentSystem, zoneFromFlowField } from "../CurrentSystem";
 import { Economy, type PearlSink, type PearlSource } from "../Economy";
@@ -23,6 +25,8 @@ import {
 import { validatePlacement, type PlacementContext } from "../PlacementRules";
 import { createRng, type Rng } from "../Rng";
 import { RoutePath } from "../RoutePath";
+import { MAIN_PATH_ID, resolveLevelPaths } from "../WaveDefinitions";
+import { wavePreview, type WavePreview } from "../WavePreview";
 import { WaveScheduler } from "../WaveScheduler";
 import { DEFAULT_PLAYER_ID, type CommandResult, type MatchCommand } from "./MatchCommands";
 import { MatchEnemy } from "./MatchEnemy";
@@ -60,8 +64,6 @@ interface RouteUnit {
   guardianId: string;
 }
 
-const MAIN_PATH_ID = "main";
-
 /**
  * Motor único da partida (item 43): estado + regras, sem Phaser. Mutação só por `execute(command)`;
  * observação por `snapshot()`, pelas listas de entidades (read views) e pelos eventos do `listener`.
@@ -71,7 +73,9 @@ export class Match {
   readonly dtMs: number;
   readonly rng: Rng;
   readonly stats = new MatchStats();
+  /** Rota principal (compatibilidade); todas as rotas ficam em `routes`. */
   readonly route: RoutePath;
+  readonly routes: ReadonlyMap<string, RoutePath>;
   private readonly economy: Economy;
   private readonly scheduler: WaveScheduler;
   private readonly enemyList: MatchEnemy[] = [];
@@ -80,6 +84,7 @@ export class Match {
   private readonly areas = new AreaEffects();
   private readonly blocking = new BlockingSystem();
   private readonly abilitySystem = new EnemyAbilitySystem<MatchEnemy>();
+  private readonly bossEncounter = new BossEncounter<MatchEnemy>();
   private readonly routeUnits: RouteUnit[] = [];
   private readonly platformOccupants = new Map<string, string>();
   private readonly players: PlayerConfig[];
@@ -100,7 +105,9 @@ export class Match {
     this.rng = createRng(options.seed ?? level.id);
     this.players = options.players ?? [{ id: DEFAULT_PLAYER_ID, teamId: "t1" }];
     this.controller = options.controller ?? null;
-    this.route = new RoutePath(level.waypoints);
+    const paths = resolveLevelPaths(level);
+    this.routes = new Map(paths.map((path) => [path.id, new RoutePath(path.waypoints)]));
+    this.route = this.routes.get(paths[0].id) as RoutePath;
     this.economy = new Economy(level.startingPearls);
     this.scheduler = new WaveScheduler(level.waves, level.initialWaveDelayMs, level.betweenWaveDelayMs, options.startWaveIndex ?? 0);
     this.currents = CurrentSystem.fromLevel(level.currents);
@@ -183,6 +190,11 @@ export class Match {
     return this.blocking.heldSince(blockerId, enemyId);
   }
 
+  /** Composição da próxima onda para o HUD (null na última). */
+  nextWavePreview(): WavePreview | null {
+    return wavePreview(this.scheduler.upcomingWave);
+  }
+
   /** Contexto puro para a apresentação pré-validar um ponto (preview) sem mutar nada. */
   placementContext(): PlacementContext {
     return {
@@ -198,7 +210,8 @@ export class Match {
   }
 
   snapshot(): MatchSnapshot {
-    const boss = this.enemyList.find((enemy) => enemy.definition.isBoss && !enemy.dead && !enemy.reachedGoal) ?? null;
+    const bossState = this.bossEncounter.snapshot();
+    const boss = bossState ? (this.enemy(bossState.id) ?? null) : null;
     const trap = this.guardianList.find((guardian) => guardian.trapPhase !== null);
     return {
       status: this.statusValue,
@@ -214,18 +227,24 @@ export class Match {
       guardianCount: this.guardianList.length,
       upgradeCount: this.guardianList.reduce((total, guardian) => total + guardian.upgradeLevel, 0),
       aliveEnemies: this.enemyList.filter((enemy) => !enemy.dead && !enemy.reachedGoal).length,
-      boss: boss
-        ? {
-            id: boss.id,
-            name: boss.definition.name,
-            x: boss.x,
-            y: boss.y,
-            speed: boss.effectiveSpeed,
-            health: boss.health,
-            maxHealth: boss.definition.maxHealth,
-            blockedById: boss.blockedById,
-          }
-        : null,
+      boss:
+        boss && bossState
+          ? {
+              id: boss.id,
+              name: boss.definition.name,
+              title: bossState.title,
+              x: boss.x,
+              y: boss.y,
+              speed: boss.effectiveSpeed,
+              health: boss.health,
+              maxHealth: boss.definition.maxHealth,
+              healthRatio: bossState.healthRatio,
+              phaseIndex: bossState.phaseIndex,
+              phaseCount: bossState.phaseCount,
+              blockedById: boss.blockedById,
+            }
+          : null,
+      nextWave: this.nextWavePreview(),
       trapPhase: trap?.trapPhase ?? null,
       stats: this.stats.snapshot(this.economy.snapshot()),
     };
@@ -388,8 +407,11 @@ export class Match {
     const alive = this.enemyList.filter((enemy) => !enemy.dead && !enemy.reachedGoal).length;
     for (const event of this.scheduler.tick(deltaMs, alive)) {
       if (event.type === "spawn") {
-        this.spawnEnemy(event.enemyId);
+        this.spawnEnemy(event.enemyId, { pathId: event.pathId, pathDistance: 0 }, event.eliteId);
       } else if (event.type === "waveStarted") {
+        // Chamar a onda antes da hora rende pérolas por segundo poupado (taxa 0 = desligado).
+        const bonus = this.earn(Math.floor((event.earlyStartMs / 1000) * ECONOMY.earlyStartBonusPerSecond), "EarlyWaveBonus", DEFAULT_PLAYER_ID);
+        void bonus;
         this.emit({
           type: "waveStarted",
           now: this.nowMs,
@@ -399,10 +421,10 @@ export class Match {
         });
       } else if (event.type === "waveCleared") {
         this.stats.wavesCompleted += 1;
-        const bonus = this.earn(ECONOMY.waveClearBonus, "WaveReward", DEFAULT_PLAYER_ID);
+        const bonus = this.earn(event.reward, "WaveReward", DEFAULT_PLAYER_ID);
         this.emit({ type: "waveCompleted", now: this.nowMs, waveIndex: event.waveIndex, bonus });
       } else if (event.type === "victory") {
-        const bonus = this.earn(ECONOMY.levelClearBonus, "LevelReward", DEFAULT_PLAYER_ID);
+        const bonus = this.earn(this.level.levelClearBonus ?? ECONOMY.levelClearBonus, "LevelReward", DEFAULT_PLAYER_ID);
         this.statusValue = "victory";
         this.emit({ type: "levelCompleted", now: this.nowMs, bonus });
       }
@@ -451,14 +473,63 @@ export class Match {
     this.listener?.(event);
   }
 
-  private spawnEnemy(enemyId: EnemyId, at: { pathId: string; pathDistance: number } = { pathId: MAIN_PATH_ID, pathDistance: 0 }): void {
-    const definition = scaleEnemy(ENEMIES[enemyId], this.level.enemyScaling, this.level.enemyOverrides?.[enemyId]);
-    const enemy = new MatchEnemy(`E${++this.enemySerial}`, definition, this.route, at.pathId);
+  private spawnEnemy(
+    enemyId: EnemyId,
+    at: { pathId: string; pathDistance: number } = { pathId: MAIN_PATH_ID, pathDistance: 0 },
+    eliteId: EliteId | null = null,
+  ): void {
+    const base = eliteId ? applyElite(ENEMIES[enemyId], ELITES[eliteId]) : ENEMIES[enemyId];
+    const definition = scaleEnemy(base, this.level.enemyScaling, this.level.enemyOverrides?.[enemyId]);
+    const route = this.routes.get(at.pathId) ?? this.route;
+    const enemy = new MatchEnemy(`E${++this.enemySerial}`, definition, route, at.pathId);
     if (at.pathDistance > 0) enemy.setPathDistance(at.pathDistance);
     this.enemyList.push(enemy);
     this.abilitySystem.register(enemy, this.abilityWorld());
     this.emit({ type: "enemySpawned", now: this.nowMs, id: enemy.id, enemyId, x: enemy.x, y: enemy.y, pathId: at.pathId });
-    if (definition.isBoss) this.emit({ type: "bossStarted", now: this.nowMs, id: enemy.id, enemyId, name: definition.name });
+    this.onBossEvents(this.bossEncounter.onSpawn(enemy), enemy);
+  }
+
+  /** Traduz os eventos do encontro de chefe para eventos de partida (e paga a recompensa extra). */
+  private onBossEvents(events: readonly BossEncounterEvent[], enemy: MatchEnemy): void {
+    for (const event of events) {
+      switch (event.type) {
+        case "bossStarted":
+          this.emit({
+            type: "bossStarted",
+            now: this.nowMs,
+            id: enemy.id,
+            enemyId: enemy.definition.baseId ?? enemy.definition.id,
+            name: event.name,
+            title: event.title,
+            phaseCount: event.phaseCount,
+          });
+          break;
+        case "bossPhaseChanged":
+          this.emit({
+            type: "bossPhaseChanged",
+            now: this.nowMs,
+            id: enemy.id,
+            phaseIndex: event.phaseIndex,
+            phaseCount: this.bossEncounter.snapshot()?.phaseCount ?? event.phaseIndex + 1,
+            announcement: event.phase.announcement ?? null,
+          });
+          break;
+        case "bossDefeated":
+          if (event.extraPearls > 0) this.earn(event.extraPearls, "SpecialReward", DEFAULT_PLAYER_ID);
+          this.emit({
+            type: "bossDefeated",
+            now: this.nowMs,
+            id: enemy.id,
+            enemyId: enemy.definition.baseId ?? enemy.definition.id,
+            name: enemy.definition.name,
+            x: enemy.x,
+            y: enemy.y,
+          });
+          break;
+        case "bossLeaked":
+          break;
+      }
+    }
   }
 
   /** Contexto que as habilidades de inimigo enxergam (item 6): sem Phaser, sem acesso à cena. */
@@ -481,6 +552,7 @@ export class Match {
   }
 
   private leak(enemy: MatchEnemy): void {
+    this.bossEncounter.onRemoved(enemy);
     const damage = Math.round(enemy.definition.reefDamage * enemy.mods.reefDamage);
     this.reefValue = Math.max(0, this.reefValue - damage);
     this.stats.recordLeak(enemy.definition.id, damage, controlTier(enemy.definition));
@@ -547,6 +619,7 @@ export class Match {
     const cause = options.cause ?? (options.continuous ? "contact" : "melee");
     const source = options.sourceId ? this.guardian(options.sourceId) : undefined;
     this.abilitySystem.damaged(enemy, outcome.applied, this.abilityWorld());
+    this.onBossEvents(this.bossEncounter.onDamaged(enemy, this.abilityWorld()), enemy);
     this.stats.recordDamage(outcome.applied, cause, options.sourceId ?? null, source?.guardianId ?? null);
     if (this.listener) {
       this.emit({
@@ -564,6 +637,7 @@ export class Match {
     }
     if (!outcome.killed) return;
     this.abilitySystem.died(enemy, this.abilityWorld());
+    this.onBossEvents(this.bossEncounter.onRemoved(enemy), enemy);
     const reward = this.earn(enemy.definition.reward, "EnemyReward", DEFAULT_PLAYER_ID);
     this.stats.recordKill(enemy.definition.id, Boolean(enemy.definition.isBoss), source?.guardianId ?? null);
     this.emit({
@@ -576,9 +650,6 @@ export class Match {
       reward,
       killerId: options.sourceId ?? null,
     });
-    if (enemy.definition.isBoss) {
-      this.emit({ type: "bossDefeated", now: this.nowMs, id: enemy.id, enemyId: enemy.definition.id, name: enemy.definition.name, x: enemy.x, y: enemy.y });
-    }
   }
 
   private updateAuras(): void {

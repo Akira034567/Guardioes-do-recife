@@ -1,4 +1,5 @@
 import type { StatusType } from "./core/StatusEffects";
+import type { EliteId } from "./data/elites";
 
 export interface Vec2 {
   x: number;
@@ -442,13 +443,55 @@ export interface ResolvedEnemyDefinition extends EnemyDefinition {
 export interface WaveGroupDefinition {
   enemyId: EnemyId;
   count: number;
-  intervalMs: number;
-  delayMs: number;
+  /** Intervalo entre spawns do grupo (alias de autoria: `spawnInterval`). */
+  intervalMs?: number;
+  spawnInterval?: number;
+  /** Atraso do primeiro spawn dentro da onda (alias de autoria: `spawnDelay`). */
+  delayMs?: number;
+  spawnDelay?: number;
+  /** Rota deste grupo; ausente = rota principal (`paths[0]`, hoje `waypoints`). */
+  pathId?: string;
+  /** Variação de elite aplicada aos spawns (item 7); uma lista sorteia entre elas por ordem. */
+  elite?: EliteId | EliteId[];
+  /** Índices de spawn que viram elite; ausente com `elite` definido = todos. */
+  elitePicks?: number[];
 }
+
+/** Modificadores de uma onda inteira (item 9). */
+export type WaveModifier =
+  | { type: "strongCurrents"; multiplier: number }
+  | { type: "eliteAll"; elite: EliteId }
+  | { type: "noEarlyStart" }
+  | { type: "fog" };
 
 export interface WaveDefinition {
   name: string;
   groups: WaveGroupDefinition[];
+  /** Alias de autoria para `groups`. */
+  enemyGroups?: WaveGroupDefinition[];
+  waveNumber?: number;
+  specialModifiers?: WaveModifier[];
+  /** Bônus ao limpar esta onda; ausente = `ECONOMY.waveClearBonus`. */
+  completionReward?: number;
+  /** Ausente = derivado (algum grupo com chefe). */
+  isBossWave?: boolean;
+}
+
+/** Uma rota da fase. A primeira é a principal e coincide com `waypoints`. */
+export interface PathDefinition {
+  id: string;
+  waypoints: Vec2[];
+  spawnPointId?: string;
+  goalPointId?: string;
+}
+
+export interface SpawnPointDefinition extends Vec2 {
+  id: string;
+  pathId: string;
+}
+
+export interface GoalPointDefinition extends Vec2 {
+  id: string;
 }
 
 export interface PlacementDefinition extends Vec2 {
@@ -496,10 +539,17 @@ export interface LevelDefinition {
   enemyScaling: EnemyScaling;
   /** Sobrescritas por inimigo, ex.: chefe mais fraco na fase de aprendizado. */
   enemyOverrides?: Partial<Record<EnemyId, EnemyOverride>>;
+  /** Rota principal. Continua sendo a fonte da verdade; `paths[0]` é ela. */
   waypoints: Vec2[];
   placements: PlacementDefinition[];
   currents: CurrentZoneDefinition[];
   waves: WaveDefinition[];
+  // ---- v2 (opcionais; ausente = fase de rota única como hoje) ----
+  paths?: PathDefinition[];
+  spawnPoints?: SpawnPointDefinition[];
+  goalPoints?: GoalPointDefinition[];
+  /** Bônus de conclusão próprio; ausente = `ECONOMY.levelClearBonus`. */
+  levelClearBonus?: number;
 }
 
 export interface DebugFlags {

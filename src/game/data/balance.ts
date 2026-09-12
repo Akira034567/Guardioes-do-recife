@@ -18,6 +18,8 @@ export const ECONOMY = {
   waveClearBonus: 25,
   /** Bônus ao concluir uma fase. */
   levelClearBonus: 75,
+  /** Pérolas por segundo de preparação poupado ao chamar a onda antes da hora (0 = desligado). */
+  earlyStartBonusPerSecond: 0,
 } as const;
 
 export const GUARDIAN_BALANCE = {
@@ -310,4 +312,17 @@ export const ENEMY_BALANCE = {
 export const BOSS_CURRENT = {
   cycleMs: 6500,
   reverseMs: 3000,
+} as const;
+
+/**
+ * Modificadores de elite (item 7): números aplicados por cima de qualquer inimigo base.
+ * `armorBonus` é aditivo; o resto multiplica. A recompensa sobe junto com a ameaça.
+ */
+export const ELITE_BALANCE = {
+  armored: { maxHealth: 1.3, armorBonus: 3, speed: 0.95, rewardMultiplier: 1.6 },
+  swift: { maxHealth: 0.9, speed: 1.35, rewardMultiplier: 1.4 },
+  regenerating: { maxHealth: 1.15, hpPerSecond: 0.02, delayAfterHitMs: 1500, rewardMultiplier: 1.6 },
+  furious: { maxHealth: 1.1, threshold: 0.5, speedMultiplier: 1.3, rewardMultiplier: 1.5 },
+  resilient: { maxHealth: 1.25, slowResistance: 0.35, stunResistance: 0.4, rewardMultiplier: 1.5 },
+  camouflaged: { maxHealth: 1.05, speed: 1.1, rewardMultiplier: 1.7 },
 } as const;

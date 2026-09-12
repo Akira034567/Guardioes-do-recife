@@ -1,4 +1,5 @@
 import type { WaveState } from "../../types";
+import type { WavePreview } from "../WavePreview";
 import type { TrapPhase } from "../TrapCore";
 import type { MatchStatsSnapshot } from "./MatchStats";
 
@@ -7,11 +8,16 @@ export type MatchStatus = "running" | "victory" | "defeat";
 export interface BossSnapshot {
   id: string;
   name: string;
+  /** Nome de exibição do encontro (pode diferir do nome do inimigo). */
+  title: string;
   x: number;
   y: number;
   speed: number;
   health: number;
   maxHealth: number;
+  healthRatio: number;
+  phaseIndex: number;
+  phaseCount: number;
   blockedById: string | null;
 }
 
@@ -31,6 +37,8 @@ export interface MatchSnapshot {
   upgradeCount: number;
   aliveEnemies: number;
   boss: BossSnapshot | null;
+  /** Composição da próxima onda (item 9); null na última. */
+  nextWave: WavePreview | null;
   /** Fase da primeira armadilha em campo (hook de teste e2e). */
   trapPhase: TrapPhase | null;
   stats: MatchStatsSnapshot;

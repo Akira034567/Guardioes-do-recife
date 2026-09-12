@@ -14,7 +14,8 @@ export type MatchEvent =
   | (Timed & { type: "waveCompleted"; waveIndex: number; bonus: number })
   | (Timed & { type: "levelCompleted"; bonus: number })
   | (Timed & { type: "defeat" })
-  | (Timed & { type: "bossStarted"; id: string; enemyId: EnemyId; name: string })
+  | (Timed & { type: "bossStarted"; id: string; enemyId: EnemyId; name: string; title: string; phaseCount: number })
+  | (Timed & { type: "bossPhaseChanged"; id: string; phaseIndex: number; phaseCount: number; announcement: string | null })
   | (Timed & { type: "bossDefeated"; id: string; enemyId: EnemyId; name: string; x: number; y: number })
   | (Timed & { type: "currentsReversed"; reversed: boolean; bossName: string | null })
   // inimigos
