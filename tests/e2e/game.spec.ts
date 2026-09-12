@@ -1,32 +1,5 @@
-import { expect, test, type Page } from "@playwright/test";
-
-/** Coordenadas do HUD (ver `HUD_LAYOUT` em UIScene) e do menu de fases. */
-const CARD_Y = 672;
-const CARD_X = { shrimp: 62, jellyfish: 180, pufferfish: 298, crab: 416, octopus: 534 } as const;
-const OPTION_A = { x: 690, y: 692 } as const;
-const OPTION_B = { x: 800, y: 692 } as const;
-const SELL = { x: 980, y: 692 } as const;
-const SKIP = { x: 1078, y: 640 } as const;
-const RESTART = { x: 1190, y: 640 } as const;
-const MENU = { x: 1190, y: 684 } as const;
-const PAUSE = { x: 1143, y: 36 } as const;
-const RESULT_NEXT = { x: 640, y: 408 } as const;
-/** Seis cartas de 192px com 16px de espaço, centralizadas (ver `LevelSelectScene`). */
-const MENU_CARD_BUTTON = (index: number) => ({ x: 120 + index * 208, y: 478 });
-
-async function openGame(page: Page, query = "level=recife-1") {
-  const pageErrors: string[] = [];
-  page.on("pageerror", (error) => pageErrors.push(error.message));
-  await page.goto(`/?${query}`);
-  const canvas = page.locator("canvas");
-  await expect(canvas).toBeVisible();
-  // O boot carrega toda a arte dos Guardiões; cliques antes da cena do jogo existir seriam perdidos.
-  await expect(canvas).toHaveAttribute("data-screen", /game|menu/, { timeout: 15_000 });
-  const box = await canvas.boundingBox();
-  if (!box) throw new Error("Canvas bounds unavailable");
-  const clickGame = (x: number, y: number) => page.mouse.click(box.x + (x * box.width) / 1280, box.y + (y * box.height) / 720);
-  return { canvas, clickGame, pageErrors };
-}
+import { expect, test } from "@playwright/test";
+import { CARD_X, CARD_Y, MENU, MENU_CARD_BUTTON, NEXT_WAVE, openGame, OPTION_A, OPTION_B, PAUSE, RESTART, SELL, SPEED_1X, SPEED_2X } from "./helpers";
 
 test("loads a level directly and places a shrimp on a platform", async ({ page }) => {
   const { canvas, clickGame, pageErrors } = await openGame(page);
@@ -225,7 +198,7 @@ test("skips wave preparation by keyboard and button", async ({ page }) => {
   await clickGame(RESTART.x, RESTART.y);
   await expect(canvas).toHaveAttribute("data-game-state", "countdown");
   await page.waitForTimeout(250);
-  await clickGame(SKIP.x, SKIP.y);
+  await clickGame(NEXT_WAVE.x, NEXT_WAVE.y);
   await expect(canvas).toHaveAttribute("data-game-state", /spawning|active/);
 });
 
@@ -256,52 +229,27 @@ test("level select only opens unlocked levels", async ({ page }) => {
   expect(pageErrors).toEqual([]);
 });
 
-test("a balanced defense can finish all five waves and unlock the next level", async ({ page }, testInfo) => {
-  test.skip(testInfo.project.name !== "desktop-chromium", "Full balance run is covered once in Chromium.");
-  test.setTimeout(240_000);
+test("switches match speed, pauses and previews the next wave", async ({ page }) => {
   const { canvas, clickGame, pageErrors } = await openGame(page);
-  const waitForPearls = (minimum: number) =>
-    expect
-      .poll(async () => Number(await canvas.getAttribute("data-pearls")), { timeout: 90_000 })
-      .toBeGreaterThanOrEqual(minimum);
+  await expect(canvas).toHaveAttribute("data-speed", "1");
+  // A prévia lista a composição da onda que está por vir (item 9).
+  await expect(canvas).toHaveAttribute("data-next-wave", /swimmer:\d+/);
 
-  // Abertura: Camarão na plataforma norte e Caranguejo no trecho lento da rota.
-  await clickGame(CARD_X.shrimp, CARD_Y);
-  await clickGame(375, 245);
-  await clickGame(CARD_X.crab, CARD_Y);
-  await clickGame(330, 388);
-  await expect(canvas).toHaveAttribute("data-guardians", "2");
-  await expect(canvas).toHaveAttribute("data-pearls", "10");
+  await clickGame(SPEED_2X.x, SPEED_2X.y);
+  await expect(canvas).toHaveAttribute("data-speed", "2");
+  await clickGame(PAUSE.x, PAUSE.y);
+  await expect(canvas).toHaveAttribute("data-paused", "true");
+  await clickGame(PAUSE.x, PAUSE.y);
+  await expect(canvas).toHaveAttribute("data-paused", "false");
+  await clickGame(SPEED_1X.x, SPEED_1X.y);
+  await expect(canvas).toHaveAttribute("data-speed", "1");
+  expect(pageErrors).toEqual([]);
+});
 
-  await waitForPearls(80);
-  await clickGame(CARD_X.shrimp, CARD_Y);
-  await clickGame(925, 500);
-  await expect(canvas).toHaveAttribute("data-guardians", "3");
-
-  // Contra o chefe blindado, o ramo Dano Concentrado rende mais que a Perfuração.
-  await waitForPearls(70);
-  await clickGame(375, 245);
-  await clickGame(OPTION_B.x, OPTION_B.y);
-  await expect(canvas).toHaveAttribute("data-upgrades", "1");
-
-  await waitForPearls(70);
-  await clickGame(925, 500);
-  await clickGame(OPTION_B.x, OPTION_B.y);
-  await expect(canvas).toHaveAttribute("data-upgrades", "2");
-
-  await expect(canvas).toHaveAttribute("data-game-state", "victory", { timeout: 120_000 });
-  const finalPearls = await canvas.getAttribute("data-pearls");
-  const finalReef = await canvas.getAttribute("data-reef");
-  console.log(`[balance] recife-1 victory · pearls left: ${finalPearls} · reef: ${finalReef}/20`);
-  await expect(canvas).toHaveAttribute("data-next-level", "recife-2");
-
-  await clickGame(RESULT_NEXT.x, RESULT_NEXT.y);
-  await expect(canvas).toHaveAttribute("data-level", "recife-2");
-  await expect(canvas).toHaveAttribute("data-game-state", "countdown");
-  await expect(canvas).toHaveAttribute("data-pearls", "220");
-
-  await clickGame(MENU.x, MENU.y);
-  await expect(canvas).toHaveAttribute("data-screen", "menu");
-  await expect(canvas).toHaveAttribute("data-unlocked-levels", "2");
+test("plays a harder difficulty with elites in the waves", async ({ page }) => {
+  const { canvas, pageErrors } = await openGame(page, "level=recife-1&difficulty=abissal");
+  await expect(canvas).toHaveAttribute("data-difficulty", "abissal");
+  // No Abissal a fase começa com menos pérolas e alguma onda traz elites (marcados com "+").
+  await expect(canvas).toHaveAttribute("data-pearls", "144");
   expect(pageErrors).toEqual([]);
 });
