@@ -5,10 +5,11 @@ import { DEPTH, GAME_HEIGHT, GAME_WIDTH, HUD_BOTTOM, HUD_TOP } from "../constant
 import type { LevelProgressApi } from "../core/LevelProgress";
 import { Match } from "../core/match/Match";
 import { MatchClock, type MatchSpeed } from "../core/match/MatchClock";
-import type { CommandResult } from "../core/match/MatchCommands";
+import type { CommandResult, MatchCommand } from "../core/match/MatchCommands";
 import type { MatchEvent } from "../core/match/MatchEvents";
 import { PLACEMENT_HINTS, validatePlacement } from "../core/PlacementRules";
 import { ECONOMY, PLACEMENT } from "../data/balance";
+import { difficultyOf, resolveLevelForDifficulty, type DifficultyDefinition } from "../data/difficulty";
 import { GUARDIANS, resolveLoadout } from "../data/guardians";
 import { getLevel, LEVELS, levelIndex, nextLevelId } from "../data/levels";
 import { EventBus, Events } from "../EventBus";
@@ -23,7 +24,7 @@ import { isDebugAllowed } from "../systems/debugGate";
 import { drawLevelBackdrop } from "../systems/LevelBackdrop";
 import { MatchEffects } from "../systems/MatchEffects";
 import { createLevelProgress } from "../systems/ProgressStore";
-import type { BranchId, DebugFlags, GuardianId, HudSnapshot, LevelDefinition, PlacementDefinition, Vec2 } from "../types";
+import type { BranchId, DebugFlags, GuardianId, HudSnapshot, LevelDefinition, PlacementDefinition, Vec2, WavePreviewChip } from "../types";
 
 interface PlatformZone {
   definition: PlacementDefinition;
@@ -36,6 +37,9 @@ interface PlatformZone {
  */
 export class GameScene extends Phaser.Scene {
   private level: LevelDefinition = LEVELS[0];
+  /** Fase já ajustada pela dificuldade; é ela que o motor recebe. */
+  private resolvedLevel: LevelDefinition = LEVELS[0];
+  private difficulty: DifficultyDefinition = difficultyOf("normal");
   private progress!: LevelProgressApi;
   private match!: Match;
   private readonly clock = new MatchClock();
@@ -73,9 +77,13 @@ export class GameScene extends Phaser.Scene {
     super("GameScene");
   }
 
-  init(data: { levelId?: string } = {}): void {
-    const requested = data.levelId ?? new URLSearchParams(window.location.search).get("level");
+  init(data: { levelId?: string; difficulty?: string } = {}): void {
+    const query = new URLSearchParams(window.location.search);
+    const requested = data.levelId ?? query.get("level");
     this.level = getLevel(requested) ?? LEVELS[0];
+    // Enquanto a tela de preparação não existe, a dificuldade vem da URL (`?difficulty=abissal`).
+    this.difficulty = difficultyOf(data.difficulty ?? query.get("difficulty"));
+    this.resolvedLevel = resolveLevelForDifficulty(this.level, this.difficulty);
   }
 
   preload(): void {
@@ -112,7 +120,7 @@ export class GameScene extends Phaser.Scene {
     this.debugAllowed = isDebugAllowed(query);
     // Atalho de debug: `?debug=1&wave=5` começa direto na onda indicada.
     const startWave = debugFromQuery ? Number(query.get("wave") ?? 1) - 1 : 0;
-    this.match = new Match(this.level, { startWaveIndex: Number.isFinite(startWave) ? Math.max(0, startWave) : 0 });
+    this.match = new Match(this.resolvedLevel, { startWaveIndex: Number.isFinite(startWave) ? Math.max(0, startWave) : 0 });
     this.match.setListener((event) => this.pendingEvents.push(event));
 
     this.audio = new AudioManager();
@@ -321,6 +329,7 @@ export class GameScene extends Phaser.Scene {
     EventBus.on(Events.startNextWave, this.startNextWave, this);
     EventBus.on(Events.toggleDebug, this.toggleDebug, this);
     EventBus.on(Events.toggleDebugFlag, this.toggleDebugFlag, this);
+    EventBus.on(Events.debugCommand, this.runDebugCommand, this);
     EventBus.on(Events.startLevel, this.startLevel, this);
     EventBus.on(Events.openLevelSelect, this.openLevelSelect, this);
     this.input.on("pointermove", this.handleWorldPointerMove, this);
@@ -338,6 +347,7 @@ export class GameScene extends Phaser.Scene {
       EventBus.off(Events.startNextWave, this.startNextWave, this);
       EventBus.off(Events.toggleDebug, this.toggleDebug, this);
       EventBus.off(Events.toggleDebugFlag, this.toggleDebugFlag, this);
+      EventBus.off(Events.debugCommand, this.runDebugCommand, this);
       EventBus.off(Events.startLevel, this.startLevel, this);
       EventBus.off(Events.openLevelSelect, this.openLevelSelect, this);
       this.input.off("pointermove", this.handleWorldPointerMove, this);
@@ -554,6 +564,15 @@ export class GameScene extends Phaser.Scene {
     this.emitHud();
   }
 
+  /** Executa um comando de debug do painel (item 40). Só com o debug liberado. */
+  private runDebugCommand(command: MatchCommand): void {
+    if (!this.debugAllowed || this.match.status !== "running") return;
+    const result = this.match.execute(command);
+    this.drainEvents();
+    if (result.ok) this.showMessage(`debug: ${command.type.replace("debug.", "")}`, 900);
+    this.emitHud();
+  }
+
   private toggleDebug(): void {
     if (!this.debugAllowed) return;
     this.debugFlags.enabled = !this.debugFlags.enabled;
@@ -596,6 +615,33 @@ export class GameScene extends Phaser.Scene {
       countdownSeconds: snapshot.countdownSeconds,
       canSkipCountdown: snapshot.canStartNextWave,
       speed: this.clock.speed,
+      nextWave: snapshot.nextWave
+        ? {
+            name: snapshot.nextWave.name,
+            isBossWave: snapshot.nextWave.isBossWave,
+            totalCount: snapshot.nextWave.totalCount,
+            chips: snapshot.nextWave.entries.map(
+              (entry): WavePreviewChip => ({
+                enemyId: entry.enemyId,
+                name: entry.name,
+                count: entry.count,
+                isElite: entry.eliteId !== null,
+                isBoss: entry.isBoss,
+              }),
+            ),
+          }
+        : null,
+      earlyCallBonus: snapshot.canStartNextWave ? Math.floor(snapshot.countdownSeconds * ECONOMY.earlyStartBonusPerSecond) : 0,
+      boss: snapshot.boss
+        ? {
+            name: snapshot.boss.name,
+            title: snapshot.boss.title,
+            healthRatio: snapshot.boss.healthRatio,
+            phaseIndex: snapshot.boss.phaseIndex,
+            phaseCount: snapshot.boss.phaseCount,
+          }
+        : null,
+      difficulty: this.difficulty.id,
       loadout: [...this.loadout],
       selectedGuardianId: this.selectedGuardianId,
       selectedPlacedGuardian: selected
@@ -639,6 +685,9 @@ export class GameScene extends Phaser.Scene {
     dataset.debug = String(this.debugFlags.enabled);
     dataset.paused = String(this.clock.paused);
     dataset.speed = String(this.clock.speed);
+    dataset.difficulty = this.difficulty.id;
+    dataset.nextWave = hud.nextWave ? hud.nextWave.chips.map((chip) => `${chip.enemyId}:${chip.count}${chip.isElite ? "+" : ""}`).join(",") : "";
+    dataset.bossPhase = snapshot.boss ? `${snapshot.boss.phaseIndex + 1}/${snapshot.boss.phaseCount}` : "";
     const shrimp = [...this.guardianViews.values()].find((view) => view.guardian.guardianId === "pistol-shrimp");
     dataset.shrimpAssets = String(hasGuardianArt(this, "pistol-shrimp"));
     dataset.shrimpArt = String(shrimp?.usesSpriteArt ?? false);
@@ -659,7 +708,7 @@ export class GameScene extends Phaser.Scene {
       this.match.guardians,
       this.match.enemies,
       this.match.projectiles,
-      this.level.currents,
+      this.resolvedLevel.currents,
       this.match.currentReversed,
       this.selectedPlacedGuardianId,
       {

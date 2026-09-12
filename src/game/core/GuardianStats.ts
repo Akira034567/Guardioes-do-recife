@@ -7,6 +7,7 @@ import type {
   GuardianUpgrade,
   MarkEffect,
   PushWaveEffect,
+  PearlGeneration,
   ResolvedAura,
   SonarEffect,
   TargetPolicyMode,
@@ -14,6 +15,7 @@ import type {
   VulnerabilityEffect,
 } from "../types";
 import { NEUTRAL_AURA } from "./Auras";
+import { RADIAL, type TargetingShape } from "./TargetingShape";
 import { appliedUpgrades, resolveLast, resolveProduct, type UpgradeProgress } from "./UpgradeTree";
 
 /**
@@ -48,6 +50,10 @@ export interface GuardianStats {
   providedAura: GuardianUpgrade["aura"] | null;
   /** Política de alvo (padrão: o mais avançado). */
   targeting: TargetPolicyMode;
+  /** Forma do alcance (padrão: radial). */
+  targetingShape: TargetingShape;
+  /** Geração periódica de pérolas (Ostra); null = não rende nada. */
+  generatesPearls: PearlGeneration | null;
   dash: boolean;
   frenzy: FrenzyEffect | null;
   mark: MarkEffect | null;
@@ -113,6 +119,8 @@ export function resolveGuardianStats(
     inkCloud: resolveLast(applied, "inkCloud") ?? null,
     providedAura: resolveLast(applied, "aura") ?? null,
     targeting: resolveLast(applied, "targeting") ?? definition.targeting ?? "leading",
+    targetingShape: resolveLast(applied, "targetingShape") ?? definition.targetingShape ?? RADIAL,
+    generatesPearls: resolveLast(applied, "generatesPearls") ?? definition.generatesPearls ?? null,
     dash: Boolean(definition.dash),
     frenzy: resolveLast(applied, "frenzy") ?? null,
     mark: resolveLast(applied, "mark") ?? null,

@@ -17,6 +17,7 @@ import {
   updateFrenzy,
   updateMark,
   updatePushWave,
+  updateIncome,
   updateSonar,
   updateTrap,
   type BehaviorHooks,
@@ -96,6 +97,8 @@ export class Match {
   private enemySerial = 0;
   private guardianSerial = 0;
   private listener: MatchListener | null = null;
+  /** Debug: o Recife não perde vidas. */
+  private invincible = false;
 
   constructor(
     readonly level: LevelDefinition,
@@ -190,6 +193,17 @@ export class Match {
     return this.blocking.heldSince(blockerId, enemyId);
   }
 
+  /** Debug: elimina todos os inimigos em campo, sem pagar recompensa. */
+  private killAll(): void {
+    for (const enemy of [...this.enemyList]) {
+      if (enemy.dead || enemy.reachedGoal) continue;
+      enemy.dead = true;
+      this.abilitySystem.died(enemy, this.abilityWorld());
+      this.bossEncounter.onRemoved(enemy);
+      this.emit({ type: "enemyKilled", now: this.nowMs, id: enemy.id, enemyId: enemy.definition.id, x: enemy.x, y: enemy.y, reward: 0, killerId: null });
+    }
+  }
+
   /** Composição da próxima onda para o HUD (null na última). */
   nextWavePreview(): WavePreview | null {
     return wavePreview(this.scheduler.upcomingWave);
@@ -263,6 +277,27 @@ export class Match {
         return this.sellGuardian(command);
       case "startNextWave":
         return this.startNextWave();
+      case "debug.addPearls":
+        this.stats.cheated = true;
+        this.earn(Math.max(0, command.amount), "SpecialReward", command.playerId ?? DEFAULT_PLAYER_ID);
+        return { ok: true };
+      case "debug.spawnEnemy":
+        this.stats.cheated = true;
+        this.spawnEnemy(command.enemyId, { pathId: MAIN_PATH_ID, pathDistance: 0 }, command.elite ?? null);
+        return { ok: true };
+      case "debug.skipWave":
+        this.stats.cheated = true;
+        this.scheduler.forceCompleteSpawns();
+        this.killAll();
+        return { ok: true };
+      case "debug.killAll":
+        this.stats.cheated = true;
+        this.killAll();
+        return { ok: true };
+      case "debug.invincible":
+        this.stats.cheated = true;
+        this.invincible = command.on;
+        return { ok: true };
       default: {
         const exhaustive: never = command;
         return { ok: false, reason: "unknownCommand", message: `Comando desconhecido: ${String((exhaustive as { type?: string }).type)}` };
@@ -444,7 +479,10 @@ export class Match {
     this.drainPoison();
 
     const hooks = this.behaviorHooks();
-    for (const guardian of this.guardianList) updateTrap(guardian, this.enemyList, hooks);
+    for (const guardian of this.guardianList) {
+      updateIncome(guardian, hooks);
+      updateTrap(guardian, this.enemyList, hooks);
+    }
     this.updateAuras();
     for (const guardian of this.guardianList) {
       guardian.syncStatus(this.nowMs);
@@ -553,7 +591,7 @@ export class Match {
 
   private leak(enemy: MatchEnemy): void {
     this.bossEncounter.onRemoved(enemy);
-    const damage = Math.round(enemy.definition.reefDamage * enemy.mods.reefDamage);
+    const damage = this.invincible ? 0 : Math.round(enemy.definition.reefDamage * enemy.mods.reefDamage);
     this.reefValue = Math.max(0, this.reefValue - damage);
     this.stats.recordLeak(enemy.definition.id, damage, controlTier(enemy.definition));
     this.emit({
@@ -575,6 +613,7 @@ export class Match {
     return {
       now: this.nowMs,
       damage: (enemy, amount, options) => this.damage(enemy, amount, { cause: "trap", ...options }),
+      earn: (amount) => this.earn(amount, "GuardianGeneration", DEFAULT_PLAYER_ID),
       spawnCloud: (ownerId, x, y, cloud) => this.areas.createToxicCloud(ownerId, x, y, cloud, this.nowMs, this.emitBound),
       onEscaped: (blockerId, enemyId) => {
         const blocker = this.guardian(blockerId);

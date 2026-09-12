@@ -16,7 +16,8 @@ import { trapChargeMultipliers, type TrapPhase } from "./TrapCore";
  */
 
 /** Inimigo visto pelos comportamentos (`Enemy` e `SimEnemy` satisfazem). */
-export interface BehaviorEnemy extends BlockableEnemy, Omit<TargetCandidate, "definition"> {}
+// `pathDistance` vem de `BlockableEnemy` (obrigatório); em `TargetCandidate` ele é opcional.
+export interface BehaviorEnemy extends BlockableEnemy, Omit<TargetCandidate, "definition" | "pathDistance" | "status"> {}
 
 /** Guardião visto pelos comportamentos (`Guardian` e `SimGuardian` satisfazem). */
 export interface BehaviorGuardian extends Vec2 {
@@ -62,11 +63,14 @@ export type BehaviorEvent =
   | { type: "coordinate"; guardianId: string; targetId: string; guardianIds: string[] }
   | { type: "chorusStart"; guardianId: string; radius: number; durationMs: number }
   | { type: "stunned"; enemyId: string }
-  | { type: "poisoned"; enemyId: string };
+  | { type: "poisoned"; enemyId: string }
+  | { type: "income"; guardianId: string; x: number; y: number; amount: number };
 
 export interface BehaviorHooks<E extends BehaviorEnemy> {
   now: number;
   damage(enemy: E, amount: number, options?: DamageOptions): void;
+  /** Credita pérolas geradas por um Guardião (Ostra). */
+  earn?(amount: number, guardianId: string): void;
   spawnCloud?(ownerId: string, x: number, y: number, cloud: ToxicCloudEffect): void;
   /** Um inimigo saiu de um bloqueio por knockback (para o `BlockingSystem` não re-agarrar). */
   onEscaped?(blockerId: string, enemyId: string): void;
@@ -80,10 +84,26 @@ export function targetPolicyFor(guardian: BehaviorGuardian, now: number): Target
   const { stats, runtime } = guardian;
   return {
     mode: stats.targeting,
+    shape: stats.targetingShape,
     threshold: stats.frenzy?.healthThreshold,
     preferredId: runtime.preferredTargetId(now),
     markedId: stats.mark ? runtime.preyId : null,
   };
+}
+
+// ----------------------------------------------------------------- renda
+
+/**
+ * Geração periódica de pérolas (item 1). O primeiro pagamento sai depois de um intervalo cheio, e a
+ * redução de recarga das auras (Coro) acelera a produção como qualquer outra habilidade.
+ */
+export function updateIncome<E extends BehaviorEnemy>(guardian: BehaviorGuardian, hooks: BehaviorHooks<E>): void {
+  const income = guardian.stats.generatesPearls;
+  if (!income || income.amount <= 0 || income.intervalMs <= 0) return;
+  const intervalMs = income.intervalMs * guardian.stats.abilityCooldownMultiplier;
+  if (!guardian.runtime.cooldown("income").tryActivate(hooks.now, intervalMs)) return;
+  hooks.earn?.(income.amount, guardian.id);
+  hooks.emit?.({ type: "income", guardianId: guardian.id, x: guardian.x, y: guardian.y, amount: income.amount });
 }
 
 // --------------------------------------------------------------- Tubarão

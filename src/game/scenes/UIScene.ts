@@ -53,6 +53,14 @@ export class UIScene extends Phaser.Scene {
   private muteText!: Phaser.GameObjects.Text;
   private skipButton!: Phaser.GameObjects.Rectangle;
   private skipButtonText!: Phaser.GameObjects.Text;
+  /** Botões de velocidade (1× e 2×) e o estado que eles representam. */
+  private speedButtons: Array<{ speed: 1 | 2; background: Phaser.GameObjects.Rectangle; label: Phaser.GameObjects.Text }> = [];
+  /** Prévia da próxima onda, encostada à direita abaixo do HUD de cima. */
+  private wavePreviewText!: Phaser.GameObjects.Text;
+  /** Barra do chefe em campo. */
+  private bossBarBackground!: Phaser.GameObjects.Rectangle;
+  private bossBarFill!: Phaser.GameObjects.Rectangle;
+  private bossBarLabel!: Phaser.GameObjects.Text;
   private levelLabel!: Phaser.GameObjects.Text;
   private debugToggle!: Phaser.GameObjects.Rectangle;
   private debugToggleText!: Phaser.GameObjects.Text;
@@ -62,6 +70,7 @@ export class UIScene extends Phaser.Scene {
   private debugOpenButton!: Phaser.GameObjects.Rectangle;
   private debugOpenText!: Phaser.GameObjects.Text;
   private debugButtons: DebugButton[] = [];
+  private debugActionButtons: Array<{ background: Phaser.GameObjects.Rectangle; label: Phaser.GameObjects.Text }> = [];
   private debugPanelCollapsed = false;
   private debugEnabled = false;
   private resultShade!: Phaser.GameObjects.Rectangle;
@@ -118,20 +127,64 @@ export class UIScene extends Phaser.Scene {
     this.waveText = this.add.text(548, 24, "ONDA 1/5", this.topStyle("#d4f7ff"));
     this.timerText = this.add.text(690, 24, "EM 10s", this.topStyle("#75e2f5"));
     this.messageText = this.add
-      .text(915, 36, "", {
+      .text(880, 36, "", {
         fontFamily: "Arial, sans-serif",
         fontSize: "14px",
         fontStyle: "bold",
         color: "#ffffff",
         align: "center",
-        wordWrap: { width: 330 },
+        wordWrap: { width: 260 },
       })
       .setOrigin(0.5);
 
+    this.speedButtons = ([1, 2] as const).map((speed, index) => {
+      const background = this.button(HUD_LAYOUT.speedButtonXs[index], HUD_LAYOUT.topButtonY, HUD_LAYOUT.speedButtonWidth, 42, `${speed}×`, () =>
+        EventBus.emit(Events.setSpeed, speed),
+      );
+      const label = background.getData("label") as Phaser.GameObjects.Text;
+      label.setFontSize(13);
+      return { speed, background, label };
+    });
     this.pauseButton = this.button(HUD_LAYOUT.pauseButtonX, HUD_LAYOUT.topButtonY, 48, 42, "Ⅱ", () => EventBus.emit(Events.togglePause));
     this.pauseText = this.pauseButton.getData("label") as Phaser.GameObjects.Text;
     this.muteButton = this.button(HUD_LAYOUT.muteButtonX, HUD_LAYOUT.topButtonY, 48, 42, "♪", () => EventBus.emit(Events.toggleMute));
     this.muteText = this.muteButton.getData("label") as Phaser.GameObjects.Text;
+
+    // Prévia da próxima onda: discreta, encostada à direita, fora do caminho do mapa.
+    this.wavePreviewText = this.add
+      .text(HUD_LAYOUT.wavePreviewRight, HUD_LAYOUT.wavePreviewY, "", {
+        fontFamily: "Arial, sans-serif",
+        fontSize: "11px",
+        fontStyle: "bold",
+        color: "#cdefff",
+        align: "right",
+        backgroundColor: "rgba(2, 28, 44, .68)",
+        padding: { x: 8, y: 5 },
+        lineSpacing: 2,
+      })
+      .setOrigin(1, 0)
+      .setVisible(false);
+
+    this.createBossBar();
+  }
+
+  /** Barra de vida do chefe: aparece só enquanto há um em campo. */
+  private createBossBar(): void {
+    const { bossBarX, bossBarY, bossBarWidth } = HUD_LAYOUT;
+    this.bossBarBackground = this.add
+      .rectangle(bossBarX, bossBarY + 10, bossBarWidth, 14, 0x1a0a12, 0.88)
+      .setStrokeStyle(2, 0xff6f79, 0.9)
+      .setVisible(false);
+    this.bossBarFill = this.add.rectangle(bossBarX - bossBarWidth / 2 + 2, bossBarY + 10, bossBarWidth - 4, 10, 0xff4d5e, 1).setOrigin(0, 0.5).setVisible(false);
+    this.bossBarLabel = this.add
+      .text(bossBarX, bossBarY - 4, "", {
+        fontFamily: "Arial Black, Arial, sans-serif",
+        fontSize: "12px",
+        color: "#ffd9dc",
+        align: "center",
+      })
+      .setOrigin(0.5, 1)
+      .setVisible(false);
   }
 
   private createBottomHud(): void {
@@ -223,8 +276,11 @@ export class UIScene extends Phaser.Scene {
     this.sellButton.setVisible(false);
     this.sellButtonText.setVisible(false);
 
-    this.skipButton = this.button(HUD_LAYOUT.skipButtonX, HUD_LAYOUT.skipButtonY, 84, 34, "PULAR  ␣", () => EventBus.emit(Events.skipCountdown));
+    this.skipButton = this.button(HUD_LAYOUT.skipButtonX, HUD_LAYOUT.skipButtonY, HUD_LAYOUT.skipButtonWidth, 34, "PRÓXIMA ONDA  ␣", () =>
+      EventBus.emit(Events.startNextWave),
+    );
     this.skipButtonText = this.skipButton.getData("label") as Phaser.GameObjects.Text;
+    this.skipButtonText.setFontSize(11);
 
     this.button(HUD_LAYOUT.restartButtonX, HUD_LAYOUT.restartButtonY, 120, 34, "REINICIAR", () => EventBus.emit(Events.restart));
     this.button(HUD_LAYOUT.menuButtonX, HUD_LAYOUT.menuButtonY, 120, 34, "FASES", () => EventBus.emit(Events.openLevelSelect));
@@ -244,7 +300,7 @@ export class UIScene extends Phaser.Scene {
     this.debugToggleText.setVisible(this.debugFromQuery);
 
     this.debugPanel = this.add
-      .rectangle(1120, 240, 282, 300, 0x001723, 0.94)
+      .rectangle(1120, 268, 282, 356, 0x001723, 0.94)
       .setStrokeStyle(2, 0xff4df3, 0.8)
       .setVisible(false);
     const title = this.add
@@ -277,8 +333,9 @@ export class UIScene extends Phaser.Scene {
       label.setVisible(false);
       return { flag, background, label };
     });
+    this.createDebugActions();
     const hint = this.add
-      .text(1120, 371, "F2 fecha · overlays não recebem input", {
+      .text(1120, 427, "F2 fecha · ações marcam a partida como testada", {
         fontFamily: "monospace",
         fontSize: "10px",
         color: "#8cbac4",
@@ -287,7 +344,7 @@ export class UIScene extends Phaser.Scene {
       .setVisible(false);
     this.debugPanel.setData("hint", hint);
 
-    this.debugCollapseButton = this.button(1238, 105, 30, 26, "−", () => {
+    this.debugCollapseButton = this.button(1238, 105, 30, 26, "\u2212", () => {
       this.debugPanelCollapsed = true;
       this.updateDebugPanelVisibility();
     });
@@ -302,6 +359,36 @@ export class UIScene extends Phaser.Scene {
     this.debugOpenText = this.debugOpenButton.getData("label") as Phaser.GameObjects.Text;
     this.debugOpenButton.setVisible(false);
     this.debugOpenText.setVisible(false);
+  }
+
+  /** Atalhos de desenvolvimento: pérolas, spawns, pular onda, matar tudo e invencibilidade. */
+  private createDebugActions(): void {
+    let invincible = false;
+    const actions: Array<[string, () => void]> = [
+      ["+100 ◉", () => EventBus.emit(Events.debugCommand, { type: "debug.addPearls", amount: 100 })],
+      ["SPAWN", () => EventBus.emit(Events.debugCommand, { type: "debug.spawnEnemy", enemyId: "swimmer" })],
+      ["ELITE", () => EventBus.emit(Events.debugCommand, { type: "debug.spawnEnemy", enemyId: "shellback", elite: "armored" })],
+      ["PULAR", () => EventBus.emit(Events.debugCommand, { type: "debug.skipWave" })],
+      ["MATAR", () => EventBus.emit(Events.debugCommand, { type: "debug.killAll" })],
+      [
+        "IMUNE",
+        () => {
+          invincible = !invincible;
+          EventBus.emit(Events.debugCommand, { type: "debug.invincible", on: invincible });
+        },
+      ],
+    ];
+    this.debugActionButtons = actions.map(([text, onClick], index) => {
+      const column = index % 3;
+      const row = Math.floor(index / 3);
+      const background = this.button(1038 + column * 82, 350 + row * 40, 78, 34, text, onClick);
+      const label = background.getData("label") as Phaser.GameObjects.Text;
+      label.setFontSize(11);
+      background.setFillStyle(0x2a1330, 1).setStrokeStyle(2, 0xff65ee, 0.8);
+      background.setVisible(false);
+      label.setVisible(false);
+      return { background, label };
+    });
   }
 
   private createResultOverlay(): void {
@@ -347,8 +434,13 @@ export class UIScene extends Phaser.Scene {
     this.messageText.setText(snapshot.message);
     this.pauseText.setText(snapshot.paused ? "▶" : "Ⅱ");
     this.muteText.setText(snapshot.muted ? "×♪" : "♪");
-    this.skipButton.setVisible(snapshot.canSkipCountdown && !snapshot.gameOver);
-    this.skipButtonText.setVisible(snapshot.canSkipCountdown && !snapshot.gameOver);
+    const canCall = snapshot.canSkipCountdown && !snapshot.gameOver;
+    this.skipButton.setVisible(canCall);
+    this.skipButtonText.setVisible(canCall);
+    this.skipButtonText.setText(snapshot.earlyCallBonus > 0 ? `PRÓXIMA ONDA\n+◉ ${snapshot.earlyCallBonus}` : "PRÓXIMA ONDA  ␣");
+    this.renderSpeed(snapshot);
+    this.renderWavePreview(snapshot);
+    this.renderBossBar(snapshot);
     this.levelLabel.setText(`FASE ${snapshot.levelIndex + 1}/${snapshot.levelCount} · ${snapshot.levelName.toUpperCase()}`);
     this.nextLevelId = snapshot.nextLevelId;
 
@@ -365,6 +457,46 @@ export class UIScene extends Phaser.Scene {
     this.renderUpgradePanel(snapshot);
     this.renderDebugState(snapshot.debug);
     this.renderResult(snapshot);
+  }
+
+  /** Os botões 1×/2× acendem conforme a velocidade; pausado, nenhum fica aceso. */
+  private renderSpeed(snapshot: HudSnapshot): void {
+    const over = snapshot.gameOver !== null;
+    this.speedButtons.forEach((button) => {
+      const active = !snapshot.paused && snapshot.speed === button.speed;
+      button.background.setVisible(!over);
+      button.label.setVisible(!over);
+      button.background.setFillStyle(active ? 0x13728a : 0x103e50, 1);
+      button.background.setStrokeStyle(2, active ? 0x67f2ac : 0x348ba0, active ? 1 : 0.75);
+      button.label.setColor(active ? "#e9fbff" : "#9fc9d6");
+    });
+  }
+
+  private renderWavePreview(snapshot: HudSnapshot): void {
+    const preview = snapshot.nextWave;
+    if (!preview || snapshot.gameOver) {
+      this.wavePreviewText.setVisible(false);
+      return;
+    }
+    const chips = preview.chips
+      .map((chip) => `${chip.isBoss ? "☠" : chip.isElite ? "⚠" : "•"} ${chip.name} ×${chip.count}`)
+      .slice(0, 5)
+      .join("\n");
+    this.wavePreviewText.setText(`PRÓXIMA: ${preview.name.toUpperCase()}\n${chips}`);
+    this.wavePreviewText.setColor(preview.isBossWave ? "#ffd9dc" : "#cdefff");
+    this.wavePreviewText.setVisible(true);
+  }
+
+  private renderBossBar(snapshot: HudSnapshot): void {
+    const boss = snapshot.boss;
+    const visible = boss !== null && !snapshot.gameOver;
+    this.bossBarBackground.setVisible(visible);
+    this.bossBarFill.setVisible(visible);
+    this.bossBarLabel.setVisible(visible);
+    if (!boss) return;
+    const phase = boss.phaseCount > 1 ? ` · fase ${boss.phaseIndex + 1}/${boss.phaseCount}` : "";
+    this.bossBarLabel.setText(`☠ ${boss.title.toUpperCase()}${phase}`);
+    this.bossBarFill.setDisplaySize(Math.max(0, (HUD_LAYOUT.bossBarWidth - 4) * Math.max(0, Math.min(1, boss.healthRatio))), 10);
   }
 
   private renderUpgradePanel(snapshot: HudSnapshot): void {
@@ -531,6 +663,10 @@ export class UIScene extends Phaser.Scene {
     this.debugOpenButton.setVisible(collapsed);
     this.debugOpenText.setVisible(collapsed);
     this.debugButtons.forEach((button) => {
+      button.background.setVisible(expanded);
+      button.label.setVisible(expanded);
+    });
+    this.debugActionButtons.forEach((button) => {
       button.background.setVisible(expanded);
       button.label.setVisible(expanded);
     });

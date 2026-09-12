@@ -15,8 +15,10 @@ export const HUD_LAYOUT = {
   /** Botão do ramo A à esquerda, ramo B à direita: as posições são fixas por ramo. */
   optionButtonXs: [690, 800] as const,
   sellButtonX: 980,
+  /** Botão "PRÓXIMA ONDA" (antigo PULAR): mesmo centro, mais largo. */
   skipButtonX: 1078,
   skipButtonY: 640,
+  skipButtonWidth: 132,
   debugButtonX: 1078,
   debugButtonY: 684,
   restartButtonX: 1190,
@@ -26,6 +28,16 @@ export const HUD_LAYOUT = {
   pauseButtonX: 1143,
   muteButtonX: 1201,
   topButtonY: 36,
+  /** Velocidade da partida: 1× e 2× à esquerda do pause. */
+  speedButtonXs: [1035, 1089] as const,
+  speedButtonWidth: 46,
+  /** Barra do chefe, logo abaixo do HUD de cima. */
+  bossBarX: 640,
+  bossBarY: 92,
+  bossBarWidth: 360,
+  /** Prévia da próxima onda, encostada à direita abaixo do HUD. */
+  wavePreviewRight: 1268,
+  wavePreviewY: 86,
 } as const;
 
 /** Centro da carta na posição `slot` (0..4) do esquadrão. */

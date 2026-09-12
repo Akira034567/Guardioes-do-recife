@@ -86,6 +86,16 @@ export class WaveScheduler {
     return this.startNextWave() !== null;
   }
 
+  /** Ferramenta de debug: marca a onda atual como totalmente gerada, para ela poder fechar. */
+  forceCompleteSpawns(): void {
+    const wave = this.waves[this.waveIndex];
+    this.groups.forEach((runtime, index) => (runtime.spawned = wave.groups[index].count));
+    if (this.currentState === "countdown") {
+      this.countdownRemainingMs = 0;
+      this.lastEarlyStartMs = 0;
+    }
+  }
+
   tick(deltaMs: number, aliveEnemyCount: number): WaveSchedulerEvent[] {
     const events: WaveSchedulerEvent[] = [];
     if (this.currentState === "victory") return events;

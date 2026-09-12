@@ -13,6 +13,10 @@ import { BALANCE_BUILDS, RAW_BUILD, type BalanceBuild } from "../balance-builds"
  * `guardians.ts`, então basta descrever o que comprar e onde.
  */
 
+// Partidas de 5 a 8 minutos geram traces enormes e, em máquinas com antivírus, o arquivo some antes
+// do navegador fechar ("browserContext.close: ENOENT ... .trace"). Sem trace/vídeo a sonda fica estável.
+test.use({ trace: "off", video: "off" });
+
 const CARD_Y = HUD_LAYOUT.cardY;
 const OPTION = {
   a: { x: HUD_LAYOUT.optionButtonXs[0], y: HUD_LAYOUT.optionButtonY },

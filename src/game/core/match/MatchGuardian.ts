@@ -172,7 +172,7 @@ export class MatchGuardian {
   tick(now: number, enemies: readonly MatchEnemy[], onImpact: (guardian: MatchGuardian, target: MatchEnemy) => void): void {
     if (!this.stats.canAttack) return;
     if (this.fsm.state === "idle") {
-      const target = selectTarget(enemies, this, this.range, targetPolicyFor(this, now));
+      const target = selectTarget(enemies, this, this.range, targetPolicyFor(this, now), now);
       if (target) this.consume(this.fsm.beginAttack(target.id, now), enemies, onImpact);
     }
     const target = enemies.find((enemy) => enemy.id === this.fsm.targetId);

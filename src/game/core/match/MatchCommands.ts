@@ -1,4 +1,5 @@
-import type { BranchId, GuardianId, PlayerId } from "../../types";
+import type { EliteId } from "../../data/elites";
+import type { BranchId, EnemyId, GuardianId, PlayerId } from "../../types";
 
 /**
  * Comandos são a única porta de mutação da partida vinda de fora do motor (jogador, roteiro de
@@ -8,7 +9,14 @@ export type MatchCommand =
   | { type: "placeGuardian"; guardianId: GuardianId; x: number; y: number; platformId?: string; playerId?: PlayerId }
   | { type: "upgradeGuardian"; instanceId: string; branchId: BranchId; playerId?: PlayerId }
   | { type: "sellGuardian"; instanceId: string; playerId?: PlayerId }
-  | { type: "startNextWave"; playerId?: PlayerId };
+  | { type: "startNextWave"; playerId?: PlayerId }
+  // Ferramentas de desenvolvimento (item 40). Toda partida que usar uma delas fica marcada
+  // (`stats.cheated`) e não deve render estrelas nem moeda global.
+  | { type: "debug.addPearls"; amount: number; playerId?: PlayerId }
+  | { type: "debug.spawnEnemy"; enemyId: EnemyId; elite?: EliteId; playerId?: PlayerId }
+  | { type: "debug.skipWave"; playerId?: PlayerId }
+  | { type: "debug.killAll"; playerId?: PlayerId }
+  | { type: "debug.invincible"; on: boolean; playerId?: PlayerId };
 
 export type RejectionReason =
   | "gameOver"

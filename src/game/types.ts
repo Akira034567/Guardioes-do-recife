@@ -1,4 +1,5 @@
 import type { StatusType } from "./core/StatusEffects";
+import type { TargetingShape } from "./core/TargetingShape";
 import type { EliteId } from "./data/elites";
 
 export interface Vec2 {
@@ -157,6 +158,15 @@ export interface BlockHoldEffect {
   bossSlow: BossSlow;
 }
 
+/**
+ * Geração periódica de pérolas (item 1). Prepara o Guardião OSTRA: basta declarar isto numa definição
+ * ou num upgrade para a unidade render pérolas durante a partida.
+ */
+export interface PearlGeneration {
+  amount: number;
+  intervalMs: number;
+}
+
 /** Zona ambiental circular presa ao Guardião que altera a velocidade da água (ver `core/FlowField.ts`). */
 export interface FlowFieldEffect {
   /** Raio = alcance × este fator. */
@@ -288,6 +298,10 @@ export interface GuardianUpgrade {
   /** Passa a bloquear a rota (Tartaruga, ramo Casco). Só vale em `placementMode` "route". */
   blocks?: boolean;
   targeting?: TargetPolicyMode;
+  /** Forma do alcance (item 18); ausente = radial. */
+  targetingShape?: TargetingShape;
+  /** Passa a render pérolas periodicamente (Ostra e afins). */
+  generatesPearls?: PearlGeneration;
   frenzy?: FrenzyEffect;
   mark?: MarkEffect;
   blockHold?: BlockHoldEffect;
@@ -329,6 +343,10 @@ export interface GuardianDefinition {
   slowDurationMs?: number;
   vulnerability?: VulnerabilityEffect;
   targeting?: TargetPolicyMode;
+  /** Forma do alcance (item 18); ausente = radial, como todos os Guardiões atuais. */
+  targetingShape?: TargetingShape;
+  /** Rende pérolas periodicamente durante a partida (nenhum Guardião atual usa). */
+  generatesPearls?: PearlGeneration;
   /** Investida visual curta até o alvo e volta (Tubarão). */
   dash?: boolean;
   trap?: TrapEffect;
@@ -605,6 +623,30 @@ export interface SelectedGuardianInfo {
   sellValue: number;
 }
 
+/** Uma linha da prévia da próxima onda: "🐟 x12" ou "⚠ Elite x1". */
+export interface WavePreviewChip {
+  enemyId: EnemyId;
+  name: string;
+  count: number;
+  isElite: boolean;
+  isBoss: boolean;
+}
+
+export interface WavePreviewInfo {
+  name: string;
+  isBossWave: boolean;
+  totalCount: number;
+  chips: WavePreviewChip[];
+}
+
+export interface BossHudInfo {
+  name: string;
+  title: string;
+  healthRatio: number;
+  phaseIndex: number;
+  phaseCount: number;
+}
+
 export interface HudSnapshot {
   levelId: string;
   levelName: string;
@@ -621,6 +663,14 @@ export interface HudSnapshot {
   canSkipCountdown: boolean;
   /** Velocidade da partida (1×, 2×, 3×). */
   speed: 1 | 2 | 3;
+  /** Composição da próxima onda (item 9); null na última. */
+  nextWave: WavePreviewInfo | null;
+  /** Pérolas que o jogador ganha se chamar a onda agora (0 = bônus desligado). */
+  earlyCallBonus: number;
+  /** Chefe em campo, para a barra e o aviso. */
+  boss: BossHudInfo | null;
+  /** Dificuldade da partida. */
+  difficulty: string;
   /** Os cinco Guardiões disponíveis nas cartas desta partida. */
   loadout: GuardianId[];
   selectedGuardianId: GuardianId | null;

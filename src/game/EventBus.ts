@@ -18,6 +18,10 @@ export const Events = {
   setSpeed: "ui:set-speed",
   toggleDebug: "ui:toggle-debug",
   toggleDebugFlag: "ui:toggle-debug-flag",
+  /** payload: MatchCommand de debug (só funciona com o debug liberado). */
+  debugCommand: "ui:debug-command",
+  /** payload: boolean — invencibilidade do Recife (debug). */
+  debugInvincible: "ui:debug-invincible",
   /** payload: levelId */
   startLevel: "ui:start-level",
   openLevelSelect: "ui:open-level-select",
