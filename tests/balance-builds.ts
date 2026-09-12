@@ -35,14 +35,14 @@ export const BALANCE_BUILDS: BalanceBuild[] = [
   {
     name: "novatos: tubarão alfa na margem + tartaruga casco + camarão",
     level: "recife-1",
-    minReef: 10,
+    minReef: 8,
     loadout: NEW_LOADOUT,
     steps: [shrimp([375, 245]), shark([300, 470]), turtle([330, 388]), up([300, 470], "b"), up([330, 388], "a"), up([375, 245], "b")],
   },
   {
     name: "novatos: tubarão frenesi + peixe-pedra emboscada + camarão",
     level: "recife-1",
-    minReef: 10,
+    minReef: 8,
     loadout: NEW_LOADOUT,
     steps: [
       shrimp([375, 245]),
