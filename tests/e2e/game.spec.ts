@@ -307,13 +307,27 @@ test("opens the reef album, the bestiary and the settings from the map", async (
   await expect(page.getByTestId("collection-card-stonefish")).toHaveAttribute("data-state", "locked");
   await expect(page.getByTestId("collection-card-stonefish")).toContainText("???");
 
-  // A ficha traz as duas árvores de evolução e a carreira do Guardião.
+  // A carta escolhe o Guardião e a ficha ao lado troca, sem sair da tela.
   await page.getByTestId("collection-card-pistol-shrimp").click();
   await expect(page.getByTestId("guardian-sheet")).toHaveAttribute("data-guardian", "pistol-shrimp");
+  await expect(page.getByTestId("sheet-info")).toContainText("Alcance");
+  await expect(page.getByTestId("guardian-career")).toBeVisible();
+
+  // As abas da ficha trocam o miolo: habilidades, evoluções e história.
+  await page.getByTestId("sheet-tab-skills").click();
+  await expect(page.getByTestId("sheet-skills")).toContainText("dano");
+  await page.getByTestId("sheet-tab-tree").click();
   await expect(page.getByTestId("guardian-branch-a")).toBeVisible();
   await expect(page.getByTestId("guardian-branch-b")).toBeVisible();
-  await expect(page.getByTestId("guardian-career")).toBeVisible();
-  await page.getByTestId("sheet-back").click();
+
+  // As outras abas do álbum saem dos mesmos dados do jogo.
+  await page.getByTestId("album-tab-places").click();
+  await expect(page.getByTestId("album-progress")).toContainText("de 10");
+  await expect(page.getByTestId("collection-card-recife-1")).toHaveAttribute("data-state", "unlocked");
+  await expect(page.getByTestId("collection-card-recife-6")).toHaveAttribute("data-state", "locked");
+  await page.getByTestId("album-tab-treasures").click();
+  await expect(page.getByTestId("collection-card-rede")).toBeVisible();
+
   await page.getByTestId("collection-back").click();
 
   // Bestiário: o Quebra-Marés só aparece depois do primeiro encontro.

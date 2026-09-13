@@ -111,6 +111,21 @@ export const ICONS = {
       `<path d="M19.4 14.6a1.5 1.5 0 0 0 .3 1.7l.1.1a1.8 1.8 0 1 1-2.6 2.6l-.1-.1a1.5 1.5 0 0 0-2.6 1.1v.3a1.8 1.8 0 0 1-3.6 0v-.2a1.5 1.5 0 0 0-2.6-1.1l-.1.1a1.8 1.8 0 1 1-2.6-2.6l.1-.1a1.5 1.5 0 0 0-1.1-2.6h-.3a1.8 1.8 0 1 1 0-3.6h.2a1.5 1.5 0 0 0 1.1-2.6l-.1-.1a1.8 1.8 0 1 1 2.6-2.6l.1.1a1.5 1.5 0 0 0 2.6-1.1v-.3a1.8 1.8 0 0 1 3.6 0v.2a1.5 1.5 0 0 0 2.6 1.1l.1-.1a1.8 1.8 0 1 1 2.6 2.6l-.1.1a1.5 1.5 0 0 0 1.1 2.6h.3a1.8 1.8 0 0 1 0 3.6h-.2a1.5 1.5 0 0 0-1.4.9z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/>`,
   ),
 
+  /** Coral ramificado: os lugares do Recife. */
+  coral: svg(
+    `<g fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">` +
+      `<path d="M12 21.4v-7.2M12 14.2 8.4 10.6M12 14.2l3.8-3.8M8.4 10.6V6.8M15.8 10.4V7M8.4 10.6 5.4 8.2M15.8 10.4l2.8-2.4"/>` +
+      `<path d="M4.4 21.4h15.2"/></g>` +
+      `<g fill="currentColor"><circle cx="8.4" cy="5.8" r="1.7"/><circle cx="15.8" cy="6" r="1.7"/><circle cx="4.6" cy="7.4" r="1.5"/><circle cx="19.4" cy="7" r="1.5"/></g>`,
+  ),
+
+  /** Baú: os achados escondidos no mapa. */
+  chest: svg(
+    `<path d="M3.4 10.4a8.6 8.6 0 0 1 17.2 0v1.2H3.4z" fill="currentColor"/>` +
+      `<rect x="3.4" y="11.6" width="17.2" height="8.4" rx="1.8" fill="currentColor"/>` +
+      `<rect x="10.4" y="9.2" width="3.2" height="6" rx="1.1" fill="#02141f"/>`,
+  ),
+
   /** Cadeado: região ou fase ainda fechada. */
   lock: svg(
     `<rect x="4.6" y="10.4" width="14.8" height="10.2" rx="2.4" fill="currentColor"/>` +

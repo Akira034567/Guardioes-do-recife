@@ -13,7 +13,8 @@ import { isRegionOpen, REGIONS, type RegionDefinition } from "../../../data/regi
 import { STORY_SEQUENCES } from "../../../data/story";
 import type { EnemyId, LevelDefinition } from "../../../types";
 import { button, h } from "../h";
-import { BRAND_WAVE, ICONS, MAP_COMPASS } from "../icons";
+import { ICONS, MAP_COMPASS } from "../icons";
+import { MAP_NAV_IDS, shellSidebar } from "../shell";
 import type { Screen, ScreenHost } from "../ScreenHost";
 
 export type NodeState = "locked" | "available" | "completed" | "perfect";
@@ -107,53 +108,27 @@ function nextLevel(region: RegionDefinition, progression: ProgressionService, is
 // ------------------------------------------------------------------------------- menu da esquerda
 
 function sidebar(host: ScreenHost, actions: MapActions): HTMLElement {
-  return h(
-    "aside",
-    { class: "gr-world__side" },
-    h(
-      "div",
-      { class: "gr-world__brand" },
-      h("span", { class: "gr-world__brand-name", text: "GUARDIÕES" }),
-      h("span", { class: "gr-world__brand-name", text: "DO RECIFE" }),
-      h("span", { class: "gr-world__brand-wave", html: BRAND_WAVE }),
-    ),
-    h(
-      "nav",
-      { class: "gr-world__nav" },
-      navItem(ICONS.compass, "Mapa do Recife", true, () => {}, "map-here"),
-      navItem(ICONS.fish, "Guardiões", false, actions.onOpenCollection, "map-collection"),
-      navItem(ICONS.spiky, "Ameaças", false, actions.onOpenBestiary, "map-bestiary"),
-      navItem(ICONS.book, "História", false, actions.onOpenStories, "map-stories"),
-      navItem(ICONS.trophy, "Conquistas", false, actions.onOpenAchievements, "map-achievements"),
-      navItem(ICONS.gear, "Configurações", false, actions.onOpenSettings, "map-settings"),
-    ),
-    h(
-      "div",
-      { class: "gr-world__side-foot" },
-      h("p", { class: "gr-world__motto", html: "Força no mar,<br>vida no Recife." }),
-      h("button", {
+  return shellSidebar(
+    "map",
+    {
+      onGoMap: () => {},
+      onOpenCollection: actions.onOpenCollection,
+      onOpenBestiary: actions.onOpenBestiary,
+      onOpenStories: actions.onOpenStories,
+      onOpenAchievements: actions.onOpenAchievements,
+      onOpenSettings: actions.onOpenSettings,
+    },
+    {
+      navId: (section) => MAP_NAV_IDS[section],
+      motto: "Força no mar, vida no Recife.",
+      footer: h("button", {
         class: "gr-world__reset",
         testId: "map-reset",
         type: "button",
         text: "Limpar progresso",
         onClick: () => host.push(confirmResetScreen(() => host.pop(), actions.onResetProgress)),
       }),
-    ),
-  );
-}
-
-function navItem(icon: string, label: string, current: boolean, onClick: () => void, testId: string): HTMLElement {
-  return h(
-    "button",
-    {
-      class: `gr-world__nav-item${current ? " gr-world__nav-item--on" : ""}`,
-      testId,
-      type: "button",
-      "aria-current": current ? "page" : undefined,
-      onClick,
     },
-    h("span", { class: "gr-icon gr-icon--lg", html: icon }),
-    h("span", { text: label.toUpperCase() }),
   );
 }
 

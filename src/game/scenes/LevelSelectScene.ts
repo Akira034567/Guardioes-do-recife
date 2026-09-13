@@ -11,6 +11,7 @@ import { getProgression } from "../systems/progression";
 import { challengeRule } from "../core/progression/challenges";
 import { pendingStory } from "../systems/story";
 import { getScreenHost } from "../ui/dom/host";
+import type { Screen } from "../ui/dom/ScreenHost";
 import { achievementsScreen } from "../ui/dom/screens/AchievementsScreen";
 import { bestiaryScreen } from "../ui/dom/screens/BestiaryScreen";
 import { collectionScreen } from "../ui/dom/screens/CollectionScreen";
@@ -18,6 +19,7 @@ import { mapScreen } from "../ui/dom/screens/MapScreen";
 import { preparationScreen } from "../ui/dom/screens/PreparationScreen";
 import { settingsScreen } from "../ui/dom/screens/SettingsScreen";
 import { storyIndexScreen, storyScreen } from "../ui/dom/screens/StoryScreen";
+import type { ShellNav, ShellSection } from "../ui/dom/shell";
 import type { GuardianId, LevelDefinition } from "../types";
 
 /**
@@ -60,11 +62,11 @@ export class LevelSelectScene extends Phaser.Scene {
         onPlayLevel: (level) => this.openPreparation(level),
         onPlayEncounter: (encounter) => this.openPreparation(encounter.level, encounter),
         onPlayChallenge: (challenge) => this.openChallenge(challenge),
-        onOpenAchievements: () => host.push(achievementsScreen(progression, () => host.pop())),
-        onOpenCollection: () => host.push(collectionScreen(progression, () => host.pop())),
-        onOpenBestiary: () => host.push(bestiaryScreen(progression, () => host.pop())),
-        onOpenStories: () => host.push(storyIndexScreen(() => host.pop())),
-        onOpenSettings: () => host.push(settingsScreen(() => host.pop())),
+        onOpenAchievements: () => this.openSection("achievements"),
+        onOpenCollection: () => this.openSection("collection"),
+        onOpenBestiary: () => this.openSection("bestiary"),
+        onOpenStories: () => this.openSection("stories"),
+        onOpenSettings: () => this.openSection("settings"),
         onResetProgress: () => {
           this.progress.reset();
           this.scene.restart();
@@ -77,6 +79,34 @@ export class LevelSelectScene extends Phaser.Scene {
       this.prepareLevelId = null;
       if (level) this.openPreparation(level);
     }
+  }
+
+  /**
+   * Abre uma seção do menu por cima do mapa. A pilha nunca passa de duas telas: trocar de seção pelo
+   * menu lateral volta ao mapa e abre a nova, em vez de empilhar mais uma.
+   */
+  private openSection(section: ShellSection): void {
+    const host = getScreenHost(this.game);
+    while (host.isOpen && host.topId !== "map") host.pop();
+    if (section === "map") return;
+    const progression = getProgression();
+    const back = (): void => this.openSection("map");
+    const nav: ShellNav = {
+      onGoMap: () => this.openSection("map"),
+      onOpenCollection: () => this.openSection("collection"),
+      onOpenBestiary: () => this.openSection("bestiary"),
+      onOpenStories: () => this.openSection("stories"),
+      onOpenAchievements: () => this.openSection("achievements"),
+      onOpenSettings: () => this.openSection("settings"),
+    };
+    const screens: Record<Exclude<ShellSection, "map">, () => Screen> = {
+      collection: () => collectionScreen(progression, back, nav),
+      bestiary: () => bestiaryScreen(progression, back),
+      stories: () => storyIndexScreen(back),
+      achievements: () => achievementsScreen(progression, back),
+      settings: () => settingsScreen(back),
+    };
+    host.push(screens[section]());
   }
 
   /**
