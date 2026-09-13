@@ -27,8 +27,8 @@ interface ShellOptions {
   /** Botão "VOLTAR" acima da marca; ausente no mapa, que não tem para onde voltar. */
   back?: () => void;
   backId?: string;
-  /** A frase do rodapé, em duas linhas. */
-  motto: string;
+  /** A frase do rodapé; ausente = a coluna termina no menu. */
+  motto?: string;
   /** Um último controle discreto embaixo da frase (o "limpar progresso" do mapa). */
   footer?: HTMLElement | null;
 }
@@ -96,7 +96,7 @@ export function shellSidebar(active: ShellSection, nav: ShellNav, options: Shell
     h(
       "div",
       { class: "gr-world__side-foot" },
-      h("p", { class: "gr-world__motto", text: options.motto }),
+      options.motto ? h("p", { class: "gr-world__motto", text: options.motto }) : null,
       options.footer ?? null,
     ),
   );

@@ -22,10 +22,14 @@ export type AchievementMeasure =
   /** Contagem de partidas que satisfizeram uma condição. */
   | { type: "matchesWith"; condition: "noLeaks" | "hardDifficulty" | "soloGuardian" };
 
+/** Prateleira da conquista na tela de Conquistas. Só organiza a lista; não muda regra nenhuma. */
+export type AchievementCategory = "exploracao" | "combate" | "guardioes" | "colecao" | "especiais";
+
 export interface AchievementDefinition {
   id: string;
   name: string;
   description: string;
+  category: AchievementCategory;
   measure: AchievementMeasure;
   /** Valor a alcançar. */
   target: number;
@@ -39,6 +43,7 @@ export const ACHIEVEMENTS: AchievementDefinition[] = [
     id: "primeira-mare",
     name: "Primeira maré",
     description: "Vença uma fase.",
+    category: "combate",
     measure: { type: "totalVictories" },
     target: 1,
     shells: 15,
@@ -47,6 +52,7 @@ export const ACHIEVEMENTS: AchievementDefinition[] = [
     id: "recife-protegido",
     name: "Recife protegido",
     description: "Conclua as seis fases da campanha.",
+    category: "exploracao",
     measure: { type: "levelsCompleted" },
     target: 6,
     shells: 80,
@@ -55,6 +61,7 @@ export const ACHIEVEMENTS: AchievementDefinition[] = [
     id: "mao-cheia",
     name: "Mão cheia",
     description: "Junte 9 estrelas.",
+    category: "exploracao",
     measure: { type: "starsTotal" },
     target: 9,
     shells: 40,
@@ -63,6 +70,7 @@ export const ACHIEVEMENTS: AchievementDefinition[] = [
     id: "maré-perfeita",
     name: "Maré perfeita",
     description: "Feche três fases com as três estrelas.",
+    category: "exploracao",
     measure: { type: "perfectLevels" },
     target: 3,
     shells: 60,
@@ -71,6 +79,7 @@ export const ACHIEVEMENTS: AchievementDefinition[] = [
     id: "cacador-de-guardioes",
     name: "Caçador de Guardiões",
     description: "Encontre os quatro Guardiões escondidos no Recife.",
+    category: "guardioes",
     measure: { type: "encountersCompleted" },
     target: 4,
     shells: 90,
@@ -79,6 +88,7 @@ export const ACHIEVEMENTS: AchievementDefinition[] = [
     id: "olho-de-peixe",
     name: "Olho de peixe",
     description: "Descubra um segredo escondido no mapa.",
+    category: "exploracao",
     measure: { type: "secretsFound" },
     target: 1,
     shells: 25,
@@ -87,6 +97,7 @@ export const ACHIEVEMENTS: AchievementDefinition[] = [
     id: "catalogo-do-recife",
     name: "Catálogo do Recife",
     description: "Catalogue as sete ameaças do bestiário.",
+    category: "colecao",
     measure: { type: "enemiesCatalogued" },
     target: 7,
     shells: 45,
@@ -95,6 +106,7 @@ export const ACHIEVEMENTS: AchievementDefinition[] = [
     id: "contador-de-historias",
     name: "Contador de histórias",
     description: "Leia cinco capítulos da história do Recife.",
+    category: "colecao",
     measure: { type: "storiesRead" },
     target: 5,
     shells: 30,
@@ -103,6 +115,7 @@ export const ACHIEVEMENTS: AchievementDefinition[] = [
     id: "faxina",
     name: "Faxina",
     description: "Derrote 500 invasores no total.",
+    category: "combate",
     measure: { type: "totalKills" },
     target: 500,
     shells: 50,
@@ -111,6 +124,7 @@ export const ACHIEVEMENTS: AchievementDefinition[] = [
     id: "muralha",
     name: "Muralha",
     description: "Vença uma fase sem deixar ninguém passar.",
+    category: "combate",
     measure: { type: "matchesWith", condition: "noLeaks" },
     target: 1,
     shells: 35,
@@ -119,6 +133,7 @@ export const ACHIEVEMENTS: AchievementDefinition[] = [
     id: "fundo-do-poco",
     name: "Fundo do poço",
     description: "Vença uma fase no Abissal.",
+    category: "especiais",
     measure: { type: "matchesWith", condition: "hardDifficulty" },
     target: 1,
     shells: 70,
@@ -127,6 +142,7 @@ export const ACHIEVEMENTS: AchievementDefinition[] = [
     id: "sozinho-no-escuro",
     name: "Sozinho no escuro",
     description: "Vença uma fase usando uma espécie só.",
+    category: "especiais",
     measure: { type: "matchesWith", condition: "soloGuardian" },
     target: 1,
     shells: 55,
@@ -136,6 +152,7 @@ export const ACHIEVEMENTS: AchievementDefinition[] = [
     id: "banquete",
     name: "Banquete",
     description: "Derrote 60 invasores em uma única partida.",
+    category: "combate",
     measure: { type: "bestInMatch", stat: "enemiesKilled" },
     target: 60,
     shells: 30,
@@ -144,6 +161,7 @@ export const ACHIEVEMENTS: AchievementDefinition[] = [
     id: "colecionador-de-perolas",
     name: "Colecionador de pérolas",
     description: "Junte 600 pérolas em uma única partida.",
+    category: "colecao",
     measure: { type: "bestInMatch", stat: "pearlsEarned" },
     target: 600,
     shells: 30,
@@ -152,6 +170,7 @@ export const ACHIEVEMENTS: AchievementDefinition[] = [
     id: "arsenal",
     name: "Arsenal",
     description: "Tenha 8 Guardiões em campo ao mesmo tempo.",
+    category: "guardioes",
     measure: { type: "bestInMatch", stat: "maxSimultaneousGuardians" },
     target: 8,
     shells: 35,
@@ -160,6 +179,7 @@ export const ACHIEVEMENTS: AchievementDefinition[] = [
     id: "veterano",
     name: "Veterano",
     description: "Passe uma hora defendendo o Recife.",
+    category: "especiais",
     measure: { type: "playTimeMinutes" },
     target: 60,
     shells: 40,

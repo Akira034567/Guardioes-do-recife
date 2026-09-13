@@ -103,7 +103,7 @@ export class LevelSelectScene extends Phaser.Scene {
       collection: () => collectionScreen(progression, back, nav),
       bestiary: () => bestiaryScreen(progression, back, nav),
       stories: () => storyIndexScreen(back, nav, (levelId) => this.progress.isUnlocked(levelId)),
-      achievements: () => achievementsScreen(progression, back),
+      achievements: () => achievementsScreen(progression, back, nav),
       settings: () => settingsScreen(back),
     };
     host.push(screens[section]());

@@ -458,6 +458,14 @@ test("tracks achievements and offers the rotating challenges", async ({ page }) 
   await expect(page.getByTestId("achievement-primeira-mare")).toHaveAttribute("data-state", "unlocked");
   await expect(page.getByTestId("achievement-faxina")).toContainText("260/500");
   await expect(page.getByTestId("achievement-sozinho-no-escuro"), "conquista escondida").toContainText("???");
+
+  // A ficha mostra a data real da conquista e a prateleira filtra a lista.
+  await page.getByTestId("achievement-primeira-mare").click();
+  await expect(page.getByTestId("achievement-sheet")).toHaveAttribute("data-achievement", "primeira-mare");
+  await expect(page.getByTestId("achievement-reward")).toContainText("Concluída em");
+  await page.getByTestId("achievements-filter-colecao").click();
+  await expect(page.getByTestId("achievement-primeira-mare")).toHaveCount(0);
+  await expect(page.getByTestId("achievement-catalogo-do-recife")).toBeVisible();
   await page.getByTestId("achievements-back").click();
 
   // O desafio do dia vem com fase, dificuldade e esquadrão já decididos.

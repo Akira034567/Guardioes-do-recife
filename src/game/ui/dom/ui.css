@@ -363,6 +363,7 @@
 }
 
 .gr-progress__track {
+  display: block;
   height: calc(6px * var(--gr-scale));
   background: rgba(2, 24, 36, 0.9);
   border-radius: 999px;
@@ -370,6 +371,7 @@
 }
 
 .gr-progress__fill {
+  display: block;
   height: 100%;
   background: linear-gradient(90deg, var(--gr-line), var(--gr-cyan));
 }
@@ -1366,7 +1368,8 @@
 /* O álbum, o bestiário e as histórias dividem a mesma moldura de tela cheia. */
 .gr-screen[data-screen="collection"],
 .gr-screen[data-screen="bestiary"],
-.gr-screen[data-screen="story-index"] {
+.gr-screen[data-screen="story-index"],
+.gr-screen[data-screen="achievements"] {
   display: block;
   container-type: inline-size;
   padding: 0;
@@ -1461,10 +1464,6 @@
   font-size: calc(19px * var(--gr-scale));
   font-weight: bold;
   color: #f2fbff;
-}
-
-.gr-album__score .gr-progress__track {
-  display: block;
 }
 
 .gr-album__quote {
@@ -1973,6 +1972,147 @@
   font-style: italic;
   font-size: calc(13px * var(--gr-scale));
   color: #bfe8f7;
+}
+
+/* ---- conquistas: a lista vira linhas, com o emblema da prateleira e a barra de progresso */
+
+.gr-album__grid--rows {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-content: start;
+}
+
+.gr-album--achievements .gr-album__body {
+  grid-template-columns: minmax(0, 1.32fr) minmax(0, 1fr);
+}
+
+.gr-album__row-card {
+  display: flex;
+  align-items: flex-start;
+  gap: calc(9px * var(--gr-scale));
+  text-align: left;
+  font: inherit;
+  color: inherit;
+  background: rgba(3, 30, 47, 0.82);
+  border: calc(1px * var(--gr-scale)) solid rgba(21, 129, 163, 0.45);
+  border-radius: calc(12px * var(--gr-scale));
+  padding: calc(8px * var(--gr-scale)) calc(10px * var(--gr-scale));
+  cursor: pointer;
+  transition: border-color 120ms ease, transform 120ms ease, box-shadow 120ms ease;
+}
+
+.gr-album__row-card:hover,
+.gr-album__row-card:focus-visible {
+  border-color: var(--gr-cyan);
+  transform: translateY(calc(-2px * var(--gr-scale)));
+}
+
+.gr-album__row-card--on {
+  border-color: var(--gr-cyan);
+  box-shadow: 0 0 calc(18px * var(--gr-scale)) rgba(117, 223, 244, 0.4);
+}
+
+.gr-album__row-card--done {
+  border-color: rgba(103, 242, 172, 0.55);
+}
+
+/* Emblema da prateleira: a cor separa exploração, combate, Guardiões, coleção e especiais. */
+.gr-album__badge {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: calc(44px * var(--gr-scale));
+  height: calc(44px * var(--gr-scale));
+  flex: none;
+  border-radius: calc(10px * var(--gr-scale));
+  border: calc(1px * var(--gr-scale)) solid rgba(255, 255, 255, 0.18);
+  background: rgba(13, 74, 100, 0.85);
+  color: var(--gr-cyan);
+}
+
+.gr-album__badge--exploracao {
+  background: rgba(12, 70, 104, 0.9);
+  color: #8fe0ff;
+}
+
+.gr-album__badge--combate {
+  background: rgba(96, 32, 40, 0.85);
+  color: #ffb3ba;
+}
+
+.gr-album__badge--guardioes {
+  background: rgba(14, 82, 74, 0.85);
+  color: #8ff0d0;
+}
+
+.gr-album__badge--colecao {
+  background: rgba(74, 56, 18, 0.85);
+  color: var(--gr-pearl);
+}
+
+.gr-album__badge--especiais {
+  background: rgba(58, 32, 96, 0.85);
+  color: #d0b6ff;
+}
+
+.gr-album__row-copy {
+  display: grid;
+  gap: calc(3px * var(--gr-scale));
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.gr-album__row-card .gr-album__card-name {
+  font-size: calc(13px * var(--gr-scale));
+  line-height: 1.2;
+}
+
+.gr-album__row-card .gr-hint {
+  font-size: calc(10px * var(--gr-scale));
+  line-height: 1.25;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  overflow: hidden;
+}
+
+.gr-album__row-meter {
+  display: grid;
+  gap: calc(3px * var(--gr-scale));
+  margin-top: calc(2px * var(--gr-scale));
+}
+
+.gr-album__row-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: calc(8px * var(--gr-scale));
+}
+
+.gr-album__prize {
+  display: inline-flex;
+  align-items: center;
+  gap: calc(4px * var(--gr-scale));
+  font-size: calc(11px * var(--gr-scale));
+  font-weight: bold;
+  color: var(--gr-pearl);
+}
+
+.gr-album__sheet--won {
+  border-color: rgba(103, 242, 172, 0.5);
+}
+
+/* O selo "Concluída" fica solto sobre o emblema grande da ficha. */
+.gr-album__banner {
+  position: relative;
+}
+
+.gr-album__chip--float {
+  position: absolute;
+  right: calc(10px * var(--gr-scale));
+  bottom: calc(10px * var(--gr-scale));
+  width: auto;
+  margin: 0;
 }
 
 /* ---- histórias: capítulo em andamento, citação e o Guardião que fala nele */

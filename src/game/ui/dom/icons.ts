@@ -126,6 +126,15 @@ export const ICONS = {
       `<rect x="10.4" y="9.2" width="3.2" height="6" rx="1.1" fill="#02141f"/>`,
   ),
 
+  /** Lâminas cruzadas: as conquistas de combate. */
+  swords: svg(
+    `<g fill="currentColor">` +
+      `<path d="M18.6 2.6h2.8v2.8l-8.1 8.1-2.8-2.8z"/><path d="M5.4 2.6H2.6v2.8l8.1 8.1 2.8-2.8z"/>` +
+      `</g>` +
+      `<g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">` +
+      `<path d="M14.6 16.2 20 21.6M9.4 16.2 4 21.6"/><path d="M13.4 19.4 16.6 16.2M10.6 19.4 7.4 16.2"/></g>`,
+  ),
+
   /** Cadeado: região ou fase ainda fechada. */
   lock: svg(
     `<rect x="4.6" y="10.4" width="14.8" height="10.2" rx="2.4" fill="currentColor"/>` +
