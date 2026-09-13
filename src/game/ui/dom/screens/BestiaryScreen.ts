@@ -1,11 +1,14 @@
 import { enemyPortraitPath } from "../../../assets/enemyArt";
+import { levelBackgroundPath } from "../../../assets/levelBackgrounds";
 import type { ProgressionService } from "../../../core/progression/ProgressionService";
 import { ENEMIES, ENEMY_ORDER, resolveEnemy } from "../../../data/enemies";
 import { ENEMY_LORE } from "../../../data/enemyLore";
 import { LEVELS } from "../../../data/levels";
-import type { EnemyDefinition, EnemyId, EnemyShapeKey } from "../../../types";
-import { button, h } from "../h";
-import type { Screen, ScreenHost } from "../ScreenHost";
+import type { EnemyDefinition, EnemyId, EnemyRole, EnemyShapeKey } from "../../../types";
+import { h } from "../h";
+import { ICONS } from "../icons";
+import type { Screen } from "../ScreenHost";
+import { shellSidebar, type ShellNav } from "../shell";
 
 const hex = (color: number): string => `#${color.toString(16).padStart(6, "0")}`;
 
@@ -15,41 +18,339 @@ function firstLevelName(enemyId: EnemyId): string {
   return level?.name ?? "—";
 }
 
+/** Etiqueta curta que a carta mostra embaixo do nome. */
+const ROLE_LABELS: Record<EnemyRole, string> = {
+  swarm: "Cardume",
+  common: "Comum",
+  fast: "Veloz",
+  armored: "Tanque",
+  elite: "Elite",
+  boss: "Chefe",
+};
+
+type BestiaryFilter = "all" | "common" | "elite" | "boss" | "unknown";
+
+const FILTERS: ReadonlyArray<{ id: BestiaryFilter; label: string; icon: string }> = [
+  { id: "all", label: "Todos", icon: ICONS.spiky },
+  { id: "common", label: "Comuns", icon: ICONS.fish },
+  { id: "elite", label: "Elites", icon: ICONS.skull },
+  { id: "boss", label: "Chefes", icon: ICONS.trophy },
+  { id: "unknown", label: "Não encontrados", icon: ICONS.lock },
+];
+
+function matchesFilter(definition: EnemyDefinition, filter: BestiaryFilter, seen: boolean): boolean {
+  switch (filter) {
+    case "all":
+      return true;
+    case "elite":
+      return definition.role === "elite";
+    case "boss":
+      return definition.role === "boss";
+    case "unknown":
+      return !seen;
+    case "common":
+      return definition.role !== "elite" && definition.role !== "boss";
+  }
+}
+
 /**
  * Ameaças do Recife (item 5): o bestiário. Inimigo nunca visto fica em "???"; depois do primeiro
- * encontro abre a página com números, comportamento, fraquezas e resistências.
+ * encontro a ficha ao lado abre com números, comportamento, fraquezas e resistências — sem trocar de
+ * tela, como no álbum.
  */
-export function bestiaryScreen(progression: ProgressionService, onBack: () => void): Screen {
+export function bestiaryScreen(progression: ProgressionService, onBack: () => void, nav?: ShellNav): Screen {
+  let filter: BestiaryFilter = "all";
+  let chosen: EnemyId | null = null;
+
   return {
     id: "bestiary",
-    render(host: ScreenHost) {
-      const discovery = progression.progress.enemyDiscovery;
-      const known = ENEMY_ORDER.filter((id) => discovery[id]).length;
-      return h(
-        "div",
-        {},
-        h(
-          "div",
-          { class: "gr-panel", testId: "bestiary-panel", dataKnown: String(known) },
-          h("span", { class: "gr-badge", text: `${known} de ${ENEMY_ORDER.length} catalogadas` }),
-          h("h1", { class: "gr-title", text: "AMEAÇAS DO RECIFE" }),
-          h("p", { class: "gr-subtitle", text: "Cada invasor é catalogado no primeiro encontro." }),
+    render() {
+      const root = h("div", { class: "gr-album gr-album--bestiary", testId: "bestiary-panel" });
+      const art = levelBackgroundPath(LEVELS[3].backgroundKey);
+      if (art) root.append(h("div", { class: "gr-world__backdrop", style: `background-image:url(${art})` }));
+      const layout = h("div", { class: "gr-album__layout" });
+      root.append(layout);
+
+      const draw = (): void => {
+        const discovery = progression.progress.enemyDiscovery;
+        const seenOf = (enemyId: EnemyId): boolean => Boolean(discovery[enemyId]);
+        const known = ENEMY_ORDER.filter(seenOf).length;
+        const listed = ENEMY_ORDER.filter((enemyId) => matchesFilter(ENEMIES[enemyId], filter, seenOf(enemyId)));
+        const current = (chosen && listed.includes(chosen) ? chosen : listed.find(seenOf)) ?? null;
+
+        layout.replaceChildren(
+          shellSidebar("bestiary", nav ?? fallbackNav(onBack), {
+            navId: (section) => `bestiary-nav-${section}`,
+            back: onBack,
+            backId: "bestiary-back",
+            motto: "O Recife lembra, observa e se prepara.",
+          }),
           h(
             "div",
-            { class: "gr-album" },
-            ...ENEMY_ORDER.map((enemyId) => {
-              const seen = Boolean(discovery[enemyId]);
-              return enemyCard(ENEMIES[enemyId], seen, discovery[enemyId]?.kills ?? 0, () => {
-                if (seen) host.push(enemyPage(ENEMIES[enemyId], discovery[enemyId]?.kills ?? 0, () => host.pop()));
-              });
+            { class: "gr-album__main" },
+            header(known),
+            filters(filter, known, (next) => {
+              filter = next;
+              chosen = null;
+              draw();
             }),
+            h(
+              "div",
+              { class: "gr-album__body" },
+              h(
+                "div",
+                { class: "gr-album__grid gr-album__grid--wide", testId: "bestiary-grid" },
+                ...listed.map((enemyId) =>
+                  enemyCard(ENEMIES[enemyId], seenOf(enemyId), discovery[enemyId]?.kills ?? 0, current === enemyId, () => {
+                    chosen = enemyId;
+                    draw();
+                  }),
+                ),
+              ),
+              current ? enemyPanel(ENEMIES[current], discovery[current]?.kills ?? 0) : emptyPanel(),
+            ),
+            h("p", { class: "gr-album__foot", text: "Toda ameaça catalogada é uma defesa a mais." }),
           ),
-          h("div", { class: "gr-actions" }, button("VOLTAR", onBack, { testId: "bestiary-back" })),
-        ),
-      );
+        );
+      };
+
+      draw();
+      return root;
     },
   };
 }
+
+/** Sem a navegação da moldura, todo item do menu só volta para o mapa. */
+function fallbackNav(onBack: () => void): ShellNav {
+  return {
+    onGoMap: onBack,
+    onOpenCollection: onBack,
+    onOpenBestiary: () => {},
+    onOpenStories: onBack,
+    onOpenAchievements: onBack,
+    onOpenSettings: onBack,
+  };
+}
+
+function header(known: number): HTMLElement {
+  const ratio = Math.round((known / Math.max(1, ENEMY_ORDER.length)) * 100);
+  return h(
+    "header",
+    { class: "gr-album__top" },
+    h(
+      "div",
+      { class: "gr-album__titles" },
+      h("h1", { class: "gr-album__title", text: "AMEAÇAS DO RECIFE" }),
+      h("p", { class: "gr-subtitle", text: "Conheça os inimigos que ameaçam nosso lar. Quanto mais você enfrenta, mais informações são descobertas." }),
+    ),
+    h(
+      "div",
+      { class: "gr-album__score", testId: "bestiary-progress", dataKnown: String(known) },
+      h("span", { class: "gr-icon gr-icon--lg", html: ICONS.spiky }),
+      h(
+        "span",
+        { class: "gr-album__score-copy" },
+        h("span", { class: "gr-stat__label", text: "Inimigos descobertos" }),
+        h("span", { class: "gr-album__score-value", text: `${known} de ${ENEMY_ORDER.length}` }),
+        h("span", { class: "gr-progress__track" }, h("span", { class: "gr-progress__fill", style: `width:${ratio}%` })),
+      ),
+    ),
+    h("p", { class: "gr-album__quote", text: "“Conhecer é o primeiro passo para proteger.”" }),
+  );
+}
+
+function filters(current: BestiaryFilter, known: number, onPick: (filter: BestiaryFilter) => void): HTMLElement {
+  return h(
+    "nav",
+    { class: "gr-album__tabs", testId: "bestiary-filters", dataValue: current },
+    ...FILTERS.map((entry) =>
+      h(
+        "button",
+        {
+          class: `gr-album__tab${entry.id === current ? " gr-album__tab--on" : ""}`,
+          testId: `bestiary-filter-${entry.id}`,
+          type: "button",
+          "aria-pressed": String(entry.id === current),
+          onClick: () => onPick(entry.id),
+        },
+        h("span", { class: "gr-icon gr-icon--lg", html: entry.icon }),
+        h("span", { text: entry.id === "all" ? `TODOS (${known}/${ENEMY_ORDER.length})` : entry.label.toUpperCase() }),
+      ),
+    ),
+  );
+}
+
+function enemyCard(definition: EnemyDefinition, seen: boolean, kills: number, chosen: boolean, onOpen: () => void): HTMLElement {
+  return h(
+    "button",
+    {
+      class: `gr-album__card${chosen ? " gr-album__card--on" : ""}${seen ? "" : " gr-album__card--locked"}`,
+      testId: `bestiary-card-${definition.id}`,
+      dataState: seen ? "seen" : "unknown",
+      type: "button",
+      disabled: !seen,
+      onClick: onOpen,
+    },
+    h("span", { class: "gr-album__card-art" }, portrait(definition, seen, 78)),
+    h("span", { class: "gr-album__card-name", text: seen ? definition.name : "???" }),
+    seen
+      ? h("span", { class: `gr-album__tagchip gr-album__tagchip--${definition.role}`, text: ROLE_LABELS[definition.role].toUpperCase() })
+      : h("span", { class: "gr-hint", text: "Ainda não encontrado." }),
+    seen ? h("span", { class: "gr-album__card-kills", text: `${kills} derrotados` }) : null,
+  );
+}
+
+function emptyPanel(): HTMLElement {
+  return h(
+    "section",
+    { class: "gr-album__sheet gr-album__sheet--empty" },
+    h("span", { class: "gr-icon gr-album__banner-icon", html: ICONS.spiky }),
+    h("p", { class: "gr-hint", text: "Enfrente as marés para catalogar o que vem nelas." }),
+  );
+}
+
+// ------------------------------------------------------------------------------- ficha da ameaça
+
+/** Escalas qualitativas: o número cru diz pouco; "vida baixa" diz o que fazer. */
+function healthLabel(value: number): string {
+  if (value <= 40) return "Baixa";
+  if (value <= 120) return "Média";
+  return value <= 300 ? "Alta" : "Altíssima";
+}
+
+function speedLabel(value: number): string {
+  if (value <= 45) return "Lenta";
+  if (value <= 80) return "Média";
+  return value <= 110 ? "Rápida" : "Altíssima";
+}
+
+function armorLabel(value: number): string {
+  if (value <= 0) return "Nenhuma";
+  return value <= 2 ? "Leve" : value <= 4 ? "Média" : "Pesada";
+}
+
+function enemyPanel(definition: EnemyDefinition, kills: number): HTMLElement {
+  const resolved = resolveEnemy(definition);
+  const lore = ENEMY_LORE[definition.id];
+  return h(
+    "section",
+    {
+      class: `gr-album__sheet${definition.isBoss ? " gr-album__sheet--boss" : ""}`,
+      testId: "enemy-page",
+      dataEnemy: definition.id,
+    },
+    h(
+      "div",
+      { class: "gr-album__sheet-head" },
+      h("span", { class: `gr-album__tagchip gr-album__tagchip--${definition.role}`, text: ROLE_LABELS[definition.role].toUpperCase() }),
+      h("h2", { class: "gr-album__sheet-name", text: definition.name }),
+      h("p", { class: "gr-subtitle", text: lore.trait }),
+    ),
+    h("div", { class: "gr-album__banner" }, portrait(definition, true, 150)),
+    h("p", { class: "gr-album__sheet-line", text: resolved.description || lore.description }),
+    h(
+      "div",
+      { class: "gr-album__duo" },
+      h(
+        "div",
+        { class: "gr-album__rows" },
+        row(ICONS.heart, "Vida", `${healthLabel(definition.maxHealth)} · ${definition.maxHealth}`),
+        row(ICONS.waves, "Velocidade", `${speedLabel(definition.speed)} · ${definition.speed}`),
+        row(ICONS.trident, "Armadura", armorLabel(definition.armor)),
+        row(ICONS.pearl, "Recompensa", `${definition.reward} ${definition.reward === 1 ? "pérola" : "pérolas"}`),
+        row(ICONS.skull, "Dano ao Recife", String(definition.reefDamage)),
+      ),
+      h(
+        "div",
+        { class: "gr-album__rows" },
+        h("span", { class: "gr-album__section-title", text: "Resistências" }),
+        row(ICONS.skull, "Nível de ameaça", THREAT_LABELS[Math.min(3, resolved.threatLevel)]),
+        ...(resistanceLines(definition).length > 0
+          ? resistanceLines(definition).map((line) => row(ICONS.shell, line.label, line.value))
+          : [row(ICONS.shell, "Nenhuma conhecida", "—")]),
+        ...(resolved.abilities.length > 0
+          ? [h("span", { class: "gr-album__section-title", text: "Em campo" }), ...resolved.abilities.map((ability) => h("p", { class: "gr-album__ability", text: abilityLabel(ability.type) }))]
+          : []),
+      ),
+    ),
+    h(
+      "div",
+      { class: "gr-album__kills", testId: "enemy-kills" },
+      h("span", { class: "gr-album__kills-art" }, portrait(definition, true, 44)),
+      h(
+        "span",
+        { class: "gr-album__career-text" },
+        h("span", { class: "gr-stat__label", text: "Derrotados por você" }),
+        h("span", { class: "gr-album__career-value", text: String(kills) }),
+      ),
+      h("span", { class: "gr-hint", text: `Visto em ${firstLevelName(definition.id)}` }),
+    ),
+    h(
+      "div",
+      { class: "gr-album__tip", testId: "enemy-tip" },
+      h("span", { class: "gr-icon gr-icon--lg", html: ICONS.star }),
+      h(
+        "span",
+        { class: "gr-album__tip-copy" },
+        h("span", { class: "gr-album__section-title", text: "Dica" }),
+        h("span", { text: `${lore.weaknesses.join(" e ")} ${lore.weaknesses.length > 1 ? "funcionam" : "funciona"} bem contra ele.` }),
+      ),
+    ),
+  );
+}
+
+/** Resistências vindas dos números do inimigo, não de texto solto. */
+function resistanceLines(definition: EnemyDefinition): Array<{ label: string; value: string }> {
+  const resolved = resolveEnemy(definition);
+  const lines: Array<{ label: string; value: string }> = [];
+  if (definition.unblockable) lines.push({ label: "Bloqueio", value: "Imune" });
+  for (const [status, amount] of Object.entries(resolved.resistances)) {
+    if (typeof amount !== "number" || amount <= 0) continue;
+    lines.push({ label: STATUS_LABELS[status] ?? status, value: `${Math.round(amount * 100)}%` });
+  }
+  for (const status of resolved.immunities) lines.push({ label: STATUS_LABELS[status] ?? status, value: "Imune" });
+  if (definition.armor > 0) lines.push({ label: "Golpes fracos", value: `−${definition.armor} por acerto` });
+  return lines;
+}
+
+/** `threatLevel` (0 comum · 1 blindado · 2 elite · 3 chefe) em uma palavra. */
+const THREAT_LABELS = ["Baixo", "Médio", "Alto", "Chefe"] as const;
+
+const STATUS_LABELS: Record<string, string> = {
+  slow: "Lentidão",
+  stun: "Atordoamento",
+  poison: "Veneno",
+  vulnerability: "Vulnerabilidade",
+  burn: "Queimadura",
+};
+
+function row(icon: string, label: string, value: string): HTMLElement {
+  return h(
+    "div",
+    { class: "gr-album__row" },
+    h("span", { class: "gr-icon", html: icon }),
+    h("span", { class: "gr-album__row-label", text: label }),
+    h("span", { class: "gr-album__row-value", text: value }),
+  );
+}
+
+/** Nome legível de cada habilidade de inimigo (item 5). */
+function abilityLabel(type: string): string {
+  const labels: Record<string, string> = {
+    regen: "Regenera vida com o tempo",
+    enrageBelowHp: "Enfurece quando está ferido",
+    shieldAllies: "Protege os aliados por perto",
+    disruptGuardians: "Atrapalha os Guardiões próximos",
+    stealth: "Some da mira até ser revelado",
+    splitOnDeath: "Se divide ao morrer",
+    phaseChangeAtHp: "Muda de fase conforme perde vida",
+    speedBurst: "Dispara em arrancadas",
+    reverseCurrents: "Inverte a correnteza do Recife",
+  };
+  return labels[type] ?? type;
+}
+
+// ------------------------------------------------------------------------------- arte
 
 /**
  * Retrato do inimigo. Quando a espécie tem arte (`public/assets/enemies/`), é a própria imagem, em
@@ -62,7 +363,7 @@ function portrait(definition: EnemyDefinition, seen: boolean, size = 92): HTMLEl
     class: `gr-enemy-art ${seen ? "" : "gr-node__art--unknown"}`,
     src: path,
     alt: seen ? definition.name : "",
-    style: `width:${Math.round(size * 1.1)}px`,
+    style: `width:calc(${Math.round(size * 1.1)}px * var(--gr-scale))`,
   });
 }
 
@@ -78,7 +379,7 @@ function blob(definition: EnemyDefinition, seen: boolean, size = 92): HTMLElemen
   const width = Math.round(size * Math.min(1.35, 0.8 + definition.scale * 0.3));
   return h("div", {
     class: "gr-blob",
-    style: `width:${width}px`,
+    style: `width:calc(${width}px * var(--gr-scale))`,
     html: `<svg viewBox="0 0 120 76" width="100%" role="img" aria-hidden="true">
       <defs><radialGradient id="${gradientId(definition)}" cx="35%" cy="32%">
         <stop offset="0%" stop-color="${hex(definition.accent)}"/><stop offset="100%" stop-color="${hex(definition.color)}"/>
@@ -109,106 +410,3 @@ const SHAPE_PATHS: Record<EnemyShapeKey, (fill: string, line: string) => string>
   boss: (fill, line) =>
     `<ellipse cx="58" cy="40" rx="40" ry="24" fill="${fill}"/><path d="M50 16 L66 2 L74 20 Z" fill="${line}"/><path d="M96 40 L120 18 L120 62 Z" fill="${line}" opacity=".9"/><path d="M22 34 q16 -10 32 -2" stroke="${line}" stroke-width="3" fill="none" opacity=".7"/><circle cx="38" cy="34" r="5" fill="#02202e"/>`,
 };
-
-function enemyCard(definition: EnemyDefinition, seen: boolean, kills: number, onOpen: () => void): HTMLElement {
-  return h(
-    "button",
-    {
-      class: `gr-card ${seen ? "gr-card--found" : "gr-card--locked"}`,
-      testId: `bestiary-card-${definition.id}`,
-      dataState: seen ? "seen" : "unknown",
-      type: "button",
-      disabled: !seen,
-      onClick: onOpen,
-    },
-    portrait(definition, seen),
-    h("span", { class: "gr-card__name", text: seen ? definition.name : "???" }),
-    h("span", { class: "gr-hint", text: seen ? `${kills} derrotados` : "Ainda não encontrado" }),
-  );
-}
-
-/** Página da ameaça. Chefes ganham destaque e a lista de habilidades. */
-export function enemyPage(definition: EnemyDefinition, kills: number, onBack: () => void): Screen {
-  const resolved = resolveEnemy(definition);
-  const lore = ENEMY_LORE[definition.id];
-  return {
-    id: "enemy-page",
-    render() {
-      return h(
-        "div",
-        {},
-        h(
-          "div",
-          { class: `gr-panel ${definition.isBoss ? "gr-panel--boss" : ""}`, testId: "enemy-page", dataEnemy: definition.id },
-          definition.isBoss ? h("span", { class: "gr-badge gr-badge--boss", text: "chefe" }) : h("span", { class: "gr-badge", text: resolved.tags.join(" · ").toLowerCase() }),
-          h(
-            "div",
-            { class: "gr-reveal" },
-            h("div", { class: "gr-reveal__art gr-reveal__art--blob" }, portrait(definition, true, 180)),
-            h(
-              "div",
-              { class: "gr-reveal__body" },
-              h("h1", { class: "gr-title", text: definition.name }),
-              h("p", { class: "gr-subtitle", text: `Visto em ${firstLevelName(definition.id)} · ${kills} derrotados` }),
-              h("p", { text: resolved.description || lore.description }),
-              h("p", { class: "gr-hint", text: lore.trait }),
-            ),
-          ),
-          h(
-            "div",
-            { class: "gr-grid" },
-            stat("Vida", String(definition.maxHealth)),
-            stat("Velocidade", String(definition.speed)),
-            stat("Armadura", String(definition.armor)),
-            stat("Dano ao Recife", String(definition.reefDamage)),
-            stat("Pérolas", `◉ ${definition.reward}`),
-            stat("Ameaça", "▲".repeat(Math.max(1, resolved.threatLevel + 1))),
-          ),
-          h(
-            "div",
-            { class: "gr-columns" },
-            listBox("FRAQUEZAS", lore.weaknesses, "gr-list--good"),
-            listBox("RESISTÊNCIAS", lore.resistances.length > 0 ? lore.resistances : ["Nenhuma conhecida"], "gr-list--bad"),
-          ),
-          resolved.abilities.length > 0
-            ? h(
-                "div",
-                { class: "gr-reward", testId: "enemy-abilities" },
-                ...resolved.abilities.map((ability) => h("div", { class: "gr-reward__line" }, h("span", { text: abilityLabel(ability.type) }))),
-              )
-            : null,
-          h("div", { class: "gr-actions" }, button("VOLTAR", onBack, { testId: "enemy-back" })),
-        ),
-      );
-    },
-  };
-}
-
-function stat(label: string, value: string): HTMLElement {
-  return h("div", { class: "gr-stat" }, h("span", { class: "gr-stat__label", text: label }), h("span", { class: "gr-stat__value", text: value }));
-}
-
-function listBox(title: string, items: string[], variant: string): HTMLElement {
-  return h(
-    "div",
-    { class: "gr-stat" },
-    h("span", { class: "gr-stat__label", text: title }),
-    h("ul", { class: `gr-list ${variant}` }, ...items.map((item) => h("li", { text: item }))),
-  );
-}
-
-/** Nome legível de cada habilidade de inimigo (item 5). */
-function abilityLabel(type: string): string {
-  const labels: Record<string, string> = {
-    regen: "Regenera vida com o tempo",
-    enrageBelowHp: "Enfurece quando está ferido",
-    shieldAllies: "Protege os aliados por perto",
-    disruptGuardians: "Atrapalha os Guardiões próximos",
-    stealth: "Some da mira até ser revelado",
-    splitOnDeath: "Se divide ao morrer",
-    phaseChangeAtHp: "Muda de fase conforme perde vida",
-    speedBurst: "Dispara em arrancadas",
-    reverseCurrents: "Inverte a correnteza do Recife",
-  };
-  return labels[type] ?? type;
-}

@@ -1363,7 +1363,9 @@
  * do álbum, a lista de cartas à esquerda e a ficha completa à direita — nada de trocar de tela para
  * ler um Guardião.
  */
-.gr-screen[data-screen="collection"] {
+/* O álbum e o bestiário dividem a mesma moldura de tela cheia. */
+.gr-screen[data-screen="collection"],
+.gr-screen[data-screen="bestiary"] {
   display: block;
   container-type: inline-size;
   padding: 0;
@@ -1962,6 +1964,147 @@
   color: #bfe8f7;
 }
 
+/* ---- bestiário: a mesma moldura do álbum, com a grade mais larga e as etiquetas de ameaça */
+
+.gr-album__grid--wide {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+/* Cada espécie tem proporção própria; a caixa da carta é que manda no tamanho. */
+.gr-album__card-art .gr-enemy-art,
+.gr-album__card-art .gr-blob {
+  max-width: 100%;
+  max-height: 100%;
+}
+
+.gr-album__banner .gr-enemy-art,
+.gr-album__banner .gr-blob {
+  max-height: 92%;
+  width: auto;
+  max-width: 80%;
+}
+
+.gr-album__duo .gr-album__section-title + .gr-album__row {
+  padding-top: calc(1px * var(--gr-scale));
+}
+
+.gr-album__duo .gr-album__section-title {
+  margin-top: calc(3px * var(--gr-scale));
+}
+
+.gr-album__card-kills {
+  font-size: calc(11px * var(--gr-scale));
+  color: #a8d4e4;
+}
+
+/* Etiqueta do papel do inimigo: a cor já diz o tipo de problema que ele dá. */
+.gr-album__tagchip {
+  font-size: calc(10px * var(--gr-scale));
+  font-weight: bold;
+  letter-spacing: calc(1px * var(--gr-scale));
+  align-self: center;
+  color: #dff2fb;
+  background: rgba(13, 74, 100, 0.9);
+  border: calc(1px * var(--gr-scale)) solid rgba(117, 223, 244, 0.5);
+  border-radius: calc(6px * var(--gr-scale));
+  padding: calc(3px * var(--gr-scale)) calc(10px * var(--gr-scale));
+}
+
+.gr-album__tagchip--fast {
+  color: #cfeaff;
+  background: rgba(18, 88, 140, 0.9);
+  border-color: rgba(128, 200, 255, 0.6);
+}
+
+.gr-album__tagchip--armored {
+  color: #ffe9c2;
+  background: rgba(92, 68, 24, 0.85);
+  border-color: rgba(255, 214, 130, 0.55);
+}
+
+.gr-album__tagchip--elite {
+  color: #e6d2ff;
+  background: rgba(62, 32, 104, 0.9);
+  border-color: rgba(192, 166, 255, 0.6);
+}
+
+.gr-album__tagchip--boss {
+  color: #ffe0e4;
+  background: rgba(116, 22, 48, 0.9);
+  border-color: rgba(255, 122, 138, 0.7);
+}
+
+.gr-album__sheet--boss {
+  border-color: rgba(255, 111, 121, 0.6);
+  box-shadow: 0 0 calc(28px * var(--gr-scale)) rgba(255, 111, 121, 0.2);
+}
+
+.gr-album__sheet--empty {
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  gap: calc(10px * var(--gr-scale));
+}
+
+.gr-album__duo {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: calc(8px * var(--gr-scale));
+  align-items: start;
+}
+
+.gr-album__ability {
+  margin: 0;
+  font-size: calc(11px * var(--gr-scale));
+  line-height: 1.35;
+  color: #d7eef8;
+}
+
+.gr-album__kills {
+  display: flex;
+  align-items: center;
+  gap: calc(10px * var(--gr-scale));
+  background: rgba(2, 24, 38, 0.65);
+  border: calc(1px * var(--gr-scale)) solid rgba(21, 129, 163, 0.45);
+  border-radius: calc(12px * var(--gr-scale));
+  padding: calc(7px * var(--gr-scale)) calc(11px * var(--gr-scale));
+}
+
+.gr-album__kills-art {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+}
+
+.gr-album__kills .gr-hint {
+  margin-left: auto;
+  text-align: right;
+}
+
+/* A dica é a linha acionável da ficha: o que levar para enfrentar esta ameaça. */
+.gr-album__tip {
+  display: flex;
+  align-items: center;
+  gap: calc(10px * var(--gr-scale));
+  background: rgba(46, 40, 8, 0.5);
+  border: calc(1px * var(--gr-scale)) solid rgba(255, 229, 128, 0.45);
+  border-radius: calc(12px * var(--gr-scale));
+  padding: calc(8px * var(--gr-scale)) calc(11px * var(--gr-scale));
+  font-size: calc(12px * var(--gr-scale));
+  line-height: 1.35;
+  color: #f4e7c2;
+}
+
+.gr-album__tip-copy {
+  display: grid;
+  gap: calc(2px * var(--gr-scale));
+}
+
+.gr-album__tip .gr-album__section-title {
+  color: var(--gr-pearl);
+}
+
 /* Num canvas estreito o álbum vira uma coluna só: cartas em cima, ficha embaixo. */
 @container (max-width: 620px) {
   .gr-album__layout {
@@ -1973,9 +2116,14 @@
     grid-template-columns: minmax(0, 1fr);
   }
 
-  .gr-album__grid {
+  .gr-album__grid,
+  .gr-album__grid--wide {
     grid-template-columns: repeat(2, minmax(0, 1fr));
     overflow: visible;
+  }
+
+  .gr-album__duo {
+    grid-template-columns: minmax(0, 1fr);
   }
 
   .gr-album__sheet {

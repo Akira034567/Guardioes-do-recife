@@ -334,10 +334,17 @@ test("opens the reef album, the bestiary and the settings from the map", async (
   await page.getByTestId("map-bestiary").click();
   await expect(page.getByTestId("bestiary-panel")).toBeVisible();
   await expect(page.getByTestId("bestiary-card-tidebreaker")).toHaveAttribute("data-state", "unknown");
+  await expect(page.getByTestId("bestiary-card-tidebreaker")).toBeDisabled();
   await expect(page.getByTestId("bestiary-card-swimmer")).toHaveAttribute("data-state", "seen");
   await page.getByTestId("bestiary-card-swimmer").click();
   await expect(page.getByTestId("enemy-page")).toHaveAttribute("data-enemy", "swimmer");
-  await page.getByTestId("enemy-back").click();
+  await expect(page.getByTestId("enemy-tip")).toContainText("contra ele");
+
+  // O filtro esconde quem não interessa e some com a ficha quando nada sobra catalogado.
+  await page.getByTestId("bestiary-filter-boss").click();
+  await expect(page.getByTestId("bestiary-card-swimmer")).toHaveCount(0);
+  await expect(page.getByTestId("bestiary-card-tidebreaker")).toBeVisible();
+  await page.getByTestId("bestiary-filter-all").click();
   await page.getByTestId("bestiary-back").click();
 
   // Histórias: capítulo não vivido fica em "???" no índice.
