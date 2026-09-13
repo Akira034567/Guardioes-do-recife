@@ -583,6 +583,10 @@ export interface LevelDefinition {
   id: string;
   name: string;
   subtitle: string;
+  /** Duas ou três linhas sobre o lugar, para a tela de preparação. */
+  briefing?: string;
+  /** A frase do Recife que fecha o briefing, sem as aspas (a tela as desenha). */
+  quote?: string;
   /** Textura de fundo pintada; ausente = fundo procedural desenhado a partir da rota. */
   backgroundKey?: string;
   theme: LevelTheme;

@@ -12,6 +12,9 @@ export const RECIFE_THREE: LevelDefinition = {
   id: "recife-3",
   name: "Três Redemoinhos",
   subtitle: "Peixes-Agulha e a Moreia Sombria",
+  briefing:
+    "Três correntes se encontram neste trecho do Recife, criando redemoinhos que confundem os cardumes. A Maré Sombria aproveita o caos para avançar.",
+  quote: "Onde as águas se cruzam, a vigilância jamais dorme.",
   backgroundKey: LEVEL_BACKGROUND_KEYS["recife-3"],
   theme: { water: 0x0f5f86, sand: 0x7cb4c4, path: 0xa5f1ff, rock: 0x27495f },
   startingPearls: ECONOMY.startingPearls + 80,

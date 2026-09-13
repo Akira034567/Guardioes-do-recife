@@ -26,6 +26,27 @@
   pointer-events: auto;
 }
 
+/* Pictogramas SVG inline (`ui/dom/icons.ts`): herdam a cor do texto e escalam com a interface. */
+.gr-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: calc(16px * var(--gr-scale));
+  height: calc(16px * var(--gr-scale));
+}
+
+.gr-icon--lg {
+  width: calc(26px * var(--gr-scale));
+  height: calc(26px * var(--gr-scale));
+}
+
+.gr-icon svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
 .gr-screen {
   position: absolute;
   inset: 0;
@@ -634,4 +655,709 @@
 /* A silhueta precisa vencer o filtro de sombra do retrato. */
 .gr-enemy-art.gr-node__art--unknown {
   filter: brightness(0) opacity(0.45);
+}
+
+/* ---------------------------------------------------------------- preparação da fase */
+
+/*
+ * A tela de preparação foge do cartão central das outras: ela ocupa a tela inteira, com a arte da
+ * fase ao fundo, o lugar à esquerda (arte, briefing, números, objetivos e chefe) e as escolhas à
+ * direita (dificuldade, ameaças e esquadrão). Informação de um lado, decisão do outro.
+ */
+.gr-screen[data-screen="preparation"] {
+  display: block;
+  container-type: inline-size;
+  padding: 0;
+  background: #02141f;
+  backdrop-filter: none;
+}
+
+.gr-prep__backdrop {
+  position: absolute;
+  inset: 0;
+  background-size: cover;
+  background-position: center;
+  filter: blur(calc(3px * var(--gr-scale))) saturate(1.2);
+  opacity: 0.78;
+}
+
+/* Escurece o fundo o bastante para o texto dos painéis ganhar dele em qualquer fase. */
+.gr-prep__backdrop::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(circle at 50% 40%, rgba(3, 32, 50, 0.42), rgba(1, 12, 20, 0.88));
+}
+
+.gr-prep__layout {
+  position: relative;
+  height: 100%;
+  min-height: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: calc(10px * var(--gr-scale));
+  padding: calc(12px * var(--gr-scale)) calc(18px * var(--gr-scale)) calc(14px * var(--gr-scale));
+}
+
+/* ---- topo: voltar ao mapa e a marca */
+
+.gr-prep__top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: calc(12px * var(--gr-scale));
+}
+
+.gr-prep__back {
+  display: inline-flex;
+  align-items: center;
+  gap: calc(8px * var(--gr-scale));
+  font: inherit;
+  font-weight: bold;
+  font-size: calc(15px * var(--gr-scale));
+  letter-spacing: calc(0.5px * var(--gr-scale));
+  color: var(--gr-shell);
+  background: none;
+  border: 0;
+  padding: calc(6px * var(--gr-scale)) calc(4px * var(--gr-scale));
+  cursor: pointer;
+  transition: color 120ms ease, transform 120ms ease;
+}
+
+.gr-prep__back:hover,
+.gr-prep__back:focus-visible {
+  color: var(--gr-cyan);
+  transform: translateX(calc(-2px * var(--gr-scale)));
+}
+
+.gr-prep__brand {
+  display: grid;
+  justify-items: end;
+  line-height: 1;
+  text-align: right;
+}
+
+.gr-prep__brand-name {
+  font-family: "Arial Black", "Arial", sans-serif;
+  font-size: calc(19px * var(--gr-scale));
+  letter-spacing: calc(0.5px * var(--gr-scale));
+  color: #f2fbff;
+  text-shadow: 0 calc(2px * var(--gr-scale)) calc(10px * var(--gr-scale)) rgba(0, 20, 34, 0.8);
+}
+
+.gr-prep__brand-wave {
+  display: block;
+  width: calc(96px * var(--gr-scale));
+  margin-top: calc(2px * var(--gr-scale));
+}
+
+.gr-prep__brand-wave svg {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.gr-prep__brand-tag {
+  margin-top: calc(4px * var(--gr-scale));
+  font-family: "Georgia", "Times New Roman", serif;
+  font-style: italic;
+  font-size: calc(11px * var(--gr-scale));
+  color: #bfe8f7;
+}
+
+/* ---- corpo em duas colunas */
+
+.gr-prep__body {
+  flex: 1 1 auto;
+  display: grid;
+  grid-template-columns: minmax(0, 1.22fr) minmax(0, 1fr);
+  gap: calc(12px * var(--gr-scale));
+  align-items: start;
+  min-height: 0;
+}
+
+.gr-prep__main {
+  width: auto;
+  max-height: 100%;
+  overflow-y: auto;
+  gap: calc(10px * var(--gr-scale));
+  padding: calc(12px * var(--gr-scale));
+}
+
+.gr-prep__side {
+  display: flex;
+  flex-direction: column;
+  gap: calc(10px * var(--gr-scale));
+  min-width: 0;
+  max-height: 100%;
+  overflow-y: auto;
+}
+
+/* Barra de rolagem discreta: as colunas só rolam quando a fase tem conteúdo demais. */
+.gr-prep__main,
+.gr-prep__side,
+.gr-prep__roster {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(117, 223, 244, 0.45) transparent;
+}
+
+/* ---- cabeçalho da fase, com a arte do mapa esmaecendo para a esquerda */
+
+.gr-prep__hero {
+  position: relative;
+  border-radius: calc(12px * var(--gr-scale));
+  overflow: hidden;
+  padding: calc(14px * var(--gr-scale)) calc(16px * var(--gr-scale));
+  min-height: calc(146px * var(--gr-scale));
+  border: calc(1px * var(--gr-scale)) solid rgba(21, 129, 163, 0.45);
+  background: linear-gradient(120deg, rgba(4, 32, 50, 0.95), rgba(8, 60, 88, 0.6));
+}
+
+.gr-prep__hero-art {
+  position: absolute;
+  inset: 0;
+  background-size: cover;
+  background-position: right center;
+}
+
+/* O véu apaga a arte da esquerda para o texto ganhar dela, e a solta à direita. */
+.gr-prep__hero-art::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(100deg, rgba(4, 32, 50, 0.97) 24%, rgba(4, 32, 50, 0.72) 48%, rgba(4, 32, 50, 0.08) 82%);
+}
+
+.gr-prep__hero-copy {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: calc(5px * var(--gr-scale));
+  max-width: 64%;
+}
+
+.gr-prep__hero .gr-title {
+  font-size: calc(34px * var(--gr-scale));
+  text-shadow: 0 calc(3px * var(--gr-scale)) calc(12px * var(--gr-scale)) rgba(0, 14, 24, 0.85);
+}
+
+.gr-prep__hero .gr-subtitle {
+  font-size: calc(15px * var(--gr-scale));
+  font-weight: bold;
+}
+
+.gr-prep__briefing {
+  margin: calc(2px * var(--gr-scale)) 0 0;
+  font-size: calc(12px * var(--gr-scale));
+  line-height: 1.45;
+  color: #d7eef8;
+}
+
+.gr-prep__quote {
+  margin: calc(2px * var(--gr-scale)) 0 0;
+  font-family: "Georgia", "Times New Roman", serif;
+  font-style: italic;
+  font-size: calc(13px * var(--gr-scale));
+  line-height: 1.35;
+  color: var(--gr-cyan);
+}
+
+/* ---- os quatro números da fase */
+
+.gr-prep__stats {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: calc(8px * var(--gr-scale));
+}
+
+.gr-prep__stat {
+  display: flex;
+  align-items: center;
+  gap: calc(9px * var(--gr-scale));
+  background: rgba(2, 28, 44, 0.62);
+  border: calc(1px * var(--gr-scale)) solid rgba(21, 129, 163, 0.4);
+  border-radius: calc(10px * var(--gr-scale));
+  padding: calc(8px * var(--gr-scale)) calc(9px * var(--gr-scale));
+  min-width: 0;
+}
+
+.gr-prep__stat-text {
+  display: grid;
+  min-width: 0;
+}
+
+.gr-prep__stat .gr-stat__label {
+  font-size: calc(9px * var(--gr-scale));
+  letter-spacing: calc(0.4px * var(--gr-scale));
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ---- blocos com título (objetivos, dificuldade, ameaças, esquadrão) */
+
+.gr-prep__block {
+  display: flex;
+  flex-direction: column;
+  gap: calc(8px * var(--gr-scale));
+  background: rgba(3, 30, 47, 0.72);
+  border: calc(1px * var(--gr-scale)) solid rgba(21, 129, 163, 0.45);
+  border-radius: calc(12px * var(--gr-scale));
+  padding: calc(10px * var(--gr-scale)) calc(12px * var(--gr-scale));
+}
+
+.gr-prep__block-title {
+  display: flex;
+  align-items: center;
+  gap: calc(8px * var(--gr-scale));
+  margin: 0;
+  font-size: calc(13px * var(--gr-scale));
+  font-weight: bold;
+  letter-spacing: calc(1px * var(--gr-scale));
+  text-transform: uppercase;
+  color: var(--gr-cyan);
+}
+
+/* ---- objetivos */
+
+.gr-prep__block .gr-objective {
+  gap: calc(9px * var(--gr-scale));
+}
+
+.gr-prep__block .gr-objective__mark {
+  width: calc(17px * var(--gr-scale));
+  height: calc(17px * var(--gr-scale));
+  flex: none;
+  color: rgba(180, 226, 244, 0.55);
+}
+
+.gr-prep__block .gr-objective--done .gr-objective__mark {
+  color: var(--gr-pearl);
+}
+
+.gr-prep__block .gr-objective__mark svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.gr-objective__text {
+  flex: 1 1 auto;
+}
+
+.gr-prep__reward {
+  display: inline-flex;
+  align-items: center;
+  gap: calc(5px * var(--gr-scale));
+  flex: none;
+  font-size: calc(12px * var(--gr-scale));
+  font-weight: bold;
+  color: var(--gr-pearl);
+}
+
+.gr-prep__reward--done {
+  font-size: calc(10px * var(--gr-scale));
+  letter-spacing: calc(1px * var(--gr-scale));
+  text-transform: uppercase;
+  color: var(--gr-success);
+}
+
+/* ---- chefe */
+
+.gr-prep__boss {
+  display: flex;
+  align-items: center;
+  gap: calc(12px * var(--gr-scale));
+  border-radius: calc(12px * var(--gr-scale));
+  padding: calc(8px * var(--gr-scale)) calc(12px * var(--gr-scale));
+  border: calc(1px * var(--gr-scale)) solid rgba(255, 111, 121, 0.45);
+  background: linear-gradient(100deg, rgba(46, 18, 62, 0.92), rgba(92, 22, 48, 0.85));
+  box-shadow: inset 0 0 calc(28px * var(--gr-scale)) rgba(180, 80, 255, 0.18);
+}
+
+.gr-prep__boss-art {
+  width: calc(94px * var(--gr-scale));
+  height: calc(70px * var(--gr-scale));
+  object-fit: contain;
+  flex: none;
+  filter: drop-shadow(0 calc(4px * var(--gr-scale)) calc(10px * var(--gr-scale)) rgba(0, 0, 0, 0.5));
+}
+
+.gr-prep__boss-copy {
+  display: flex;
+  flex-direction: column;
+  gap: calc(3px * var(--gr-scale));
+  min-width: 0;
+}
+
+.gr-prep__boss-name {
+  font-family: "Arial Black", "Arial", sans-serif;
+  font-size: calc(20px * var(--gr-scale));
+  color: #ffe9ec;
+}
+
+.gr-prep__boss-line {
+  font-size: calc(11px * var(--gr-scale));
+  line-height: 1.35;
+  color: #f0c9d4;
+}
+
+/* ---- dificuldade */
+
+.gr-prep__choices {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: calc(8px * var(--gr-scale));
+}
+
+.gr-prep__choice {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: calc(7px * var(--gr-scale));
+  text-align: center;
+  font: inherit;
+  color: inherit;
+  background: rgba(2, 24, 38, 0.72);
+  border: calc(2px * var(--gr-scale)) solid rgba(21, 129, 163, 0.45);
+  border-radius: calc(12px * var(--gr-scale));
+  padding: calc(12px * var(--gr-scale)) calc(6px * var(--gr-scale));
+  cursor: pointer;
+  transition: border-color 120ms ease, transform 120ms ease, box-shadow 120ms ease;
+}
+
+.gr-prep__choice:hover,
+.gr-prep__choice:focus-visible {
+  border-color: var(--gr-accent);
+  transform: translateY(calc(-2px * var(--gr-scale)));
+}
+
+.gr-prep__choice--on {
+  border-color: var(--gr-accent);
+  background: rgba(2, 24, 38, 0.92);
+  box-shadow: 0 0 calc(18px * var(--gr-scale)) color-mix(in srgb, var(--gr-accent) 38%, transparent), inset 0 0 calc(20px * var(--gr-scale)) color-mix(in srgb, var(--gr-accent) 12%, transparent);
+}
+
+.gr-prep__choice-name {
+  font-family: "Arial Black", "Arial", sans-serif;
+  font-size: calc(14px * var(--gr-scale));
+  letter-spacing: calc(0.5px * var(--gr-scale));
+}
+
+.gr-prep__choice--on .gr-prep__choice-name {
+  color: var(--gr-accent);
+  text-decoration: underline;
+  text-underline-offset: calc(3px * var(--gr-scale));
+}
+
+.gr-prep__choice-pitch {
+  font-size: calc(11px * var(--gr-scale));
+  line-height: 1.3;
+  color: #a8d4e4;
+}
+
+.gr-prep__locked {
+  display: flex;
+  align-items: center;
+  gap: calc(10px * var(--gr-scale));
+  background: rgba(2, 24, 38, 0.8);
+  border: calc(2px * var(--gr-scale)) solid var(--gr-accent);
+  border-radius: calc(12px * var(--gr-scale));
+  padding: calc(9px * var(--gr-scale)) calc(12px * var(--gr-scale));
+}
+
+.gr-prep__locked-copy {
+  display: grid;
+  gap: calc(2px * var(--gr-scale));
+}
+
+.gr-prep__locked .gr-prep__choice-name {
+  color: var(--gr-accent);
+}
+
+/* ---- ameaças conhecidas */
+
+.gr-prep__threats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(calc(74px * var(--gr-scale)), 1fr));
+  gap: calc(6px * var(--gr-scale));
+}
+
+.gr-prep__threat {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: calc(3px * var(--gr-scale));
+  text-align: center;
+  min-width: 0;
+}
+
+.gr-prep__threat-art {
+  width: calc(62px * var(--gr-scale));
+  height: calc(50px * var(--gr-scale));
+  object-fit: contain;
+  filter: drop-shadow(0 calc(3px * var(--gr-scale)) calc(7px * var(--gr-scale)) rgba(0, 0, 0, 0.45));
+}
+
+.gr-prep__threat-art--unknown {
+  filter: brightness(0) opacity(0.45);
+}
+
+.gr-prep__threat-name {
+  font-size: calc(10px * var(--gr-scale));
+  line-height: 1.2;
+  color: #bcdfee;
+}
+
+/* ---- esquadrão */
+
+.gr-prep__squad {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: calc(6px * var(--gr-scale));
+}
+
+.gr-prep__slot {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-end;
+  gap: calc(3px * var(--gr-scale));
+  min-width: 0;
+  font: inherit;
+  color: inherit;
+  text-align: center;
+  background: linear-gradient(180deg, rgba(11, 70, 98, 0.85), rgba(4, 34, 52, 0.9));
+  border: calc(2px * var(--gr-scale)) solid rgba(90, 200, 235, 0.6);
+  border-radius: calc(12px * var(--gr-scale));
+  padding: calc(10px * var(--gr-scale)) calc(4px * var(--gr-scale)) calc(8px * var(--gr-scale));
+}
+
+.gr-prep__slot--empty {
+  border-style: dashed;
+  border-color: rgba(117, 223, 244, 0.45);
+  background: rgba(2, 24, 38, 0.55);
+  color: #8dcbd8;
+  cursor: pointer;
+  justify-content: center;
+  min-height: calc(84px * var(--gr-scale));
+}
+
+.gr-prep__slot--empty:hover:not(:disabled),
+.gr-prep__slot--empty:focus-visible:not(:disabled) {
+  border-color: var(--gr-cyan);
+  color: var(--gr-cyan);
+}
+
+.gr-prep__slot--empty:disabled {
+  cursor: default;
+  opacity: 0.6;
+}
+
+.gr-prep__slot-art {
+  width: calc(58px * var(--gr-scale));
+  height: calc(58px * var(--gr-scale));
+  object-fit: contain;
+  filter: drop-shadow(0 calc(3px * var(--gr-scale)) calc(8px * var(--gr-scale)) rgba(0, 0, 0, 0.45));
+}
+
+.gr-prep__slot-name {
+  font-size: calc(11px * var(--gr-scale));
+  font-weight: bold;
+  color: var(--gr-shell);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}
+
+.gr-prep__slot-remove {
+  position: absolute;
+  top: calc(-7px * var(--gr-scale));
+  right: calc(-7px * var(--gr-scale));
+  width: calc(20px * var(--gr-scale));
+  height: calc(20px * var(--gr-scale));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: calc(4px * var(--gr-scale));
+  color: #e9fbff;
+  background: #0d4a64;
+  border: calc(2px * var(--gr-scale)) solid rgba(160, 220, 240, 0.75);
+  border-radius: 999px;
+  cursor: pointer;
+  transition: background 120ms ease, transform 120ms ease;
+}
+
+.gr-prep__slot-remove:hover,
+.gr-prep__slot-remove:focus-visible {
+  background: #8f2f3c;
+  transform: scale(1.1);
+}
+
+.gr-prep__slot-remove svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.gr-prep__squad-actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.gr-prep__roster-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: calc(8px * var(--gr-scale));
+  font: inherit;
+  font-size: calc(12px * var(--gr-scale));
+  font-weight: bold;
+  color: #e9fbff;
+  background: rgba(13, 74, 100, 0.9);
+  border: calc(2px * var(--gr-scale)) solid var(--gr-line);
+  border-radius: calc(12px * var(--gr-scale));
+  padding: calc(7px * var(--gr-scale)) calc(12px * var(--gr-scale));
+  cursor: pointer;
+  transition: border-color 120ms ease, background 120ms ease;
+}
+
+.gr-prep__roster-toggle:hover,
+.gr-prep__roster-toggle:focus-visible,
+.gr-prep__roster-toggle--on {
+  border-color: var(--gr-cyan);
+  background: var(--gr-panel-soft);
+}
+
+.gr-prep__roster {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(calc(104px * var(--gr-scale)), 1fr));
+  align-content: start;
+  gap: calc(6px * var(--gr-scale));
+  border-top: calc(1px * var(--gr-scale)) solid rgba(21, 129, 163, 0.35);
+  padding-top: calc(8px * var(--gr-scale));
+}
+
+.gr-prep__option {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: calc(2px * var(--gr-scale));
+  text-align: center;
+  min-width: 0;
+  font: inherit;
+  color: inherit;
+  background: rgba(4, 32, 48, 0.66);
+  border: calc(2px * var(--gr-scale)) solid rgba(21, 129, 163, 0.45);
+  border-radius: calc(10px * var(--gr-scale));
+  padding: calc(6px * var(--gr-scale)) calc(4px * var(--gr-scale));
+  cursor: pointer;
+  transition: border-color 120ms ease, transform 120ms ease;
+}
+
+.gr-prep__option:hover:not(:disabled),
+.gr-prep__option:focus-visible:not(:disabled) {
+  border-color: var(--gr-cyan);
+  transform: translateY(calc(-2px * var(--gr-scale)));
+}
+
+.gr-prep__option:disabled {
+  cursor: default;
+  opacity: 0.42;
+}
+
+.gr-prep__option--on {
+  border-color: var(--gr-success);
+  background: rgba(12, 74, 70, 0.6);
+}
+
+.gr-prep__option--locked {
+  cursor: default;
+  gap: calc(4px * var(--gr-scale));
+}
+
+.gr-prep__option-art {
+  width: calc(46px * var(--gr-scale));
+  height: calc(46px * var(--gr-scale));
+  object-fit: contain;
+}
+
+.gr-prep__option-art--locked {
+  filter: brightness(0) opacity(0.45);
+}
+
+.gr-prep__option-name {
+  font-size: calc(11px * var(--gr-scale));
+  font-weight: bold;
+  color: var(--gr-shell);
+}
+
+.gr-prep__option .gr-hint {
+  font-size: calc(9px * var(--gr-scale));
+  line-height: 1.2;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  overflow: hidden;
+}
+
+.gr-prep__option-name {
+  overflow-wrap: anywhere;
+}
+
+/* ---- barra de baixo */
+
+.gr-prep__actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: calc(12px * var(--gr-scale));
+}
+
+.gr-prep__leave,
+.gr-prep__go {
+  display: inline-flex;
+  align-items: center;
+  gap: calc(10px * var(--gr-scale));
+}
+
+.gr-prep__leave {
+  background: rgba(3, 30, 47, 0.85);
+}
+
+.gr-prep__go {
+  font-size: calc(17px * var(--gr-scale));
+  padding: calc(12px * var(--gr-scale)) calc(26px * var(--gr-scale));
+  background: linear-gradient(180deg, #17b4a0, #0e7b8f);
+  border-color: #7dffd4;
+  box-shadow: 0 0 calc(24px * var(--gr-scale)) rgba(103, 242, 172, 0.4);
+}
+
+.gr-prep__go:disabled {
+  box-shadow: none;
+}
+
+/* Num canvas estreito (retrato) duas colunas viram duas fitas: as escolhas descem para baixo. */
+@container (max-width: 620px) {
+  .gr-prep__body {
+    grid-template-columns: minmax(0, 1fr);
+    overflow-y: auto;
+  }
+
+  .gr-prep__main,
+  .gr-prep__side {
+    max-height: none;
+    overflow-y: visible;
+  }
+
+  .gr-prep__hero-copy {
+    max-width: 100%;
+  }
+
+  .gr-prep__stats,
+  .gr-prep__choices {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }

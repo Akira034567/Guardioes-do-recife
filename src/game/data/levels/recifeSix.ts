@@ -12,6 +12,9 @@ export const RECIFE_SIX: LevelDefinition = {
   id: "recife-6",
   name: "Coração do Recife",
   subtitle: "Tudo o que o mar tem para dar",
+  briefing:
+    "O coração do Recife, onde o coral é mais antigo e a água nunca esfria. Se a Maré Negra passar daqui, não sobra recife para defender depois.",
+  quote: "Aqui não se recua: atrás de nós só tem casa.",
   backgroundKey: LEVEL_BACKGROUND_KEYS["recife-6"],
   theme: { water: 0x0b4f78, sand: 0x86a9b0, path: 0xaef0ff, rock: 0x4a3d2c },
   startingPearls: ECONOMY.startingPearls + 160,

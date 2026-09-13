@@ -14,6 +14,10 @@ export interface DifficultyDefinition {
   id: DifficultyId;
   name: string;
   description: string;
+  /** Cor da dificuldade nas telas (o marcador de ondas e a borda do cartão escolhido). */
+  accent: string;
+  /** Uma linha sobre o que muda, para o cartão da tela de preparação. */
+  pitch: string;
   /** Multiplicadores aplicados por cima de `enemyScaling` da fase. */
   enemyHealth: number;
   enemySpeed: number;
@@ -37,6 +41,8 @@ export const DIFFICULTIES: Record<DifficultyId, DifficultyDefinition> = {
     id: "normal",
     name: "Normal",
     description: "O Recife como foi desenhado.",
+    accent: "#5fe0b4",
+    pitch: "Equilíbrio para explorar a fase.",
     enemyHealth: 1,
     enemySpeed: 1,
     enemyCount: 1,
@@ -48,6 +54,8 @@ export const DIFFICULTIES: Record<DifficultyId, DifficultyDefinition> = {
     id: "dificil",
     name: "Difícil",
     description: "Invasores mais resistentes e em maior número; elites aparecem de vez em quando.",
+    accent: "#ffa23c",
+    pitch: "Inimigos mais fortes e mais numerosos.",
     enemyHealth: 1.25,
     enemySpeed: 1.05,
     enemyCount: 1.15,
@@ -59,6 +67,8 @@ export const DIFFICULTIES: Record<DifficultyId, DifficultyDefinition> = {
     id: "abissal",
     name: "Abissal",
     description: "A maré negra: cardumes maiores, elites frequentes e poucas pérolas para começar.",
+    accent: "#c08bff",
+    pitch: "Um verdadeiro teste para os guardiões.",
     enemyHealth: 1.6,
     enemySpeed: 1.12,
     enemyCount: 1.3,

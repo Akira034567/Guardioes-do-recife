@@ -12,6 +12,9 @@ export const RECIFE_TWO: LevelDefinition = {
   id: "recife-2",
   name: "Canal das Algas",
   subtitle: "Cardumes e os primeiros Cascudos",
+  briefing:
+    "As algas altas escondem o canal e o que vem por dentro dele. Cardumes inteiros sobem pelo laço oeste, e atrás deles chegam os primeiros Cascudos.",
+  quote: "Quem se esconde nas algas já decidiu atacar.",
   backgroundKey: LEVEL_BACKGROUND_KEYS["recife-2"],
   theme: { water: 0x0d6b8a, sand: 0x7fb8c7, path: 0x9ff0ff, rock: 0x2b4f66 },
   startingPearls: ECONOMY.startingPearls + 40,

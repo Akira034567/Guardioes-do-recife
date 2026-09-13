@@ -27,6 +27,11 @@ export const LEVEL_BACKGROUND_ASSETS: ReadonlyArray<{ key: string; path: string 
   { key: LEVEL_BACKGROUND_KEYS["recife-6"], path: "assets/levels/recife-six/background.png" },
 ];
 
+/** Caminho do fundo pintado, para as telas em HTML (que usam `<img>`, não textura do Phaser). */
+export function levelBackgroundPath(key: string | undefined): string | null {
+  return LEVEL_BACKGROUND_ASSETS.find((candidate) => candidate.key === key)?.path ?? null;
+}
+
 /**
  * Enfileira o fundo de uma fase (~2 MB cada), se ainda não estiver na memória. É chamado
  * no `preload` da `GameScene`, para o menu abrir sem esperar os seis mapas.

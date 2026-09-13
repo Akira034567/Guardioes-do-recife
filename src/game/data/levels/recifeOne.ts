@@ -10,6 +10,9 @@ export const RECIFE_ONE: LevelDefinition = {
   id: "recife-1",
   name: "Recife Costeiro",
   subtitle: "Peixes invasores e o Quebra-Marés",
+  briefing:
+    "O Recife Costeiro é a água rasa onde tudo começa. A maré trouxe os primeiros invasores e eles vêm pela borda, sem pressa, testando quem ainda mora aqui.",
+  quote: "Toda maré grande começa com uma onda pequena.",
   backgroundKey: RECIFE_ONE_BACKGROUND_KEY,
   theme: { water: 0x0f6f92, sand: 0x7fb8c7, path: 0xa9e6f2, rock: 0x2f5468 },
   startingPearls: ECONOMY.startingPearls,

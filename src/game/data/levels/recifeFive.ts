@@ -13,6 +13,9 @@ export const RECIFE_FIVE: LevelDefinition = {
   id: "recife-5",
   name: "Naufrágio do Galeão",
   subtitle: "Rota curta, pressão máxima",
+  briefing:
+    "O galeão partido deixou um corredor curto e reto atravessando o casco. Pouco tempo de tiro, dois chefes e todos os tipos de invasor misturados.",
+  quote: "O que o mar afundou uma vez, ele volta para levar de novo.",
   backgroundKey: LEVEL_BACKGROUND_KEYS["recife-5"],
   theme: { water: 0x0f5a7d, sand: 0x8aa9a0, path: 0xb8f4ff, rock: 0x5a4630 },
   startingPearls: ECONOMY.startingPearls + 160,

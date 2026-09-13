@@ -12,6 +12,9 @@ export const RECIFE_FOUR: LevelDefinition = {
   id: "recife-4",
   name: "Espiral de Coral",
   subtitle: "Uma corrente empurra, a outra segura",
+  briefing:
+    "O coral cresceu em espiral em volta da ilha central, e a rota acompanha cada volta. Uma corrente empurra no arco de cima; a outra segura no fundo da espiral.",
+  quote: "A espiral não tem atalho: ou se guarda o centro, ou se perde a volta inteira.",
   backgroundKey: LEVEL_BACKGROUND_KEYS["recife-4"],
   theme: { water: 0x115f8f, sand: 0x86b6c6, path: 0xb0f2ff, rock: 0x2c4a63 },
   startingPearls: ECONOMY.startingPearls + 120,
