@@ -1363,9 +1363,10 @@
  * do álbum, a lista de cartas à esquerda e a ficha completa à direita — nada de trocar de tela para
  * ler um Guardião.
  */
-/* O álbum e o bestiário dividem a mesma moldura de tela cheia. */
+/* O álbum, o bestiário e as histórias dividem a mesma moldura de tela cheia. */
 .gr-screen[data-screen="collection"],
-.gr-screen[data-screen="bestiary"] {
+.gr-screen[data-screen="bestiary"],
+.gr-screen[data-screen="story-index"] {
   display: block;
   container-type: inline-size;
   padding: 0;
@@ -1594,6 +1595,16 @@
   width: calc(62px * var(--gr-scale));
   height: calc(62px * var(--gr-scale));
   color: rgba(150, 212, 236, 0.6);
+}
+
+/*
+ * A silhueta precisa vencer o `drop-shadow` das artes do álbum: as duas regras têm a mesma
+ * especificidade, então quem não ganhasse aqui deixaria o item fechado aparecer colorido.
+ */
+.gr-album__art.gr-node__art--unknown,
+.gr-album__banner-art.gr-node__art--unknown,
+.gr-album__voice-art.gr-node__art--unknown {
+  filter: brightness(0) opacity(0.45);
 }
 
 .gr-album__card-lock {
@@ -1962,6 +1973,69 @@
   font-style: italic;
   font-size: calc(13px * var(--gr-scale));
   color: #bfe8f7;
+}
+
+/* ---- histórias: capítulo em andamento, citação e o Guardião que fala nele */
+
+.gr-album__chip--pending {
+  color: #cfe9ff;
+  background: rgba(16, 66, 100, 0.7);
+  border-color: rgba(117, 223, 244, 0.55);
+}
+
+.gr-album__quotebox {
+  margin: 0;
+  background: rgba(2, 24, 38, 0.7);
+  border-left: calc(3px * var(--gr-scale)) solid var(--gr-cyan);
+  border-radius: calc(8px * var(--gr-scale));
+  padding: calc(8px * var(--gr-scale)) calc(12px * var(--gr-scale));
+}
+
+.gr-album__quotebox p {
+  margin: 0;
+  font-family: "Georgia", "Times New Roman", serif;
+  font-style: italic;
+  font-size: calc(12px * var(--gr-scale));
+  line-height: 1.45;
+  color: #dff2fb;
+}
+
+.gr-album__quotebox cite {
+  display: block;
+  margin-top: calc(4px * var(--gr-scale));
+  font-style: normal;
+  font-size: calc(11px * var(--gr-scale));
+  color: var(--gr-cyan);
+}
+
+.gr-album__voice-row {
+  display: flex;
+  align-items: center;
+  gap: calc(9px * var(--gr-scale));
+  padding-top: calc(4px * var(--gr-scale));
+}
+
+.gr-album__voice-art {
+  width: calc(46px * var(--gr-scale));
+  height: calc(46px * var(--gr-scale));
+  object-fit: contain;
+  flex: none;
+}
+
+.gr-album__read {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: calc(10px * var(--gr-scale));
+  margin-top: calc(2px * var(--gr-scale));
+  font-size: calc(15px * var(--gr-scale));
+  background: linear-gradient(180deg, #17b4a0, #0e7b8f);
+  border-color: #7dffd4;
+  box-shadow: 0 0 calc(20px * var(--gr-scale)) rgba(103, 242, 172, 0.35);
+}
+
+.gr-album__read:disabled {
+  box-shadow: none;
 }
 
 /* ---- bestiário: a mesma moldura do álbum, com a grade mais larga e as etiquetas de ameaça */

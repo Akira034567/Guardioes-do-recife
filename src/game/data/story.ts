@@ -1,3 +1,5 @@
+import type { GuardianId } from "../types";
+
 /**
  * Histórias do Recife (item 31). Texto puro, sem Phaser: o visualizador em HTML lê daqui e o save
  * guarda só os ids já vistos. Uma sequência nova é só uma entrada nesta lista.
@@ -21,6 +23,8 @@ export interface StorySequence {
   title: string;
   /** Uma linha curta no índice do menu de histórias. */
   summary: string;
+  /** Guardião que fala neste capítulo; o índice usa a arte dele como capa. */
+  guardianId?: GuardianId;
   trigger: StoryTrigger;
   slides: StorySlide[];
 }
@@ -30,6 +34,7 @@ export const STORY_SEQUENCES: StorySequence[] = [
     id: "abertura",
     title: "A maré que mudou",
     summary: "O dia em que a água do Recife ficou diferente.",
+    guardianId: "pistol-shrimp",
     trigger: { type: "levelIntro", levelId: "recife-1" },
     slides: [
       { text: "O Recife acordou com a água morna e um silêncio que não era dele. Os peixes de sempre tinham ido embora durante a noite." },
@@ -41,6 +46,7 @@ export const STORY_SEQUENCES: StorySequence[] = [
     id: "canal-estreito",
     title: "O canal estreito",
     summary: "A segunda maré traz carapaças que não cedem.",
+    guardianId: "ink-octopus",
     trigger: { type: "levelIntro", levelId: "recife-2" },
     slides: [
       { text: "A primeira maré passou. A segunda veio mais devagar, e isso era pior: o que vem devagar costuma vir preparado." },
@@ -51,6 +57,7 @@ export const STORY_SEQUENCES: StorySequence[] = [
     id: "gruta-fria",
     title: "A gruta fria",
     summary: "Alguma coisa grande se move nas fendas do leste.",
+    guardianId: "jellyfish",
     trigger: { type: "levelIntro", levelId: "recife-3" },
     slides: [
       { text: "As fendas do leste sempre foram território de ninguém. Naquela semana, começaram a soltar bolhas quentes." },
@@ -62,6 +69,7 @@ export const STORY_SEQUENCES: StorySequence[] = [
     id: "espiral",
     title: "A espiral",
     summary: "A correnteza vira um labirinto e o Recife aprende a usá-la.",
+    guardianId: "pufferfish",
     trigger: { type: "levelIntro", levelId: "recife-4" },
     slides: [
       { text: "A corrente passou a girar em espiral, como se a água estivesse procurando alguma coisa no fundo." },
@@ -72,6 +80,7 @@ export const STORY_SEQUENCES: StorySequence[] = [
     id: "naufragio",
     title: "O naufrágio",
     summary: "Um casco velho vira abrigo e armadilha ao mesmo tempo.",
+    guardianId: "reef-crab",
     trigger: { type: "levelIntro", levelId: "recife-5" },
     slides: [
       { text: "O casco está no fundo desde antes de qualquer um deles. Nunca incomodou ninguém. Agora incomoda." },
@@ -82,6 +91,7 @@ export const STORY_SEQUENCES: StorySequence[] = [
     id: "quebra-mares",
     title: "Quebra-Marés",
     summary: "O que estava virando a corrente finalmente aparece.",
+    guardianId: "pistol-shrimp",
     trigger: { type: "levelIntro", levelId: "recife-6" },
     slides: [
       { text: "Não era uma maré. Era uma coisa do tamanho de uma maré, e ela vinha subindo o canal principal." },
@@ -92,6 +102,7 @@ export const STORY_SEQUENCES: StorySequence[] = [
     id: "recife-protegido",
     title: "Água limpa",
     summary: "Depois do Quebra-Marés, o Recife respira.",
+    guardianId: "jellyfish",
     trigger: { type: "levelOutro", levelId: "recife-6" },
     slides: [
       { text: "A corrente voltou ao fluxo de sempre. Levou dois dias até os peixes antigos começarem a reaparecer no canal norte." },

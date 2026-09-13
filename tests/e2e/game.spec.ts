@@ -347,10 +347,22 @@ test("opens the reef album, the bestiary and the settings from the map", async (
   await page.getByTestId("bestiary-filter-all").click();
   await page.getByTestId("bestiary-back").click();
 
-  // Histórias: capítulo não vivido fica em "???" no índice.
+  // Histórias: o capítulo da fase aberta está "em andamento"; o das fases distantes segue fechado.
   await page.getByTestId("map-stories").click();
   await expect(page.getByTestId("story-index")).toBeVisible();
-  await expect(page.getByTestId("story-entry-abertura")).toHaveAttribute("data-state", "locked");
+  await expect(page.getByTestId("story-entry-abertura")).toHaveAttribute("data-state", "pending");
+  await expect(page.getByTestId("story-entry-naufragio")).toHaveAttribute("data-state", "locked");
+  await expect(page.getByTestId("story-entry-naufragio")).toContainText("???");
+
+  // Capítulo não vivido não pode ser lido; a ficha conta onde ele acontece, não o que acontece.
+  await page.getByTestId("story-entry-naufragio").click();
+  await expect(page.getByTestId("story-sheet")).toHaveAttribute("data-story", "naufragio");
+  await expect(page.getByTestId("story-read")).toBeDisabled();
+  await expect(page.getByTestId("story-quote")).toHaveCount(0);
+
+  // O filtro separa o que já foi vivido do resto.
+  await page.getByTestId("story-filter-locked").click();
+  await expect(page.getByTestId("story-entry-abertura")).toHaveCount(0);
   await page.getByTestId("story-index-back").click();
 
   // Configurações: a escolha vale na hora e fica gravada no save.
