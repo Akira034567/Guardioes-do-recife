@@ -909,6 +909,9 @@ export class GameScene extends Phaser.Scene {
             branches: selected.branchStatuses,
             invested: selected.invested,
             sellValue: selected.sellValueAt(ECONOMY.sellRefundRate),
+            damage: selected.stats.damage,
+            range: selected.stats.range,
+            cooldownMs: selected.stats.cooldownMs,
           }
         : null,
       paused: this.clock.paused,
@@ -1038,16 +1041,7 @@ export class GameScene extends Phaser.Scene {
       drawLevelBackdrop(this, this.level);
     }
 
-    this.add
-      .text(26, 88, `${levelIndex(this.level.id) < 0 ? "ENCONTRO" : `RECIFE ${levelIndex(this.level.id) + 1}`}  ·  ${this.level.name.toUpperCase()}`, {
-        fontFamily: "Arial, sans-serif",
-        fontSize: "17px",
-        fontStyle: "bold",
-        color: "#d9f9ff",
-        backgroundColor: "rgba(2, 28, 44, .68)",
-        padding: { x: 12, y: 7 },
-      })
-      .setDepth(DEPTH.effects);
+    // O nome da fase é da `UIScene`: ela desenha a plaquinha no mesmo canto, na pele do HUD.
   }
 
   private createPlatforms(): void {

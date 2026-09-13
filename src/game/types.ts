@@ -704,6 +704,10 @@ export interface SelectedGuardianInfo {
   branches: BranchStatus[];
   invested: number;
   sellValue: number;
+  /** Medidas em vigor (já com os upgrades comprados), para o painel do HUD. */
+  damage: number;
+  range: number;
+  cooldownMs: number;
 }
 
 /** Uma linha da prévia da próxima onda: "🐟 x12" ou "⚠ Elite x1". */
