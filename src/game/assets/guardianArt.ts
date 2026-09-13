@@ -351,3 +351,29 @@ export function solidBounds(scene: Phaser.Scene, key: string): PixelBounds | nul
   boundsCache.set(key, bounds);
   return bounds;
 }
+
+/**
+ * Encaixa a arte de uma criatura numa caixa: `solidBounds` acha os pixels visíveis e o recorte mantém
+ * o quadro inteiro, então o deslocamento centraliza só a parte que aparece. As células das tabelas de
+ * arte têm bastante área transparente em volta; sem isto, Guardiões diferentes saem com tamanhos
+ * visuais incoerentes. Usado pelo HUD da partida e pelo hub.
+ */
+export function fitImageToBox(
+  scene: Phaser.Scene,
+  image: Phaser.GameObjects.Image,
+  key: string,
+  centerX: number,
+  centerY: number,
+  boxWidth: number,
+  boxHeight: number,
+): void {
+  const bounds = solidBounds(scene, key);
+  const frame = scene.textures.getFrame(key);
+  const scale = bounds ? Math.min(boxWidth / bounds.width, boxHeight / bounds.height) : Math.min(boxWidth / frame.width, boxHeight / frame.height);
+  const offsetX = bounds ? (bounds.x + bounds.width / 2 - frame.width / 2) * scale : 0;
+  const offsetY = bounds ? (bounds.y + bounds.height / 2 - frame.height / 2) * scale : 0;
+  image.setTexture(key);
+  if (bounds) image.setCrop(bounds.x, bounds.y, bounds.width, bounds.height);
+  else image.setCrop();
+  image.setScale(scale).setPosition(centerX - offsetX, centerY - offsetY);
+}

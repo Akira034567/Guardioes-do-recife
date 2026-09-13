@@ -11,15 +11,12 @@ import { getProgression } from "../systems/progression";
 import { challengeRule } from "../core/progression/challenges";
 import { pendingStory } from "../systems/story";
 import { getScreenHost } from "../ui/dom/host";
-import type { Screen } from "../ui/dom/ScreenHost";
-import { achievementsScreen } from "../ui/dom/screens/AchievementsScreen";
-import { bestiaryScreen } from "../ui/dom/screens/BestiaryScreen";
-import { collectionScreen } from "../ui/dom/screens/CollectionScreen";
+import { openSection, type SectionRouter } from "../ui/dom/sections";
 import { mapScreen } from "../ui/dom/screens/MapScreen";
 import { preparationScreen } from "../ui/dom/screens/PreparationScreen";
-import { settingsScreen } from "../ui/dom/screens/SettingsScreen";
-import { storyIndexScreen, storyScreen } from "../ui/dom/screens/StoryScreen";
-import type { ShellNav, ShellSection } from "../ui/dom/shell";
+import { storyScreen } from "../ui/dom/screens/StoryScreen";
+import type { ShellSection } from "../ui/dom/shell";
+import { transitionTo } from "../systems/sceneTransition";
 import type { GuardianId, LevelDefinition } from "../types";
 
 /**
@@ -59,6 +56,7 @@ export class LevelSelectScene extends Phaser.Scene {
 
     host.push(
       mapScreen(progression, (levelId) => this.progress.isUnlocked(levelId), {
+        onGoHub: () => this.openSection("hub"),
         onPlayLevel: (level) => this.openPreparation(level),
         onPlayEncounter: (encounter) => this.openPreparation(encounter.level, encounter),
         onPlayChallenge: (challenge) => this.openChallenge(challenge),
@@ -81,32 +79,19 @@ export class LevelSelectScene extends Phaser.Scene {
     }
   }
 
-  /**
-   * Abre uma seção do menu por cima do mapa. A pilha nunca passa de duas telas: trocar de seção pelo
-   * menu lateral volta ao mapa e abre a nova, em vez de empilhar mais uma.
-   */
+  /** O roteador compartilhado, com o mapa como raiz desta cena. */
+  private router(): SectionRouter {
+    return {
+      game: this.game,
+      home: "map",
+      isUnlocked: (levelId) => this.progress.isUnlocked(levelId),
+      goHub: () => transitionTo(this, "HubScene"),
+      goMap: () => {},
+    };
+  }
+
   private openSection(section: ShellSection): void {
-    const host = getScreenHost(this.game);
-    while (host.isOpen && host.topId !== "map") host.pop();
-    if (section === "map") return;
-    const progression = getProgression();
-    const back = (): void => this.openSection("map");
-    const nav: ShellNav = {
-      onGoMap: () => this.openSection("map"),
-      onOpenCollection: () => this.openSection("collection"),
-      onOpenBestiary: () => this.openSection("bestiary"),
-      onOpenStories: () => this.openSection("stories"),
-      onOpenAchievements: () => this.openSection("achievements"),
-      onOpenSettings: () => this.openSection("settings"),
-    };
-    const screens: Record<Exclude<ShellSection, "map">, () => Screen> = {
-      collection: () => collectionScreen(progression, back, nav),
-      bestiary: () => bestiaryScreen(progression, back, nav),
-      stories: () => storyIndexScreen(back, nav, (levelId) => this.progress.isUnlocked(levelId)),
-      achievements: () => achievementsScreen(progression, back, nav),
-      settings: () => settingsScreen(back, nav),
-    };
-    host.push(screens[section]());
+    openSection(section, this.router());
   }
 
   /**

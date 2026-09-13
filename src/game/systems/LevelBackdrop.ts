@@ -3,7 +3,7 @@ import { DEPTH, GAME_HEIGHT, GAME_WIDTH, HUD_BOTTOM, HUD_TOP } from "../constant
 import type { LevelDefinition } from "../types";
 
 /** Gerador determinístico simples para espalhar detalhes sem depender de Math.random. */
-function seededRandom(seed: string): () => number {
+export function seededRandom(seed: string): () => number {
   let state = 0;
   for (let index = 0; index < seed.length; index += 1) state = (state * 31 + seed.charCodeAt(index)) >>> 0;
   return () => {
@@ -13,7 +13,7 @@ function seededRandom(seed: string): () => number {
 }
 
 /** Mistura duas cores (0..1) para desenhar camadas opacas sem discos de alpha sobrepostos. */
-function mixColor(base: number, overlay: number, amount: number): number {
+export function mixColor(base: number, overlay: number, amount: number): number {
   const channel = (shift: number): number => {
     const from = (base >> shift) & 0xff;
     const to = (overlay >> shift) & 0xff;

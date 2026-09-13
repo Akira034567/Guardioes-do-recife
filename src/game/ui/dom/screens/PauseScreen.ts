@@ -15,7 +15,7 @@ export interface PauseInfo {
   pearls: number;
 }
 
-/** Menu de pause (item 36): continuar, reiniciar, configurações e sair para o mapa. */
+/** Menu de pause (item 36): continuar, reiniciar, configurações e sair para o Meu Recife. */
 export function pauseScreen(info: PauseInfo, actions: PauseActions): Screen {
   return {
     id: "pause",
@@ -41,7 +41,7 @@ export function pauseScreen(info: PauseInfo, actions: PauseActions): Screen {
             button("CONTINUAR", actions.onResume, { testId: "pause-resume", variant: "primary" }),
             button("CONFIGURAÇÕES", () => host.push(settingsScreen(() => host.pop())), { testId: "pause-settings" }),
             button("REINICIAR FASE", actions.onRestart, { testId: "pause-restart" }),
-            button("SAIR PARA O MAPA", actions.onExit, { testId: "pause-exit" }),
+            button("SAIR PARA O RECIFE", actions.onExit, { testId: "pause-exit" }),
           ),
         ),
       );

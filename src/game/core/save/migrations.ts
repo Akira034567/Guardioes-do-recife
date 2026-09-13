@@ -27,8 +27,22 @@ function fromV1(document: Record<string, unknown>, registry: SanitizeRegistry): 
   };
 }
 
+/**
+ * v2 → v3: nasce o hub "Meu Recife". O Recife entra vazio de propósito; `reconcileReef` planta na
+ * primeira visita, então o layout sai do mesmo lugar para quem migrou e para quem começou agora.
+ */
+function fromV2(document: Record<string, unknown>): Record<string, unknown> {
+  return {
+    ...document,
+    saveVersion: 3,
+    reef: { owned: [], placed: [], nextInstanceId: 1, granted: [], lastSeenStage: 0, residents: [] },
+    migratedFrom: 2,
+  };
+}
+
 export const MIGRATIONS: Record<number, Migration> = {
   1: fromV1,
+  2: fromV2,
 };
 
 /** Aplica as migrações em cadeia a partir de `fromVersion` até a versão alvo. */

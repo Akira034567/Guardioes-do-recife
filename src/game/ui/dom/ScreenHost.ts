@@ -25,6 +25,8 @@ export class ScreenHost {
   private readonly stack: Array<{ screen: Screen; element: HTMLElement }> = [];
 
   private readonly unsubscribeSettings: () => void;
+  /** Quem quer saber qual tela está no topo (o hub pausa a cena quando uma seção o cobre). */
+  private readonly topListeners = new Set<(topId: string | null) => void>();
 
   constructor(private readonly game: Phaser.Game) {
     this.root = document.createElement("div");
@@ -52,6 +54,15 @@ export class ScreenHost {
 
   get topId(): string | null {
     return this.stack.at(-1)?.screen.id ?? null;
+  }
+
+  /**
+   * Avisa quando a tela do topo muda. A cena do hub usa isto para pausar enquanto uma seção está
+   * aberta por cima, em vez de ficar conferindo `topId` a cada quadro.
+   */
+  onTopChanged(listener: (topId: string | null) => void): () => void {
+    this.topListeners.add(listener);
+    return () => this.topListeners.delete(listener);
   }
 
   /** Abre uma tela por cima das outras. */
@@ -84,6 +95,7 @@ export class ScreenHost {
 
   destroy(): void {
     this.clear();
+    this.topListeners.clear();
     this.unsubscribeSettings();
     this.game.scale.off("resize", this.align, this);
     window.removeEventListener("resize", this.align);
@@ -110,6 +122,8 @@ export class ScreenHost {
     const top = this.stack.at(-1);
     const modal = top ? (top.screen.modal ?? true) : false;
     this.game.input.enabled = !modal;
-    this.game.canvas.dataset.overlay = top?.screen.id ?? "";
+    const topId = top?.screen.id ?? null;
+    this.game.canvas.dataset.overlay = topId ?? "";
+    this.topListeners.forEach((listener) => listener(topId));
   }
 }

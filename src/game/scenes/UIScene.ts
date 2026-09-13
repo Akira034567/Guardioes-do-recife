@@ -1,6 +1,6 @@
 import Phaser from "phaser";
 import { enemyFrameKey } from "../assets/enemyArt";
-import { artTextureKey, artTextureKeyForFolder, GUARDIAN_ART, solidBounds } from "../assets/guardianArt";
+import { artTextureKey, artTextureKeyForFolder, fitImageToBox, GUARDIAN_ART, solidBounds } from "../assets/guardianArt";
 import { GAME_HEIGHT, GAME_WIDTH, HUD_BOTTOM, HUD_TOP } from "../constants";
 import { PLACEMENT_HINTS } from "../core/PlacementRules";
 import { ENEMIES, resolveEnemy } from "../data/enemies";
@@ -1093,15 +1093,7 @@ export class UIScene extends Phaser.Scene {
    * mantém o quadro inteiro, então o deslocamento centraliza só a parte que aparece.
    */
   private fitSprite(image: Phaser.GameObjects.Image, key: string, centerX: number, centerY: number, boxWidth: number, boxHeight: number): void {
-    const bounds = solidBounds(this, key);
-    const frame = this.textures.getFrame(key);
-    const scale = bounds ? Math.min(boxWidth / bounds.width, boxHeight / bounds.height) : Math.min(boxWidth / frame.width, boxHeight / frame.height);
-    const offsetX = bounds ? (bounds.x + bounds.width / 2 - frame.width / 2) * scale : 0;
-    const offsetY = bounds ? (bounds.y + bounds.height / 2 - frame.height / 2) * scale : 0;
-    image.setTexture(key);
-    if (bounds) image.setCrop(bounds.x, bounds.y, bounds.width, bounds.height);
-    else image.setCrop();
-    image.setScale(scale).setPosition(centerX - offsetX, centerY - offsetY);
+    fitImageToBox(this, image, key, centerX, centerY, boxWidth, boxHeight);
   }
 
   /** Ícone da carta: a arte `idle` da base recortada aos pixels visíveis e ajustada à caixa pedida. */

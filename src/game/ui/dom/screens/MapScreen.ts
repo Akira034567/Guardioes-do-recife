@@ -20,6 +20,8 @@ import type { Screen, ScreenHost } from "../ScreenHost";
 export type NodeState = "locked" | "available" | "completed" | "perfect";
 
 export interface MapActions {
+  /** Volta para o Meu Recife, a tela inicial. */
+  onGoHub(): void;
   onPlayLevel(level: LevelDefinition): void;
   onPlayEncounter(encounter: EncounterDefinition): void;
   onPlayChallenge(challenge: ChallengeDefinition): void;
@@ -111,6 +113,7 @@ function sidebar(host: ScreenHost, actions: MapActions): HTMLElement {
   return shellSidebar(
     "map",
     {
+      onGoHub: actions.onGoHub,
       onGoMap: () => {},
       onOpenCollection: actions.onOpenCollection,
       onOpenBestiary: actions.onOpenBestiary,
@@ -120,6 +123,8 @@ function sidebar(host: ScreenHost, actions: MapActions): HTMLElement {
     },
     {
       navId: (section) => MAP_NAV_IDS[section],
+      back: actions.onGoHub,
+      backId: "map-back",
       motto: "Força no mar, vida no Recife.",
       footer: h("button", {
         class: "gr-world__reset",

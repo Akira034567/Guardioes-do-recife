@@ -14,3 +14,23 @@ export const DEPTH = {
   effects: 60,
   debug: 100,
 } as const;
+
+/**
+ * Camadas do hub "Meu Recife". Separada de `DEPTH`, que é contrato da partida: o hub tem cenário,
+ * marcos e criaturas onde a fase tem rota, plataformas e projéteis.
+ */
+export const HUB_DEPTH = {
+  water: 0,
+  farReef: 5,
+  bands: 8,
+  midDecor: 12,
+  motes: 16,
+  landmarkGlow: 18,
+  landmark: 20,
+  guardiansBack: 28,
+  guardians: 30,
+  guardiansFront: 34,
+  nearDecor: 40,
+  bubbles: 46,
+  vignette: 50,
+} as const;

@@ -6,10 +6,12 @@ import { BRAND_WAVE, ICONS } from "./icons";
  * o álbum desenham a mesma coluna da esquerda, só mudando qual item está aceso — assim o jogador nunca
  * perde a referência ao trocar de seção.
  */
-export type ShellSection = "map" | "collection" | "bestiary" | "stories" | "achievements" | "settings";
+export type ShellSection = "hub" | "map" | "collection" | "bestiary" | "stories" | "achievements" | "settings";
 
 export interface ShellNav {
-  /** Volta para o mapa (a tela de baixo da pilha). */
+  /** Volta para o Meu Recife, a tela inicial e a casa do jogador. */
+  onGoHub(): void;
+  /** Abre o mapa das fases. */
   onGoMap(): void;
   onOpenCollection(): void;
   onOpenBestiary(): void;
@@ -34,6 +36,7 @@ interface ShellOptions {
 }
 
 const ITEMS: ReadonlyArray<{ section: ShellSection; icon: string; label: string; open: (nav: ShellNav) => void }> = [
+  { section: "hub", icon: ICONS.coral, label: "Meu Recife", open: (nav) => nav.onGoHub() },
   { section: "map", icon: ICONS.compass, label: "Mapa do Recife", open: (nav) => nav.onGoMap() },
   { section: "collection", icon: ICONS.fish, label: "Álbum do Recife", open: (nav) => nav.onOpenCollection() },
   { section: "bestiary", icon: ICONS.spiky, label: "Ameaças", open: (nav) => nav.onOpenBestiary() },
@@ -44,6 +47,7 @@ const ITEMS: ReadonlyArray<{ section: ShellSection; icon: string; label: string;
 
 /** Os nomes que o menu do mapa sempre teve; a tela do mapa continua passando estes. */
 export const MAP_NAV_IDS: Record<ShellSection, string> = {
+  hub: "map-hub",
   map: "map-here",
   collection: "map-collection",
   bestiary: "map-bestiary",

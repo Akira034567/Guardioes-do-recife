@@ -16,6 +16,8 @@ export type UnlockCondition =
   | { type: "secretFound"; secretId: string }
   | { type: "encounterCompleted"; encounterId: string }
   | { type: "achievement"; achievementId: string }
+  | { type: "guardiansUnlocked"; count: number }
+  | { type: "levelsCompleted"; count: number }
   | { type: "purchase"; shells: number };
 
 export interface GuardianUnlockDefinition {

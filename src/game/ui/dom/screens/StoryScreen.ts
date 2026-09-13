@@ -160,9 +160,10 @@ export function storyIndexScreen(onBack: () => void, nav?: ShellNav, isUnlocked:
   };
 }
 
-/** Sem a navegação da moldura, todo item do menu só volta para o mapa. */
+/** Sem a navegação da moldura, todo item do menu só volta para a tela anterior. */
 function fallbackNav(onBack: () => void): ShellNav {
   return {
+    onGoHub: onBack,
     onGoMap: onBack,
     onOpenCollection: onBack,
     onOpenBestiary: onBack,

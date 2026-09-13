@@ -2,7 +2,7 @@
  * Progressão permanente do jogador (item 37). Nunca mistura com o estado de uma partida: o motor
  * (`core/match`) não conhece este documento, e este documento só recebe resultados no fim da partida.
  */
-export const SAVE_VERSION = 2;
+export const SAVE_VERSION = 3;
 
 export type Stars = 0 | 1 | 2 | 3;
 
@@ -35,6 +35,55 @@ export interface GuardianCareer {
   upgrades: number;
 }
 
+/** Teto de peças no Recife: vale na carga E em toda gravação, não só no plantio. */
+export const MAX_PLACED_DECORATIONS = 160;
+
+/** Uma decoração plantada no Recife. Coordenadas em % da área (0–100), como `data/regions.ts`. */
+export interface PlacedDecoration {
+  /** Id da instância, único no save. Sai de um contador (`d1`, `d2`, …), nunca de sorteio. */
+  instanceId: string;
+  /** Id do catálogo (`DecorationDefinition.id`). */
+  defId: string;
+  x: number;
+  y: number;
+  /** Graus, -180..180. */
+  rotation: number;
+  /** Multiplicador sobre o tamanho do catálogo. */
+  scale: number;
+  /** Espelha na horizontal: variedade visual sem arte nova. */
+  flip: boolean;
+  /** Slot do layout que ancorou a peça; null = posição livre (editor futuro). */
+  slotId: string | null;
+}
+
+/**
+ * O hub "Meu Recife". Guarda só o que NÃO dá para derivar do resto do progresso: o que o jogador
+ * possui e onde está plantado. Quais peças estão LIBERADAS é sempre derivado (`core/reef/growth`),
+ * para o save nunca discordar da regra.
+ */
+export interface ReefState {
+  /** Decorações que o jogador possui (concedidas pelo crescimento hoje, compradas amanhã). */
+  owned: string[];
+  placed: PlacedDecoration[];
+  nextInstanceId: number;
+  /** Já concedidas automaticamente: impede reoferecer o que o jogador removeu de propósito. */
+  granted: string[];
+  /** Canteiros que o crescimento já preencheu uma vez. Esvaziar um é decisão do jogador. */
+  servedSlots: string[];
+  /** Último estágio que o jogador viu, para anunciar "o Recife cresceu" uma vez só. */
+  lastSeenStage: number;
+  /** Guardiões escolhidos para nadar no hub; vazio = todos os desbloqueados. */
+  residents: string[];
+}
+
+/**
+ * Um Recife vazio NOVO a cada chamada. Nunca exporte um objeto pronto para ser espalhado: um spread
+ * raso compartilharia os arrays entre todos os perfis, e um save passaria a mexer no outro.
+ */
+export function emptyReef(): ReefState {
+  return { owned: [], placed: [], nextInstanceId: 1, granted: [], servedSlots: [], lastSeenStage: 0, residents: [] };
+}
+
 export interface PlayerProgress {
   saveVersion: typeof SAVE_VERSION;
   profileId: string;
@@ -59,6 +108,8 @@ export interface PlayerProgress {
   /** Guardiões desbloqueados ainda não apresentados ao jogador. */
   pendingUnlockReveals: string[];
   totals: { matches: number; victories: number; defeats: number; kills: number; playTimeMs: number; wavesCleared: number };
+  /** Hub "Meu Recife": o que está plantado e quem mora lá. O crescimento em si é derivado. */
+  reef: ReefState;
 }
 
 /** Ids válidos para descartar lixo de saves antigos ou de conteúdo removido. */
@@ -68,6 +119,8 @@ export interface SanitizeRegistry {
   enemyIds: readonly string[];
   /** Guardiões liberados em um perfil novo. */
   defaultUnlockedGuardians: readonly string[];
+  /** Ids do catálogo de decoração; ausente = sem filtro (testes e ferramentas headless). */
+  decorationIds?: readonly string[];
 }
 
 export const DEFAULT_SETTINGS: PlayerSettings = {
@@ -106,6 +159,8 @@ export function createDefaultProgress(registry: SanitizeRegistry, now: Date): Pl
     completedEncounters: [],
     pendingUnlockReveals: [],
     totals: { matches: 0, victories: 0, defeats: 0, kills: 0, playTimeMs: 0, wavesCleared: 0 },
+    // Perfil novo começa com o Recife vazio; `reconcileReef` planta na primeira visita ao hub.
+    reef: emptyReef(),
   };
 }
 
@@ -191,6 +246,38 @@ export function sanitizeProgress(raw: unknown, registry: SanitizeRegistry, now: 
       };
     }
   }
+  // Recife: instância com id repetido, `defId` fora do catálogo ou número inválido não entra.
+  const rawReef = isRecord(raw.reef) ? raw.reef : {};
+  const reefPlaced: PlacedDecoration[] = [];
+  const seenInstances = new Set<string>();
+  let maxInstance = 0;
+  if (Array.isArray(rawReef.placed)) {
+    for (const entry of rawReef.placed) {
+      if (reefPlaced.length >= MAX_PLACED_DECORATIONS) break;
+      if (!isRecord(entry)) continue;
+      const defId = text(entry.defId, "");
+      if (defId.length === 0) continue;
+      if (registry.decorationIds && !registry.decorationIds.includes(defId)) continue;
+      const instanceId = text(entry.instanceId, "");
+      if (instanceId.length === 0 || seenInstances.has(instanceId)) continue;
+      seenInstances.add(instanceId);
+      const numeric = Number.parseInt(instanceId.replace(/\D+/g, ""), 10);
+      if (Number.isFinite(numeric)) maxInstance = Math.max(maxInstance, numeric);
+      reefPlaced.push({
+        instanceId,
+        defId,
+        x: finite(entry.x, 50, 0, 100),
+        y: finite(entry.y, 50, 0, 100),
+        rotation: finite(entry.rotation, 0, -180, 180),
+        scale: finite(entry.scale, 1, 0.25, 4),
+        flip: bool(entry.flip, false),
+        slotId: typeof entry.slotId === "string" && entry.slotId.length > 0 ? entry.slotId : null,
+      });
+    }
+  }
+  // Invariante que se conserta sozinha: o que está plantado sempre pertence ao jogador.
+  const reefOwned = new Set([...stringList(rawReef.owned, registry.decorationIds), ...reefPlaced.map((item) => item.defId)]);
+
   const currency = isRecord(raw.currency) ? raw.currency : {};
   const settings = isRecord(raw.settings) ? raw.settings : {};
   const tutorial = isRecord(raw.tutorial) ? raw.tutorial : {};
@@ -242,6 +329,17 @@ export function sanitizeProgress(raw: unknown, registry: SanitizeRegistry, now: 
     discoveredSecrets: stringList(raw.discoveredSecrets),
     completedEncounters: stringList(raw.completedEncounters),
     pendingUnlockReveals: stringList(raw.pendingUnlockReveals, registry.guardianIds),
+    reef: {
+      owned: [...reefOwned],
+      placed: reefPlaced,
+      // Um save editado à mão não pode gerar colisão de id: o contador sobe acima do que existe.
+      nextInstanceId: Math.max(Math.floor(finite(rawReef.nextInstanceId, 1, 1)), maxInstance + 1),
+      granted: stringList(rawReef.granted, registry.decorationIds),
+      // Ids de canteiro são internos (não vêm do jogador), então basta limitar a quantidade.
+      servedSlots: stringList(rawReef.servedSlots).slice(0, MAX_PLACED_DECORATIONS),
+      lastSeenStage: Math.floor(finite(rawReef.lastSeenStage, 0, 0, 9)),
+      residents: stringList(rawReef.residents, registry.guardianIds),
+    },
     totals: {
       matches: finite(totals.matches, 0, 0),
       victories: finite(totals.victories, 0, 0),

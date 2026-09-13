@@ -2,6 +2,7 @@ import type { LevelProgressApi } from "../core/LevelProgress";
 import { SaveManager, type SaveStorage } from "../core/save/SaveManager";
 import { ENEMY_ORDER } from "../data/enemies";
 import { GUARDIAN_ORDER } from "../data/guardians";
+import { DECORATION_IDS } from "../data/reef/decorations";
 import { DEFAULT_UNLOCKED_GUARDIANS } from "../data/unlocks";
 import { LEVEL_IDS } from "../data/levels";
 
@@ -19,7 +20,13 @@ function browserStorage(): SaveStorage | null {
 export function getSaveManager(): SaveManager {
   if (!manager) {
     manager = new SaveManager(browserStorage(), {
-      registry: { levelIds: LEVEL_IDS, guardianIds: GUARDIAN_ORDER, enemyIds: ENEMY_ORDER, defaultUnlockedGuardians: DEFAULT_UNLOCKED_GUARDIANS },
+      registry: {
+        levelIds: LEVEL_IDS,
+        guardianIds: GUARDIAN_ORDER,
+        enemyIds: ENEMY_ORDER,
+        defaultUnlockedGuardians: DEFAULT_UNLOCKED_GUARDIANS,
+        decorationIds: DECORATION_IDS,
+      },
     });
   }
   return manager;

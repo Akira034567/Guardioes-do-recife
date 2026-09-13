@@ -34,11 +34,30 @@ export async function openGame(page: Page, query = "level=recife-1") {
   const canvas = page.locator("canvas");
   await expect(canvas).toBeVisible();
   // O boot carrega toda a arte dos Guardiões; cliques antes da cena do jogo existir seriam perdidos.
-  await expect(canvas).toHaveAttribute("data-screen", /game|menu/, { timeout: 15_000 });
+  await expect(canvas).toHaveAttribute("data-screen", /game|menu|hub/, { timeout: 15_000 });
   const box = await canvas.boundingBox();
   if (!box) throw new Error("Canvas bounds unavailable");
   const clickGame = (x: number, y: number) => page.mouse.click(box.x + (x * box.width) / 1280, box.y + (y * box.height) / 720);
   return { canvas, clickGame, pageErrors };
+}
+
+/**
+ * Abre o jogo no Meu Recife, a tela inicial. Os efeitos reduzidos entram semeados no save: a
+ * transição cai para zero e `data-hub-ready` aparece assim que a cena monta, então a espera é
+ * determinística em vez de correr contra um fade.
+ */
+export async function openHub(page: Page, query = "") {
+  await page.addInitScript(() => {
+    const key = "guardioes-do-recife.save";
+    const raw = window.localStorage.getItem(key);
+    const save = raw ? JSON.parse(raw) : { saveVersion: 3 };
+    save.settings = { ...(save.settings ?? {}), reducedEffects: true };
+    window.localStorage.setItem(key, JSON.stringify(save));
+  });
+  const opened = await openGame(page, query);
+  await expect(opened.canvas).toHaveAttribute("data-screen", "hub");
+  await expect(opened.canvas).toHaveAttribute("data-hub-ready", "true", { timeout: 10_000 });
+  return opened;
 }
 
 declare global {

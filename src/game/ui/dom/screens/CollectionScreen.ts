@@ -11,7 +11,7 @@ import { GUARDIAN_UNLOCKS } from "../../../data/unlocks";
 import type { BranchId, GuardianDefinition, GuardianId, InteractableDefinition, LevelDefinition, UpgradeBranch } from "../../../types";
 import { button, h } from "../h";
 import { ICONS } from "../icons";
-import type { Screen, ScreenHost } from "../ScreenHost";
+import type { Screen } from "../ScreenHost";
 import { shellSidebar, type ShellNav } from "../shell";
 
 /** Caminho da imagem de uma variante do Guardião (`base`, `perfuracao-1`, …). */
@@ -24,7 +24,7 @@ function basePortrait(guardianId: GuardianId): string {
   return variantArt(guardianId, GUARDIAN_ART[guardianId].base.folder, "idle");
 }
 
-type AlbumTab = "guardians" | "encounters" | "places" | "treasures";
+export type AlbumTab = "guardians" | "encounters" | "places" | "treasures";
 
 const TABS: ReadonlyArray<{ id: AlbumTab; label: string; icon: string }> = [
   { id: "guardians", label: "Guardiões", icon: ICONS.fish },
@@ -61,16 +61,27 @@ interface AlbumEntry {
  * Álbum do Recife (item 4): tudo o que o jogador já encontrou. Quatro abas — Guardiões, Encontros,
  * Locais e Tesouros —, a lista à esquerda e a ficha completa à direita, sem trocar de tela.
  */
-export function collectionScreen(progression: ProgressionService, onBack: () => void, nav?: ShellNav): Screen {
-  let tab: AlbumTab = "guardians";
-  let chosen: string | null = null;
+/** Onde o álbum abre. O hub usa `focus` para cair direto no Guardião que o jogador clicou no Recife. */
+export interface CollectionOptions {
+  tab?: AlbumTab;
+  focus?: string;
+}
+
+export function collectionScreen(
+  progression: ProgressionService,
+  onBack: () => void,
+  nav?: ShellNav,
+  options: CollectionOptions = {},
+): Screen {
+  let tab: AlbumTab = options.tab ?? "guardians";
+  let chosen: string | null = options.focus ?? null;
   /** Qual quadro a ficha do Guardião está mostrando em "ver em ação". */
   let actionFrame = 0;
   let sheetTab: SheetTab = "info";
 
   return {
     id: "collection",
-    render(host: ScreenHost) {
+    render() {
       const root = h("div", { class: "gr-album", testId: "collection-panel" });
       const art = levelBackgroundPath(LEVELS[0].backgroundKey);
       if (art) root.append(h("div", { class: "gr-world__backdrop", style: `background-image:url(${art})` }));
@@ -78,7 +89,7 @@ export function collectionScreen(progression: ProgressionService, onBack: () => 
       root.append(layout);
 
       const draw = (): void => {
-        const entries = entriesFor(tab, progression, host, {
+        const entries = entriesFor(tab, progression, {
           frame: actionFrame,
           sheetTab,
           onFrame: (next) => {
@@ -89,6 +100,7 @@ export function collectionScreen(progression: ProgressionService, onBack: () => 
             sheetTab = next;
             draw();
           },
+          onChanged: () => draw(),
         });
         const current = entries.find((entry) => entry.id === chosen) ?? entries.find((entry) => entry.found) ?? entries[0];
         const found = entries.filter((entry) => entry.found).length;
@@ -142,6 +154,7 @@ export function collectionScreen(progression: ProgressionService, onBack: () => 
 /** Quando a tela é aberta sem a navegação da moldura, todo item do menu só volta para o mapa. */
 function fallbackNav(onBack: () => void): ShellNav {
   return {
+    onGoHub: onBack,
     onGoMap: onBack,
     onOpenCollection: () => {},
     onOpenBestiary: onBack,
@@ -246,12 +259,14 @@ interface SheetContext {
   sheetTab: SheetTab;
   onFrame(next: number): void;
   onSheetTab(next: SheetTab): void;
+  /** Redesenha a tela no lugar. Trocar por `host.replace` perderia `nav`, aba e foco. */
+  onChanged(): void;
 }
 
-function entriesFor(tab: AlbumTab, progression: ProgressionService, host: ScreenHost, context: SheetContext): AlbumEntry[] {
+function entriesFor(tab: AlbumTab, progression: ProgressionService, context: SheetContext): AlbumEntry[] {
   switch (tab) {
     case "guardians":
-      return guardianEntries(progression, host, context);
+      return guardianEntries(progression, context);
     case "encounters":
       return encounterEntries(progression);
     case "places":
@@ -261,7 +276,7 @@ function entriesFor(tab: AlbumTab, progression: ProgressionService, host: Screen
   }
 }
 
-function guardianEntries(progression: ProgressionService, host: ScreenHost, context: SheetContext): AlbumEntry[] {
+function guardianEntries(progression: ProgressionService, context: SheetContext): AlbumEntry[] {
   const statuses = new Map(progression.unlockStatuses().map((status) => [status.guardianId, status]));
   return GUARDIAN_ORDER.map((guardianId) => {
     const definition = GUARDIANS[guardianId];
@@ -277,7 +292,7 @@ function guardianEntries(progression: ProgressionService, host: ScreenHost, cont
       icon: ICONS.fish,
       hint: (status?.hidden ?? false) ? "Nenhum sinal dele até agora." : (status?.hint ?? ""),
       progress: status?.progress ?? null,
-      sheet: () => guardianSheetPanel(definition, status, progression, host, context, found),
+      sheet: () => guardianSheetPanel(definition, status, progression, context, found),
     };
   });
 }
@@ -378,7 +393,6 @@ function guardianSheetPanel(
   definition: GuardianDefinition,
   status: UnlockStatus | undefined,
   progression: ProgressionService,
-  host: ScreenHost,
   context: SheetContext,
   found: boolean,
 ): HTMLElement {
@@ -419,7 +433,7 @@ function guardianSheetPanel(
               ? button(
                   `${GLOBAL_CURRENCY.symbol} ${status.price}`,
                   () => {
-                    if (progression.buy(definition.id).ok) host.replace(collectionScreen(progression, () => host.pop()));
+                    if (progression.buy(definition.id).ok) context.onChanged();
                   },
                   { testId: `collection-buy-${definition.id}`, disabled: status.state !== "available" },
                 )

@@ -725,7 +725,7 @@ export class GameScene extends Phaser.Scene {
           },
           onExit: () => {
             host.clear();
-            this.openLevelSelect();
+            this.openHub();
           },
         },
       ),
@@ -765,6 +765,12 @@ export class GameScene extends Phaser.Scene {
   private openLevelSelect(prepareLevelId?: string): void {
     this.scene.stop("UIScene");
     this.scene.start("LevelSelectScene", prepareLevelId ? { prepareLevelId } : undefined);
+  }
+
+  /** Sair pelo pause é ir para casa: o Meu Recife. Vencer continua levando ao mapa, para encadear. */
+  private openHub(): void {
+    this.scene.stop("UIScene");
+    this.scene.start("HubScene");
   }
 
   private startNextWave(): void {

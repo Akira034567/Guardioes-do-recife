@@ -80,7 +80,8 @@ Menus são HTML por cima do canvas (`src/game/ui/dom`), alinhados ao jogo e esca
 - **Ameaças do Recife**: bestiário. O inimigo só aparece depois do primeiro encontro, com vida, velocidade, fraquezas, resistências e habilidades; chefes ganham página destacada.
 - **Histórias do Recife**: índice dos capítulos já vividos, com releitura.
 - **Configurações**: volumes, silenciar, efeitos reduzidos, tremor de tela e escala da interface. Tudo grava no save na hora.
-- **Mapa do Recife**: a tela inicial. As seis fases em sequência, com estrelas, e os nós de Encontro pendurados nelas; daqui saem o álbum, o bestiário, as histórias e as configurações.
+- **Meu Recife**: a tela inicial e a casa do jogador (`scenes/HubScene.ts`). Um ambiente subaquático onde os Guardiões encontrados moram de verdade — nadam, reparam no cursor e reagem ao clique. O cenário É a interface: cada lugar leva a uma tela (o arco com o globo abre o mapa, o jardim de corais abre o álbum, a fenda abre as Ameaças, o mastro as Histórias, o pedestal as Conquistas, a boia as Configurações). O nome do lugar aparece num rótulo discreto só na aproximação; em aparelho sem cursor, o primeiro toque mostra o nome e o segundo entra. Clicar num Guardião abre uma ficha pequena com papel, origem e carreira.
+- **Mapa do Recife**: as seis fases em sequência, com estrelas, e os nós de Encontro pendurados nelas. Deixou de ser a tela inicial: agora é uma seção como as outras, com VOLTAR para o Meu Recife.
 - **Menu de pause**: o botão Ⅱ pausa e abre continuar, configurações, reiniciar e sair para o mapa.
 - **Conquistas do Recife**: a lista com barra de progresso, o que já caiu e o que falta.
 
@@ -161,6 +162,7 @@ Uma partida inteira vive em `src/game/core/match/Match.ts`, sem Phaser:
 
 - `F2`: abre ou fecha o modo debug.
 - `?debug=1`: inicia com debug e disponibiliza o botão para dispositivos touch. Em build de produção, F2 só funciona com `?debug=1`.
+- `?screen=map`: abre direto no Mapa do Recife, pulando o Meu Recife.
 - O painel permite alternar rota, alcance, hitboxes, corrente, estados, alvos e áreas de posicionamento separadamente.
 - Ações do painel: +100 pérolas, spawn de inimigo, spawn de elite, pular onda, matar todos e invencibilidade. Elas viram comandos do motor e marcam a partida como testada (`MatchStats.cheated`), para não render progressão.
 
@@ -171,7 +173,9 @@ Uma partida inteira vive em `src/game/core/match/Match.ts`, sem Phaser:
 - `src/game/core/match`: o motor único da partida (`Match`): estado, `tick()` de passo fixo, comandos (`placeGuardian`, `upgradeGuardian`, `sellGuardian`, `startNextWave`), eventos de domínio, `MatchStats`, `MatchClock` (pause e velocidade). Cena e simulação de balanceamento rodam o mesmo motor.
 - `src/game/core/save`: progressão permanente versionada (`PlayerProgress`, `SaveManager`, migrações); nunca se mistura com o estado da partida.
 - `src/game/objects`: views Phaser (`EnemyView`, `GuardianView`, `ProjectileView`, áreas) que só desenham o que o motor diz.
-- `src/game/scenes`: carregamento, menu de fases, apresentação da partida (`GameScene`) e HUD.
+- `src/game/scenes`: carregamento, hub (`HubScene`), menu de fases, apresentação da partida (`GameScene`) e HUD.
+- `src/game/core/reef`: as regras do hub, puras e sem Phaser — crescimento do Recife (`growth.ts`), plantio determinístico (`planting.ts`), comportamento das criaturas (`ReefInhabitant`/`ReefLife`), patente e a costura da moeda (`economy.ts`, ainda sem loja).
+- `src/game/data/reef`: catálogo de decoração, layout do Recife (lugares, canteiros, zonas — tudo em % 0–100) e o comportamento de hub de cada Guardião.
 - `src/game/systems`: `MatchEffects` (evento → efeito/som/mensagem), áudio provisório, overlay de debug, fundo procedural, `ProgressStore`, `settings` e `story`.
 - `src/game/ui/dom`: camada de telas em HTML (`ScreenHost`, `h`, `ui.css`) e as telas de preparação, resultado, coleção, bestiário, histórias, configurações e pause.
 - `src/game/core/progression`: objetivos, estrelas, recompensas, desbloqueios e o `ProgressionService` que aplica o resultado de uma partida.
@@ -188,4 +192,7 @@ Uma partida inteira vive em `src/game/core/match/Match.ts`, sem Phaser:
 - Nova história: uma entrada em `data/story.ts` com o gatilho (`levelIntro`, `levelOutro` ou `manual`); o save guarda só os ids lidos.
 - Nova conquista: uma entrada em `ACHIEVEMENTS` com a medida e a meta; a avaliação e a tela se viram sozinhas.
 - Nova configuração: campo em `PlayerSettings`, padrão em `DEFAULT_SETTINGS`, saneamento em `sanitizeProgress` e a linha na tela de configurações.
+- Guardião novo no Meu Recife: uma entrada em `HUB_BEHAVIORS` (`data/reef/hubBehaviors.ts`) e nada mais — a cena só faz `residents.map(hubBehavior)`, e quem esquecer de cadastrar ganha o comportamento padrão em vez de derrubar o hub.
+- Nova decoração do Recife: uma entrada em `DECORATIONS` (`data/reef/decorations.ts`) com a condição de liberação (a mesma união `UnlockCondition` dos Guardiões) e os tipos de canteiro que a aceitam. A arte é declarada: hoje `{ type: "vector", layers }` desenha com formas do Phaser; quando o PNG existir, troque por `{ type: "sprite", key, path }` e nada mais muda, porque só o renderizador lê `art`. Um canteiro novo entra em `REEF_SLOTS` com o `order` seguinte (a fila precisa ficar sem buraco; `tests/reef-catalog.test.ts` cobra).
+- Campo novo no save: além do tipo, ele PRECISA ser reconstruído em `sanitizeProgress` — a função monta o documento campo a campo, e o que ela não conhece é apagado na gravação seguinte, sem erro nenhum.
 - Nova fase: arquivo em `src/game/data/levels/` e inclusão em `LEVELS`; os testes em `tests/levels.test.ts` validam rota, plataformas, correntes e ondas automaticamente.

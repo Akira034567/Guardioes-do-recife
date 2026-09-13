@@ -50,13 +50,21 @@ const PROGRESS: Record<UnlockCondition["type"], (condition: UnlockCondition, pro
     const achievementId = (condition as Extract<UnlockCondition, { type: "achievement" }>).achievementId;
     return { current: progress.achievements[achievementId]?.unlockedAt ? 1 : 0, target: 1, label: "Conquista" };
   },
+  guardiansUnlocked: (condition, progress) => {
+    const count = (condition as Extract<UnlockCondition, { type: "guardiansUnlocked" }>).count;
+    return { current: progress.unlockedGuardians.length, target: count, label: `${count} Guardiões no Recife` };
+  },
+  levelsCompleted: (condition, progress) => {
+    const count = (condition as Extract<UnlockCondition, { type: "levelsCompleted" }>).count;
+    return { current: progress.completedLevels.length, target: count, label: `${count} fases concluídas` };
+  },
   purchase: (condition, progress) => {
     const shells = (condition as Extract<UnlockCondition, { type: "purchase" }>).shells;
     return { current: progress.currency.shells, target: shells, label: `${shells} Conchas` };
   },
 };
 
-function isSatisfied(condition: UnlockCondition, progress: PlayerProgress): boolean {
+export function isSatisfied(condition: UnlockCondition, progress: PlayerProgress): boolean {
   // A compra nunca se satisfaz sozinha: ela depende do jogador gastar as Conchas.
   if (condition.type === "purchase") return false;
   const status = PROGRESS[condition.type](condition, progress);

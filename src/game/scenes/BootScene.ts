@@ -19,7 +19,10 @@ export class BootScene extends Phaser.Scene {
 
   create(): void {
     this.cameras.main.setBackgroundColor("#052f49");
-    const requestedLevel = getLevel(new URLSearchParams(window.location.search).get("level"));
+    const params = new URLSearchParams(window.location.search);
+    const requestedLevel = getLevel(params.get("level"));
+    // Atalho de desenvolvimento e dos testes: `?screen=map` pula o hub e vai direto para as fases.
+    const requestedScreen = params.get("screen");
     this.add
       .text(GAME_WIDTH / 2, GAME_HEIGHT / 2 - 18, "GUARDIÕES DO RECIFE", {
         fontFamily: "Arial Black, Arial, sans-serif",
@@ -29,7 +32,7 @@ export class BootScene extends Phaser.Scene {
       })
       .setOrigin(0.5);
     this.add
-      .text(GAME_WIDTH / 2, GAME_HEIGHT / 2 + 24, requestedLevel ? `Preparando ${requestedLevel.name}…` : "Carregando fases…", {
+      .text(GAME_WIDTH / 2, GAME_HEIGHT / 2 + 24, requestedLevel ? `Preparando ${requestedLevel.name}…` : "Carregando o Recife…", {
         fontFamily: "Arial, sans-serif",
         fontSize: "17px",
         color: "#75dff4",
@@ -38,7 +41,8 @@ export class BootScene extends Phaser.Scene {
 
     this.time.delayedCall(80, () => {
       if (requestedLevel) this.scene.start("GameScene", { levelId: requestedLevel.id });
-      else this.scene.start("LevelSelectScene");
+      else if (requestedScreen === "map") this.scene.start("LevelSelectScene");
+      else this.scene.start("HubScene");
     });
   }
 }

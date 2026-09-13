@@ -206,7 +206,7 @@ test("skips wave preparation by keyboard and button", async ({ page }) => {
 test("level select only opens unlocked levels", async ({ page }) => {
   const pageErrors: string[] = [];
   page.on("pageerror", (error) => pageErrors.push(error.message));
-  await page.goto("/");
+  await page.goto("/?screen=map");
   const canvas = page.locator("canvas");
   await expect(canvas).toBeVisible();
   await expect(canvas).toHaveAttribute("data-screen", "menu");
@@ -272,11 +272,11 @@ test("migrates an old save so existing players keep their levels", async ({ page
   await page.addInitScript(() => {
     window.localStorage.setItem("guardioes-do-recife.progress.v1", JSON.stringify({ completed: ["recife-1", "recife-2"] }));
   });
-  const { canvas, pageErrors } = await openGame(page, "");
+  const { canvas, pageErrors } = await openGame(page, "screen=map");
   await expect(canvas).toHaveAttribute("data-screen", "menu");
   await expect(canvas).toHaveAttribute("data-unlocked-levels", "3");
   const saved = await page.evaluate(() => JSON.parse(window.localStorage.getItem("guardioes-do-recife.save") ?? "{}"));
-  expect(saved.saveVersion).toBe(2);
+  expect(saved.saveVersion).toBe(3);
   expect(saved.completedLevels).toEqual(["recife-1", "recife-2"]);
   expect(saved.levelStars["recife-1"].stars).toBe(1);
   expect(saved.currency.shells).toBeGreaterThan(0);
@@ -297,7 +297,7 @@ test("opens the reef album, the bestiary and the settings from the map", async (
       }),
     );
   });
-  const { canvas, pageErrors } = await openGame(page, "");
+  const { canvas, pageErrors } = await openGame(page, "screen=map");
   await expect(canvas).toHaveAttribute("data-screen", "menu");
 
   // Álbum do Recife: os cinco fundadores aparecem; o Peixe-Pedra segue oculto em "???".
@@ -425,7 +425,7 @@ test("rescues a guardian in an encounter and adds him to the collection", async 
       JSON.stringify({ saveVersion: 2, completedLevels: ["recife-1", "recife-2", "recife-3"], storyProgress: { seen: ["abertura"] } }),
     );
   });
-  const { canvas, clickGame, pageErrors } = await openGame(page, "");
+  const { canvas, clickGame, pageErrors } = await openGame(page, "screen=map");
   await expect(page.getByTestId("map-node-rede-fantasma")).toHaveAttribute("data-state", "available");
   await page.getByTestId("map-node-rede-fantasma").click();
   await expect(page.getByTestId("map-detail")).toHaveAttribute("data-kind", "encounter");
@@ -461,7 +461,7 @@ test("tracks achievements and offers the rotating challenges", async ({ page }) 
       }),
     );
   });
-  const { canvas, pageErrors } = await openGame(page, "");
+  const { canvas, pageErrors } = await openGame(page, "screen=map");
   await expect(canvas).toHaveAttribute("data-screen", "menu");
 
   // As conquistas são recalculadas ao abrir o mapa: um perfil com histórico não vê a lista zerada.

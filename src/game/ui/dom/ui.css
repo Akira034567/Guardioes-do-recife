@@ -2148,9 +2148,25 @@
 #ui-layer[data-contrast="high"] .gr-world__nav-item,
 #ui-layer[data-contrast="high"] .gr-world__block,
 #ui-layer[data-contrast="high"] .gr-prep__block,
+#ui-layer[data-contrast="high"] .gr-hub__counter,
+#ui-layer[data-contrast="high"] .gr-hub__tag,
+#ui-layer[data-contrast="high"] .gr-hub__card,
 #ui-layer[data-contrast="high"] .gr-panel {
   background: #021b2b;
   border-color: #7fd7f0;
+}
+
+/*
+ * No hub o fundo é o próprio Recife, desenhado pelo Phaser: não dá para baixar a opacidade dele
+ * como nas outras telas. Um véu por cima resolve — o Recife continua visível e o texto para de
+ * competir com o cenário.
+ */
+#ui-layer[data-contrast="high"] .gr-hub::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: rgba(1, 10, 18, 0.55);
+  pointer-events: none;
 }
 
 #ui-layer[data-contrast="high"] .gr-world__backdrop,
@@ -3247,5 +3263,281 @@
   .gr-prep__stats,
   .gr-prep__choices {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+/* ---- Meu Recife (hub) ------------------------------------------------------------------------
+ * O cenário é a interface: esta camada só carrega texto e os atalhos de teclado. As três regras da
+ * raiz são obrigatórias — sem `pointer-events: none` ela engoliria TODO clique do canvas (por causa
+ * de `#ui-layer > * { pointer-events: auto }`), e sem anular o fundo e o desfoque de `.gr-screen` o
+ * Recife apareceria borrado e lavado.
+ */
+/*
+ * O seletor PRECISA do `#ui-layer >`: `#ui-layer > * { pointer-events: auto }` carrega um id e
+ * venceria qualquer regra só de classe. Sem isto a camada do hub engole todo clique do Recife — e
+ * sem erro nenhum no console, o que torna o sintoma difícil de achar.
+ */
+#ui-layer > .gr-screen[data-screen="hub"] {
+  display: block;
+  padding: 0;
+  background: none;
+  backdrop-filter: none;
+  pointer-events: none;
+  container-type: inline-size;
+}
+
+.gr-hub {
+  position: absolute;
+  inset: 0;
+}
+
+.gr-hub__counters,
+.gr-hub__card,
+.gr-hub__spot {
+  pointer-events: auto;
+}
+
+/*
+ * `display: grid` nas caixas abaixo venceria o `display: none` que o navegador dá a `[hidden]`, e a
+ * ficha vazia ficaria à mostra no canto. Esta regra devolve o comportamento esperado.
+ */
+.gr-hub__tag[hidden],
+.gr-hub__card[hidden] {
+  display: none;
+}
+
+.gr-hub__counters {
+  position: absolute;
+  top: calc(16px * var(--gr-scale));
+  right: calc(18px * var(--gr-scale));
+  display: flex;
+  gap: calc(10px * var(--gr-scale));
+}
+
+.gr-hub__counter {
+  display: flex;
+  align-items: center;
+  gap: calc(6px * var(--gr-scale));
+  padding: calc(6px * var(--gr-scale)) calc(12px * var(--gr-scale));
+  border-radius: 999px;
+  background: rgba(3, 29, 45, 0.72);
+  border: 1px solid rgba(21, 129, 163, 0.55);
+  font-size: calc(13px * var(--gr-scale));
+  font-weight: bold;
+  color: var(--gr-shell);
+}
+
+.gr-hub__counter-value {
+  letter-spacing: calc(0.5px * var(--gr-scale));
+}
+
+/* O rótulo do lugar: aparece na aproximação e some quando o cursor sai. */
+.gr-hub__tag {
+  position: absolute;
+  transform: translate(-50%, -130%);
+  display: grid;
+  justify-items: center;
+  gap: calc(2px * var(--gr-scale));
+  padding: calc(7px * var(--gr-scale)) calc(14px * var(--gr-scale));
+  border-radius: calc(10px * var(--gr-scale));
+  background: rgba(2, 20, 31, 0.86);
+  border: 1px solid rgba(117, 223, 244, 0.45);
+  box-shadow: 0 calc(4px * var(--gr-scale)) calc(16px * var(--gr-scale)) rgba(0, 8, 16, 0.55);
+  white-space: nowrap;
+  pointer-events: none;
+  animation: gr-fade 140ms ease-out;
+}
+
+.gr-hub__tag-name {
+  font-size: calc(14px * var(--gr-scale));
+  font-weight: bold;
+  letter-spacing: calc(1px * var(--gr-scale));
+  text-transform: uppercase;
+  color: var(--gr-cyan);
+}
+
+.gr-hub__tag-hint {
+  font-size: calc(11px * var(--gr-scale));
+  color: #9fd0e2;
+}
+
+.gr-hub__tag[data-armed="true"] {
+  border-color: var(--gr-pearl);
+}
+
+/* A ficha do Guardião: pequena, num canto, para não tapar o Recife. */
+.gr-hub__card {
+  position: absolute;
+  left: calc(18px * var(--gr-scale));
+  bottom: calc(18px * var(--gr-scale));
+  width: calc(268px * var(--gr-scale));
+  display: grid;
+  gap: calc(8px * var(--gr-scale));
+  padding: calc(14px * var(--gr-scale));
+  border-radius: calc(14px * var(--gr-scale));
+  background: rgba(4, 32, 48, 0.92);
+  border: 1px solid rgba(21, 129, 163, 0.6);
+  box-shadow: 0 calc(8px * var(--gr-scale)) calc(26px * var(--gr-scale)) rgba(0, 8, 16, 0.6);
+  animation: gr-fade 160ms ease-out;
+}
+
+.gr-hub__card-head {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: calc(8px * var(--gr-scale));
+}
+
+.gr-hub__card-name {
+  margin: 0;
+  font-size: calc(16px * var(--gr-scale));
+  line-height: 1.15;
+  color: #eafaff;
+}
+
+.gr-hub__card-close {
+  flex: none;
+  width: calc(24px * var(--gr-scale));
+  height: calc(24px * var(--gr-scale));
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+  color: #9fd0e2;
+  cursor: pointer;
+}
+
+.gr-hub__card-close:hover,
+.gr-hub__card-close:focus-visible {
+  background: rgba(255, 255, 255, 0.16);
+  color: #eafaff;
+}
+
+.gr-hub__card-role {
+  margin: 0;
+  font-size: calc(12px * var(--gr-scale));
+  font-weight: bold;
+  letter-spacing: calc(0.6px * var(--gr-scale));
+  text-transform: uppercase;
+  color: var(--gr-cyan);
+}
+
+.gr-hub__card-origin {
+  margin: 0;
+  font-size: calc(12px * var(--gr-scale));
+  color: #9fd0e2;
+}
+
+.gr-hub__card-stats {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: calc(6px * var(--gr-scale));
+  margin: 0;
+}
+
+.gr-hub__stat {
+  display: grid;
+  gap: calc(2px * var(--gr-scale));
+}
+
+.gr-hub__stat dt {
+  font-size: calc(9px * var(--gr-scale));
+  text-transform: uppercase;
+  letter-spacing: calc(0.4px * var(--gr-scale));
+  color: #7fb0c4;
+}
+
+.gr-hub__stat dd {
+  margin: 0;
+  font-size: calc(14px * var(--gr-scale));
+  font-weight: bold;
+  color: var(--gr-pearl);
+}
+
+/* Os atalhos de teclado. Fora da vista, mas focáveis: `display: none` os tiraria da tabulação e o
+ * cenário viraria o único caminho para as telas. */
+.gr-hub__spots {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.gr-hub__spot {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: calc(-1px);
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+  background: none;
+  color: inherit;
+}
+
+/*
+ * O alvo de um lugar do Recife: transparente e por cima do desenho. Não tem aparência própria — o
+ * realce é o brilho que o Phaser acende embaixo.
+ */
+.gr-hub__spot--place {
+  position: absolute;
+  width: auto;
+  height: auto;
+  margin: 0;
+  overflow: visible;
+  clip-path: none;
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  background: none;
+  border: 0;
+  cursor: pointer;
+  font-size: 0;
+  color: transparent;
+}
+
+.gr-hub__spot--place:focus-visible {
+  outline: calc(2px * var(--gr-scale)) solid var(--gr-cyan);
+  outline-offset: calc(2px * var(--gr-scale));
+}
+
+.gr-hub__spot:not(.gr-hub__spot--place):focus-visible {
+  position: static;
+  width: auto;
+  height: auto;
+  margin: calc(4px * var(--gr-scale));
+  overflow: visible;
+  clip-path: none;
+  padding: calc(6px * var(--gr-scale)) calc(12px * var(--gr-scale));
+  border-radius: 999px;
+  background: rgba(3, 29, 45, 0.92);
+  border: 2px solid var(--gr-cyan);
+  font-size: calc(12px * var(--gr-scale));
+  color: #eafaff;
+  cursor: pointer;
+}
+
+/* A área onde os lugares do Recife são posicionados em % — a mesma escala do layout. */
+.gr-hub__places {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.gr-hub__spot-group {
+  position: absolute;
+  top: calc(58px * var(--gr-scale));
+  left: calc(18px * var(--gr-scale));
+  display: flex;
+  flex-wrap: wrap;
+  max-width: 70cqw;
+}
+
+@container (max-width: 620px) {
+  .gr-hub__card {
+    width: auto;
+    right: calc(18px * var(--gr-scale));
   }
 }
