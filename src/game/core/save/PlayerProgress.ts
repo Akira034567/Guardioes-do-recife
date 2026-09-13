@@ -22,6 +22,8 @@ export interface PlayerSettings {
   reducedEffects: boolean;
   screenShake: boolean;
   damageNumbers: boolean;
+  /** Reforça o contraste das telas de menu (bordas e fundos mais sólidos). */
+  highContrast: boolean;
   uiScale: "small" | "normal" | "large";
 }
 
@@ -76,6 +78,7 @@ export const DEFAULT_SETTINGS: PlayerSettings = {
   reducedEffects: false,
   screenShake: true,
   damageNumbers: true,
+  highContrast: false,
   uiScale: "normal",
 };
 
@@ -223,6 +226,7 @@ export function sanitizeProgress(raw: unknown, registry: SanitizeRegistry, now: 
       reducedEffects: bool(settings.reducedEffects, DEFAULT_SETTINGS.reducedEffects),
       screenShake: bool(settings.screenShake, DEFAULT_SETTINGS.screenShake),
       damageNumbers: bool(settings.damageNumbers, DEFAULT_SETTINGS.damageNumbers),
+      highContrast: bool(settings.highContrast, DEFAULT_SETTINGS.highContrast),
       uiScale: settings.uiScale === "small" || settings.uiScale === "large" ? settings.uiScale : "normal",
     },
     guardianStats,

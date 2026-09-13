@@ -1369,7 +1369,8 @@
 .gr-screen[data-screen="collection"],
 .gr-screen[data-screen="bestiary"],
 .gr-screen[data-screen="story-index"],
-.gr-screen[data-screen="achievements"] {
+.gr-screen[data-screen="achievements"],
+.gr-screen[data-screen="settings"] {
   display: block;
   container-type: inline-size;
   padding: 0;
@@ -1972,6 +1973,195 @@
   font-style: italic;
   font-size: calc(13px * var(--gr-scale));
   color: #bfe8f7;
+}
+
+/* ---- configurações: cartões por assunto, com sliders e pares NÃO/SIM */
+
+.gr-config__body {
+  flex: 1 1 auto;
+  display: grid;
+  grid-template-columns: minmax(0, 1.38fr) minmax(0, 1fr);
+  gap: calc(12px * var(--gr-scale));
+  align-items: start;
+  min-height: 0;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(117, 223, 244, 0.45) transparent;
+}
+
+.gr-config__column {
+  display: flex;
+  flex-direction: column;
+  gap: calc(10px * var(--gr-scale));
+  min-width: 0;
+}
+
+.gr-config__card {
+  display: flex;
+  flex-direction: column;
+  gap: calc(6px * var(--gr-scale));
+  background: rgba(3, 30, 47, 0.85);
+  border: calc(1px * var(--gr-scale)) solid rgba(21, 129, 163, 0.5);
+  border-radius: calc(14px * var(--gr-scale));
+  padding: calc(10px * var(--gr-scale)) calc(14px * var(--gr-scale)) calc(12px * var(--gr-scale));
+}
+
+.gr-config__head {
+  display: flex;
+  align-items: center;
+  gap: calc(10px * var(--gr-scale));
+  padding-bottom: calc(4px * var(--gr-scale));
+}
+
+.gr-config__head .gr-icon {
+  color: var(--gr-cyan);
+}
+
+.gr-config__head-copy {
+  display: grid;
+  gap: calc(1px * var(--gr-scale));
+}
+
+.gr-config__title {
+  font-family: "Arial Black", "Arial", sans-serif;
+  font-size: calc(15px * var(--gr-scale));
+  letter-spacing: calc(1px * var(--gr-scale));
+  color: #f2fbff;
+}
+
+.gr-config__row {
+  display: flex;
+  align-items: center;
+  gap: calc(10px * var(--gr-scale));
+  padding: calc(6px * var(--gr-scale)) 0;
+  border-top: calc(1px * var(--gr-scale)) solid rgba(21, 129, 163, 0.25);
+  font-size: calc(13px * var(--gr-scale));
+}
+
+.gr-config__row .gr-icon {
+  color: var(--gr-cyan);
+}
+
+.gr-config__label {
+  flex: 1 1 auto;
+  min-width: 0;
+  color: #dff2fb;
+}
+
+.gr-config__value {
+  min-width: calc(46px * var(--gr-scale));
+  text-align: right;
+  font-weight: bold;
+  color: #f2fbff;
+}
+
+.gr-config__note {
+  border-top: calc(1px * var(--gr-scale)) solid rgba(21, 129, 163, 0.25);
+  padding-top: calc(7px * var(--gr-scale));
+  font-size: calc(10px * var(--gr-scale));
+  line-height: 1.35;
+}
+
+/* Par (ou trio) de opções: uma escolha só, sempre visível ao lado da outra. */
+.gr-config__seg {
+  display: inline-flex;
+  gap: calc(5px * var(--gr-scale));
+  flex: none;
+}
+
+.gr-config__seg-button {
+  font: inherit;
+  font-size: calc(11px * var(--gr-scale));
+  font-weight: bold;
+  letter-spacing: calc(0.5px * var(--gr-scale));
+  color: var(--gr-shell);
+  background: rgba(2, 24, 38, 0.8);
+  border: calc(1px * var(--gr-scale)) solid rgba(21, 129, 163, 0.5);
+  border-radius: calc(9px * var(--gr-scale));
+  padding: calc(7px * var(--gr-scale)) calc(13px * var(--gr-scale));
+  min-width: calc(58px * var(--gr-scale));
+  cursor: pointer;
+  transition: border-color 120ms ease, background 120ms ease;
+}
+
+.gr-config__seg-button:hover,
+.gr-config__seg-button:focus-visible {
+  border-color: var(--gr-cyan);
+}
+
+.gr-config__seg-button--on {
+  color: #f2fbff;
+  border-color: var(--gr-cyan);
+  background: linear-gradient(180deg, rgba(23, 120, 158, 0.95), rgba(13, 74, 100, 0.9));
+  box-shadow: 0 0 calc(12px * var(--gr-scale)) rgba(117, 223, 244, 0.3);
+}
+
+.gr-config__action {
+  display: inline-flex;
+  align-items: center;
+  gap: calc(7px * var(--gr-scale));
+  flex: none;
+  font: inherit;
+  font-size: calc(11px * var(--gr-scale));
+  font-weight: bold;
+  letter-spacing: calc(0.5px * var(--gr-scale));
+  color: var(--gr-shell);
+  background: rgba(2, 24, 38, 0.8);
+  border: calc(1px * var(--gr-scale)) solid rgba(21, 129, 163, 0.5);
+  border-radius: calc(9px * var(--gr-scale));
+  padding: calc(7px * var(--gr-scale)) calc(12px * var(--gr-scale));
+  cursor: pointer;
+}
+
+.gr-config__action:hover:not(:disabled),
+.gr-config__action:focus-visible:not(:disabled) {
+  border-color: var(--gr-cyan);
+}
+
+.gr-config__action:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.gr-config__row .gr-slider {
+  flex: 0 1 calc(190px * var(--gr-scale));
+}
+
+/* Aberta pela pausa, a tela vem sem o menu do Recife: só o "voltar". */
+.gr-config--bare .gr-album__layout {
+  grid-template-columns: calc(120px * var(--gr-scale)) minmax(0, 1fr);
+}
+
+.gr-world__side--bare {
+  display: block;
+}
+
+/*
+ * Alto contraste (acessibilidade): fundos quase opacos e bordas fortes. Vale para todas as telas de
+ * menu de uma vez, porque a camada inteira carrega o atributo.
+ */
+#ui-layer[data-contrast="high"] .gr-album__card,
+#ui-layer[data-contrast="high"] .gr-album__sheet,
+#ui-layer[data-contrast="high"] .gr-album__rows,
+#ui-layer[data-contrast="high"] .gr-album__row-card,
+#ui-layer[data-contrast="high"] .gr-config__card,
+#ui-layer[data-contrast="high"] .gr-world__nav-item,
+#ui-layer[data-contrast="high"] .gr-world__block,
+#ui-layer[data-contrast="high"] .gr-prep__block,
+#ui-layer[data-contrast="high"] .gr-panel {
+  background: #021b2b;
+  border-color: #7fd7f0;
+}
+
+#ui-layer[data-contrast="high"] .gr-world__backdrop,
+#ui-layer[data-contrast="high"] .gr-prep__backdrop {
+  opacity: 0.16;
+}
+
+#ui-layer[data-contrast="high"] .gr-hint,
+#ui-layer[data-contrast="high"] .gr-stat__label,
+#ui-layer[data-contrast="high"] .gr-progress__label {
+  color: #cfeaf7;
 }
 
 /* ---- conquistas: a lista vira linhas, com o emblema da prateleira e a barra de progresso */

@@ -374,6 +374,18 @@ test("opens the reef album, the bestiary and the settings from the map", async (
   const settings = await page.evaluate(() => JSON.parse(window.localStorage.getItem("guardioes-do-recife.save") ?? "{}").settings);
   expect(settings.muted).toBe(true);
   expect(settings.uiScale).toBe("large");
+
+  // Alto contraste é acessibilidade de verdade: vale na hora, na camada inteira de menus.
+  await page.getByTestId("settings-contrast").click();
+  await expect(page.locator("#ui-layer")).toHaveAttribute("data-contrast", "high");
+
+  // "Restaurar padrão" devolve tudo de uma vez.
+  await page.getByTestId("settings-restore").click();
+  await expect(page.getByTestId("settings-ui-scale")).toHaveAttribute("data-value", "normal");
+  await expect(page.locator("#ui-layer")).toHaveAttribute("data-contrast", "normal");
+  const restored = await page.evaluate(() => JSON.parse(window.localStorage.getItem("guardioes-do-recife.save") ?? "{}").settings);
+  expect(restored.muted).toBe(false);
+  expect(restored.highContrast).toBe(false);
   await page.getByTestId("settings-back").click();
   // Fechar uma tela volta para o mapa, que agora é a tela inicial do jogo.
   await expect(canvas).toHaveAttribute("data-overlay", "map");

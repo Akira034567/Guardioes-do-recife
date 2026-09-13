@@ -41,6 +41,15 @@ export class ScreenHost {
     return this.stack.length > 0;
   }
 
+  /** Tela cheia é do canvas; a camada HTML acompanha porque está presa a ele. */
+  get isFullscreen(): boolean {
+    return this.game.scale.isFullscreen;
+  }
+
+  toggleFullscreen(): void {
+    this.game.scale.toggleFullscreen();
+  }
+
   get topId(): string | null {
     return this.stack.at(-1)?.screen.id ?? null;
   }
@@ -90,8 +99,10 @@ export class ScreenHost {
     this.root.style.top = `${bounds.y - (origin?.y ?? 0)}px`;
     this.root.style.width = `${bounds.width}px`;
     this.root.style.height = `${bounds.height}px`;
+    const settings = getSettings();
     const fit = Math.max(0.55, bounds.width / GAME_WIDTH);
-    this.root.style.setProperty("--gr-scale", String(fit * UI_SCALE_FACTOR[getSettings().uiScale]));
+    this.root.style.setProperty("--gr-scale", String(fit * UI_SCALE_FACTOR[settings.uiScale]));
+    this.root.dataset.contrast = settings.highContrast ? "high" : "normal";
   };
 
   /** Enquanto houver tela modal aberta, o jogo não recebe cliques. */
