@@ -5,7 +5,8 @@ import { ENEMIES, ENEMY_ORDER, resolveEnemy } from "../../../data/enemies";
 import { ENEMY_LORE } from "../../../data/enemyLore";
 import { LEVELS } from "../../../data/levels";
 import type { EnemyDefinition, EnemyId, EnemyRole, EnemyShapeKey } from "../../../types";
-import { h } from "../h";
+import { fill, h } from "../h";
+import { preserveScroll } from "../scroll";
 import { ICONS } from "../icons";
 import type { Screen } from "../ScreenHost";
 import { shellSidebar, type ShellNav } from "../shell";
@@ -58,28 +59,29 @@ function matchesFilter(definition: EnemyDefinition, filter: BestiaryFilter, seen
  * encontro a ficha ao lado abre com números, comportamento, fraquezas e resistências — sem trocar de
  * tela, como no álbum.
  */
-export function bestiaryScreen(progression: ProgressionService, onBack: () => void, nav?: ShellNav): Screen {
+/** `embedded`: o AppShell já desenha a coluna e o fundo, então a tela entrega só o conteúdo (item 2). */
+export function bestiaryScreen(progression: ProgressionService, onBack: () => void, nav?: ShellNav, embedded = false): Screen {
   let filter: BestiaryFilter = "all";
   let chosen: EnemyId | null = null;
 
   return {
     id: "bestiary",
     render() {
-      const root = h("div", { class: "gr-album gr-album--bestiary", testId: "bestiary-panel" });
+      const root = h("div", { class: `${"gr-album gr-album--bestiary"}${embedded ? " gr-album--embedded" : ""}`, testId: "bestiary-panel" });
       const art = levelBackgroundPath(LEVELS[3].backgroundKey);
-      if (art) root.append(h("div", { class: "gr-world__backdrop", style: `background-image:url(${art})` }));
+      if (art && !embedded) root.append(h("div", { class: "gr-world__backdrop", style: `background-image:url(${art})` }));
       const layout = h("div", { class: "gr-album__layout" });
       root.append(layout);
 
-      const draw = (): void => {
+      const redraw = (): void => {
         const discovery = progression.progress.enemyDiscovery;
         const seenOf = (enemyId: EnemyId): boolean => Boolean(discovery[enemyId]);
         const known = ENEMY_ORDER.filter(seenOf).length;
         const listed = ENEMY_ORDER.filter((enemyId) => matchesFilter(ENEMIES[enemyId], filter, seenOf(enemyId)));
         const current = (chosen && listed.includes(chosen) ? chosen : listed.find(seenOf)) ?? null;
 
-        layout.replaceChildren(
-          shellSidebar("bestiary", nav ?? fallbackNav(onBack), {
+        fill(layout, 
+          embedded ? null : shellSidebar("bestiary", nav ?? fallbackNav(onBack), {
             navId: (section) => `bestiary-nav-${section}`,
             back: onBack,
             backId: "bestiary-back",
@@ -114,7 +116,11 @@ export function bestiaryScreen(progression: ProgressionService, onBack: () => vo
         );
       };
 
-      draw();
+      // Clicar num card reconstrói o miolo. A rolagem da grade e o foco do botão são
+      // repostos em volta disso, senão a tela salta para o topo a cada escolha (item 6).
+      const draw = (): void => preserveScroll(root, redraw);
+
+      redraw();
       return root;
     },
   };

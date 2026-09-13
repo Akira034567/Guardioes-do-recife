@@ -1,7 +1,7 @@
 import Phaser from "phaser";
 import { GAME_HEIGHT, GAME_WIDTH } from "../constants";
 import type { LevelProgressApi } from "../core/LevelProgress";
-import { difficultyOf } from "../data/difficulty";
+
 import { ENCOUNTERS, type EncounterDefinition } from "../data/encounters";
 import type { ChallengeDefinition } from "../core/progression/challenges";
 import { getLevel, LEVELS, LEVEL_IDS } from "../data/levels";
@@ -177,7 +177,9 @@ export class LevelSelectScene extends Phaser.Scene {
           },
         },
         {
-          difficulty: difficultyOf(saved.lastDifficulty).id,
+          // Toda fase abre no NORMAL (item 4). `lastDifficulty` continua sendo gravado (os
+          // atalhos de URL e as sondas de balanceamento o usam), mas deixou de decidir isto.
+          difficulty: "normal",
           loadout: (saved.lastLoadout.length > 0 ? saved.lastLoadout : saved.unlockedGuardians) as GuardianId[],
           encounter: encounter ? { guardianId: encounter.guardianId, teaser: encounter.teaser } : undefined,
         },

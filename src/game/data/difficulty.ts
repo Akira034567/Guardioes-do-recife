@@ -2,6 +2,9 @@ import { createRng, hashSeed } from "../core/Rng";
 import type { LevelDefinition, WaveDefinition, WaveGroupDefinition } from "../types";
 import { ENEMIES } from "./enemies";
 import { eliteAllowedFor, ELITE_IDS, type EliteId } from "./elites";
+import { CORRUPTED_CORALS } from "./bossWeakPoints";
+import type { WeakPointPlan } from "../core/WeakPoints";
+import type { EnemyId } from "../types";
 
 export type DifficultyId = "normal" | "dificil" | "abissal";
 
@@ -32,6 +35,11 @@ export interface DifficultyDefinition {
   startingPearls: number;
   /** Multiplica as vidas do Recife (ausente = iguais). */
   reefHealth?: number;
+  /**
+   * Pontos fracos que os chefes ganham nesta dificuldade (item 11). No Normal, nenhum: é o que
+   * mantém a fase base intocada e o motor sem saber o que é dificuldade.
+   */
+  bossWeakPoints?: Partial<Record<EnemyId, WeakPointPlan>>;
   /** Último retoque na onda já resolvida (eventos, composições especiais). */
   waveComposition?: (wave: WaveDefinition, context: { level: LevelDefinition; waveIndex: number; random: () => number }) => WaveDefinition;
 }
@@ -62,6 +70,7 @@ export const DIFFICULTIES: Record<DifficultyId, DifficultyDefinition> = {
     eliteChance: 0.15,
     pearlReward: 1.1,
     startingPearls: 0.9,
+    bossWeakPoints: { tidebreaker: CORRUPTED_CORALS },
   },
   abissal: {
     id: "abissal",
@@ -76,6 +85,8 @@ export const DIFFICULTIES: Record<DifficultyId, DifficultyDefinition> = {
     pearlReward: 1.2,
     startingPearls: 0.8,
     reefHealth: 0.75,
+    // 🔶 corais mais resistentes no Abissal; valor placeholder.
+    bossWeakPoints: { tidebreaker: { ...CORRUPTED_CORALS, hpFraction: 0.14 } },
   },
 };
 
@@ -108,6 +119,7 @@ export function resolveLevelForDifficulty(level: LevelDefinition, difficulty: Di
   });
   return {
     ...level,
+    enemyOverrides: withBossWeakPoints(level.enemyOverrides, difficulty),
     startingPearls: Math.round(level.startingPearls * difficulty.startingPearls),
     reefHealth: Math.max(1, Math.round(level.reefHealth * (difficulty.reefHealth ?? 1))),
     enemyScaling: {
@@ -118,6 +130,26 @@ export function resolveLevelForDifficulty(level: LevelDefinition, difficulty: Di
     levelClearBonus: level.levelClearBonus === undefined ? undefined : Math.round(level.levelClearBonus * difficulty.pearlReward),
     waves,
   };
+}
+
+/**
+ * Injeta os pontos fracos da dificuldade nos overrides da fase, sem tocar no catálogo de inimigos
+ * nem na fase original. Uma fase que já declare os seus próprios continua mandando: dá para
+ * roteirizar um encontro específico sem passar por aqui.
+ */
+function withBossWeakPoints(
+  overrides: LevelDefinition["enemyOverrides"],
+  difficulty: DifficultyDefinition,
+): LevelDefinition["enemyOverrides"] {
+  const plans = difficulty.bossWeakPoints;
+  if (!plans) return overrides;
+  const merged = { ...(overrides ?? {}) };
+  for (const [enemyId, plan] of Object.entries(plans) as [EnemyId, WeakPointPlan][]) {
+    const existing = merged[enemyId];
+    if (existing?.weakPoints) continue;
+    merged[enemyId] = { ...existing, weakPoints: plan };
+  }
+  return merged;
 }
 
 function scaleGroup(

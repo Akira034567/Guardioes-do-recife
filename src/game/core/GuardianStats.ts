@@ -1,3 +1,4 @@
+import type { TargetTier } from "./Targeting";
 import type {
   BlockHoldEffect,
   ChorusEffect,
@@ -52,6 +53,8 @@ export interface GuardianStats {
   targeting: TargetPolicyMode;
   /** Forma do alcance (padrão: radial). */
   targetingShape: TargetingShape;
+  /** Ordem de categorias de alvo (item 12); `null` = sem preferência, comportamento de sempre. */
+  targetPriority: readonly TargetTier[] | null;
   /** Geração periódica de pérolas (Ostra); null = não rende nada. */
   generatesPearls: PearlGeneration | null;
   dash: boolean;
@@ -120,6 +123,7 @@ export function resolveGuardianStats(
     providedAura: resolveLast(applied, "aura") ?? null,
     targeting: resolveLast(applied, "targeting") ?? definition.targeting ?? "leading",
     targetingShape: resolveLast(applied, "targetingShape") ?? definition.targetingShape ?? RADIAL,
+    targetPriority: resolveLast(applied, "targetPriority") ?? definition.targetPriority ?? null,
     generatesPearls: resolveLast(applied, "generatesPearls") ?? definition.generatesPearls ?? null,
     dash: Boolean(definition.dash),
     frenzy: resolveLast(applied, "frenzy") ?? null,

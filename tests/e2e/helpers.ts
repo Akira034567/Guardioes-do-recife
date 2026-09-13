@@ -67,5 +67,9 @@ declare global {
       bounds(name: string): { name: string; x: number; y: number; width: number; height: number; enabled: boolean } | null;
       names(): string[];
     };
+    /** Fases do ciclo de vida da partida, publicadas em desenvolvimento por `systems/devLog`. */
+    __grLifecycle?: {
+      dump(): string[];
+    };
   }
 }

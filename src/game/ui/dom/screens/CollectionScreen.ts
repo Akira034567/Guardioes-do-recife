@@ -9,7 +9,8 @@ import { LEVELS } from "../../../data/levels";
 import { GLOBAL_CURRENCY } from "../../../data/progression";
 import { GUARDIAN_UNLOCKS } from "../../../data/unlocks";
 import type { BranchId, GuardianDefinition, GuardianId, InteractableDefinition, LevelDefinition, UpgradeBranch } from "../../../types";
-import { button, h } from "../h";
+import { fill, button, h } from "../h";
+import { preserveScroll } from "../scroll";
 import { ICONS } from "../icons";
 import type { Screen } from "../ScreenHost";
 import { shellSidebar, type ShellNav } from "../shell";
@@ -71,7 +72,9 @@ export function collectionScreen(
   progression: ProgressionService,
   onBack: () => void,
   nav?: ShellNav,
+/** `embedded`: o AppShell já desenha a coluna e o fundo, então a tela entrega só o conteúdo (item 2). */
   options: CollectionOptions = {},
+  embedded = false,
 ): Screen {
   let tab: AlbumTab = options.tab ?? "guardians";
   let chosen: string | null = options.focus ?? null;
@@ -82,13 +85,13 @@ export function collectionScreen(
   return {
     id: "collection",
     render() {
-      const root = h("div", { class: "gr-album", testId: "collection-panel" });
+      const root = h("div", { class: `${"gr-album"}${embedded ? " gr-album--embedded" : ""}`, testId: "collection-panel" });
       const art = levelBackgroundPath(LEVELS[0].backgroundKey);
-      if (art) root.append(h("div", { class: "gr-world__backdrop", style: `background-image:url(${art})` }));
+      if (art && !embedded) root.append(h("div", { class: "gr-world__backdrop", style: `background-image:url(${art})` }));
       const layout = h("div", { class: "gr-album__layout" });
       root.append(layout);
 
-      const draw = (): void => {
+      const redraw = (): void => {
         const entries = entriesFor(tab, progression, {
           frame: actionFrame,
           sheetTab,
@@ -105,8 +108,8 @@ export function collectionScreen(
         const current = entries.find((entry) => entry.id === chosen) ?? entries.find((entry) => entry.found) ?? entries[0];
         const found = entries.filter((entry) => entry.found).length;
 
-        layout.replaceChildren(
-          shellSidebar("collection", nav ?? fallbackNav(onBack), {
+        fill(layout, 
+          embedded ? null : shellSidebar("collection", nav ?? fallbackNav(onBack), {
             navId: (section) => `album-nav-${section}`,
             back: onBack,
             backId: "collection-back",
@@ -145,7 +148,11 @@ export function collectionScreen(
         );
       };
 
-      draw();
+      // Clicar num card reconstrói o miolo. A rolagem da grade e o foco do botão são
+      // repostos em volta disso, senão a tela salta para o topo a cada escolha (item 6).
+      const draw = (): void => preserveScroll(root, redraw);
+
+      redraw();
       return root;
     },
   };

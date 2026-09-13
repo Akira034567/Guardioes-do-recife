@@ -25,12 +25,17 @@ import { getLevel, LEVELS, levelIndex, nextLevelId } from "../data/levels";
 import { EventBus, Events } from "../EventBus";
 import { CloudGfx, FieldGfx, FlowGfx } from "../objects/AreaEffectViews";
 import { EnemyView } from "../objects/EnemyView";
+import { WeakPointView } from "../objects/WeakPointView";
 import { GuardianView } from "../objects/GuardianView";
 import { ProjectileView } from "../objects/ProjectileView";
 import { ArtEffects } from "../systems/ArtEffects";
 import { AudioManager } from "../systems/AudioManager";
 import { DebugOverlay } from "../systems/DebugOverlay";
 import { isDebugAllowed } from "../systems/debugGate";
+import { devAssert, DIAGNOSTICS_ON, lifecycleLog, publishDiagnostics } from "../systems/devLog";
+import { Disposables } from "../systems/Disposables";
+import { MatchLifecycle } from "../match/MatchLifecycle";
+import { transitionTo } from "../systems/sceneTransition";
 import { drawLevelBackdrop } from "../systems/LevelBackdrop";
 import { MatchEffects } from "../systems/MatchEffects";
 import { PlacementGhost } from "../objects/PlacementGhost";
@@ -57,6 +62,14 @@ export class GameScene extends Phaser.Scene {
   private level: LevelDefinition = LEVELS[0];
   /** Fase já ajustada pela dificuldade; é ela que o motor recebe. */
   private resolvedLevel: LevelDefinition = LEVELS[0];
+  /** Fases explícitas da partida (item 8): quem pergunta em que pé a partida está pergunta aqui. */
+  private lifecycle = new MatchLifecycle();
+  /** Tudo que `destroyGame()` precisa desfazer, na ordem inversa da criação. */
+  private disposables = new Disposables();
+  /** Acumulador do watchdog de input, para não conferir a invariante a 60 Hz. */
+  private watchdogAccumulatorMs = 0;
+  /** Passado à `UIScene` no `startGame`; fica guardado porque quem o resolve é o `initializeGame`. */
+  private pendingDebugFromQuery = false;
   private difficulty: DifficultyDefinition = difficultyOf("normal");
   private launch!: MatchLaunchConfig;
   private progress!: LevelProgressApi;
@@ -72,6 +85,8 @@ export class GameScene extends Phaser.Scene {
   private debugFlags!: DebugFlags;
   private platforms: PlatformZone[] = [];
   private readonly enemyViews = new Map<string, EnemyView>();
+  /** Pontos fracos de chefe: vivem à parte porque não são inimigos de onda (item 11). */
+  private readonly weakPointViews = new Map<string, WeakPointView>();
   private readonly guardianViews = new Map<string, GuardianView>();
   private readonly projectileViews = new Map<string, ProjectileView>();
   private readonly fieldViews = new Map<string, FieldGfx>();
@@ -126,8 +141,33 @@ export class GameScene extends Phaser.Scene {
   }
 
   create(): void {
+    this.initializeGame();
+    this.startGame();
+  }
+
+  // ------------------------------------------------------------- ciclo de vida
+  //
+  // Cinco passos explícitos (item 8). O ciclo do Phaser já existe, mas não diz nada sobre o estado
+  // da PARTIDA — e era justamente aí que o jogo travava sem deixar rastro. Note que o Phaser
+  // REAPROVEITA a instância da cena entre um `scene.start` e o seguinte: tudo que sobrevive precisa
+  // ser reposto no `initializeGame`, e tudo que foi criado precisa ser desfeito no `destroyGame`.
+
+  /** Monta a partida: estado zerado, motor novo, views, listeners. Ainda não começa a rodar. */
+  private initializeGame(): void {
+    this.lifecycle = new MatchLifecycle();
+    this.lifecycle.transition("initializing");
+    this.disposables = new Disposables();
+    publishDiagnostics();
+
+    // A `GameScene` era a única cena que não limpava a camada HTML ao entrar. Um overlay que
+    // sobrevivesse a uma troca de cena deixava `game.input.enabled = false` (ScreenHost.sync) com o
+    // jogo desenhando normalmente: vivo e surdo, sem erro nenhum no console.
+    getScreenHost(this.game).clear();
+    this.game.input.enabled = true;
+
     this.progress = createLevelProgress();
     this.enemyViews.clear();
+    this.weakPointViews.clear();
     this.guardianViews.clear();
     this.projectileViews.clear();
     this.fieldViews.clear();
@@ -172,6 +212,8 @@ export class GameScene extends Phaser.Scene {
     this.debugFlags = {
       enabled: debugFromQuery,
       route: true,
+      // Desligada por padrão de propósito: ver o item 13.
+      routeNodes: false,
       ranges: true,
       hitboxes: true,
       current: true,
@@ -193,13 +235,96 @@ export class GameScene extends Phaser.Scene {
     this.game.canvas.addEventListener("pointerdown", this.unlockAudio, { passive: true });
     this.game.canvas.dataset.screen = "game";
     this.game.canvas.dataset.level = this.level.id;
-    this.scene.launch("UIScene", { debugFromQuery, loadout: this.loadout });
+    this.pendingDebugFromQuery = debugFromQuery;
+
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => this.destroyGame());
+    this.lifecycle.transition("ready");
+  }
+
+  /** Liga o HUD e entrega a partida ao jogador. */
+  private startGame(): void {
+    this.scene.launch("UIScene", { debugFromQuery: this.pendingDebugFromQuery, loadout: this.loadout });
+    this.lifecycle.transition("running");
+    this.publishLifecycle();
     this.emitHud();
   }
 
+  /** Pausa e retomada. O relógio para; as views continuam desenhando. */
+  private pauseGame(paused: boolean): void {
+    this.clock.paused = paused;
+    if (paused) this.tweens.pauseAll();
+    else this.tweens.resumeAll();
+    // Pausar depois do fim da partida (a tela de resultado) não é uma fase nova: o ciclo já está
+    // em `finished` e continuar de lá é ilegal de propósito.
+    if (this.lifecycle.phase === "running" || this.lifecycle.phase === "paused") {
+      this.lifecycle.transition(paused ? "paused" : "running");
+      this.publishLifecycle();
+    }
+  }
+
+  /**
+   * Reinício limpo: uma partida nova, do zero. Passa pelo `transitionTo`, que limpa a camada HTML e
+   * desliga o input durante a troca — dois cliques rápidos não disparam dois `scene.start`.
+   *
+   * Repare que o desmonte NÃO acontece aqui: o fade dura alguns quadros e o `update()` continuaria
+   * rodando sobre um motor já desfeito. Quem desmonta é o `SHUTDOWN`, que o `scene.start` dispara.
+   */
+  private resetGame(levelId?: string): void {
+    if (!this.lifecycle.isLive) return;
+    lifecycleLog("match", "reset", { levelId: levelId ?? this.level.id });
+    transitionTo(this, "GameScene", { ...this.launch, ...(levelId ? { levelId } : {}) });
+  }
+
+  /**
+   * Desfaz tudo: listeners, áudio, efeitos, views, overlays e referências. Idempotente, porque o
+   * `SHUTDOWN` pode chegar depois de uma saída manual.
+   */
+  private destroyGame(): void {
+    if (!this.lifecycle.isLive) return;
+    this.lifecycle.transition("destroying");
+    this.disposables.disposeAll();
+
+    this.enemyViews.forEach((view) => view.destroy());
+    this.weakPointViews.forEach((view) => view.destroy());
+    this.guardianViews.forEach((view) => view.destroy());
+    this.projectileViews.forEach((view) => view.destroy());
+    this.fieldViews.forEach((view) => view.destroy());
+    this.cloudViews.forEach((view) => view.destroy());
+    this.flowViews.forEach((view) => view.destroy());
+    this.interactableViews.forEach((view) => view.destroy());
+    this.enemyViews.clear();
+    this.weakPointViews.clear();
+    this.guardianViews.clear();
+    this.projectileViews.clear();
+    this.fieldViews.clear();
+    this.cloudViews.clear();
+    this.flowViews.clear();
+    this.interactableViews.clear();
+    this.pendingEvents = [];
+    this.currentMotes = [];
+    this.platforms = [];
+    this.tutorial = null;
+    this.selectedGuardianId = null;
+    this.selectedPlacedGuardianId = null;
+
+    this.scene.stop("UIScene");
+    getScreenHost(this.game).clear();
+    this.game.input.enabled = true;
+    this.lifecycle.transition("destroyed");
+    this.publishLifecycle();
+  }
+
+  private publishLifecycle(): void {
+    this.game.canvas.dataset.lifecycle = this.lifecycle.phase;
+  }
+
   update(_time: number, delta: number): void {
+    this.checkInputWatchdog(delta);
     if (this.match.status !== "running") {
+      // Os efeitos do último quadro (número de dano, explosão do abate final) precisam terminar
+      // mesmo com a partida encerrada; antes eles congelavam no ar.
       this.drainEvents();
+      this.effects.update(this.match.now);
       return;
     }
     const ticks = this.clock.advance(delta, () => this.match.tick());
@@ -233,6 +358,20 @@ export class GameScene extends Phaser.Scene {
 
   private applyEvent(event: MatchEvent): void {
     switch (event.type) {
+      case "weakPointSpawned": {
+        const weakPoint = this.match.weakPoints.find((point) => point.id === event.id);
+        if (weakPoint) this.weakPointViews.set(event.id, new WeakPointView(this, weakPoint));
+        return;
+      }
+      case "weakPointDestroyed": {
+        const view = this.weakPointViews.get(event.id);
+        this.weakPointViews.delete(event.id);
+        // `parentGone` é o chefe saindo de campo: some junto, sem espetáculo de ruptura.
+        if (!view) return;
+        if (event.reason === "broken") view.playBreak(() => {});
+        else view.destroy();
+        return;
+      }
       case "enemySpawned": {
         const enemy = this.match.enemy(event.id);
         if (enemy) this.enemyViews.set(event.id, new EnemyView(this, enemy));
@@ -322,6 +461,7 @@ export class GameScene extends Phaser.Scene {
       return enemy ? { x: enemy.x, y: enemy.y } : null;
     };
     for (const view of this.enemyViews.values()) view.sync(now, deltaMs);
+    for (const view of this.weakPointViews.values()) view.sync(deltaMs);
     for (const view of this.guardianViews.values()) view.sync(now, enemyPosition);
     for (const view of this.projectileViews.values()) view.sync();
     for (const view of this.fieldViews.values()) view.sync(now);
@@ -369,7 +509,9 @@ export class GameScene extends Phaser.Scene {
     // O menu do navegador no botão direito atrapalha o cancelamento por clique.
     this.game.canvas.addEventListener("contextmenu", preventContextMenu);
 
-    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+    // Cada limpeza entra nomeada no registro: o `destroyGame` roda todas em ordem inversa e isola
+    // cada uma, então uma que estoure não impede as seguintes de rodar.
+    this.disposables.add("eventos do HUD", () => {
       EventBus.off(Events.selectGuardian, this.selectGuardian, this);
       EventBus.off(Events.upgradeGuardian, this.upgradeSelectedGuardian, this);
       EventBus.off(Events.sellGuardian, this.sellSelectedGuardian, this);
@@ -385,17 +527,21 @@ export class GameScene extends Phaser.Scene {
       EventBus.off(Events.debugCommand, this.runDebugCommand, this);
       EventBus.off(Events.startLevel, this.startLevel, this);
       EventBus.off(Events.openLevelSelect, this.openLevelSelect, this);
+    });
+    this.disposables.add("input do mundo", () => {
       this.input.off("pointermove", this.handleWorldPointerMove, this);
       this.input.off("pointerdown", this.handleWorldPointerDown, this);
       this.input.keyboard?.off("keydown-ESC", this.handleEscape, this);
-      this.game.canvas.removeEventListener("contextmenu", preventContextMenu);
-      this.ghost.destroy();
-      this.game.canvas.removeEventListener("pointerdown", this.unlockAudio);
-      this.match.setListener(null);
-      this.effects.destroy();
-      this.audio.destroy();
-      this.debugOverlay.destroy();
     });
+    this.disposables.add("listeners do canvas", () => {
+      this.game.canvas.removeEventListener("contextmenu", preventContextMenu);
+      this.game.canvas.removeEventListener("pointerdown", this.unlockAudio);
+    });
+    this.disposables.add("motor", () => this.match.setListener(null));
+    this.disposables.add("fantasma de posicionamento", () => this.ghost.destroy());
+    this.disposables.add("efeitos", () => this.effects.destroy());
+    this.disposables.add("áudio", () => this.audio.destroy());
+    this.disposables.add("overlay de debug", () => this.debugOverlay.destroy());
   }
 
   private selectGuardian(id: GuardianId): void {
@@ -622,6 +768,8 @@ export class GameScene extends Phaser.Scene {
   private finishGame(result: "victory" | "defeat"): void {
     if (this.gameOverShown) return;
     this.gameOverShown = true;
+    this.lifecycle.transition("finished");
+    this.publishLifecycle();
     this.message = result === "victory" ? `RECIFE PROTEGIDO! +${ECONOMY.levelClearBonus} pérolas` : "O RECIFE PRECISA DE REFORÇOS";
     this.messageUntilMs = Number.POSITIVE_INFINITY;
     this.audio.play(result === "victory" ? "upgrade" : "warning");
@@ -733,9 +881,7 @@ export class GameScene extends Phaser.Scene {
   }
 
   private setPaused(paused: boolean): void {
-    this.clock.paused = paused;
-    if (paused) this.tweens.pauseAll();
-    else this.tweens.resumeAll();
+    this.pauseGame(paused);
     this.emitHud();
   }
 
@@ -752,25 +898,46 @@ export class GameScene extends Phaser.Scene {
   }
 
   private restartGame(): void {
-    this.scene.stop("UIScene");
-    this.scene.restart({ ...this.launch });
+    this.resetGame();
   }
 
   private startLevel(levelId: string): void {
     if (!getLevel(levelId)) return;
-    this.scene.stop("UIScene");
-    this.scene.restart({ ...this.launch, levelId });
+    this.resetGame(levelId);
   }
 
   private openLevelSelect(prepareLevelId?: string): void {
-    this.scene.stop("UIScene");
-    this.scene.start("LevelSelectScene", prepareLevelId ? { prepareLevelId } : undefined);
+    lifecycleLog("match", "exit", { to: "LevelSelectScene" });
+    transitionTo(this, "LevelSelectScene", prepareLevelId ? { prepareLevelId } : undefined);
   }
 
   /** Sair pelo pause é ir para casa: o Meu Recife. Vencer continua levando ao mapa, para encadear. */
   private openHub(): void {
-    this.scene.stop("UIScene");
-    this.scene.start("HubScene");
+    lifecycleLog("match", "exit", { to: "HubScene" });
+    transitionTo(this, "HubScene");
+  }
+
+  /**
+   * Invariante de input: fora de uma transição, com nenhuma tela HTML aberta, o jogo TEM que estar
+   * aceitando cliques. Quando isso deixa de valer, o jogo fica visualmente vivo e completamente
+   * surdo — o sintoma mais difícil de diagnosticar que este projeto teve, porque não gera erro.
+   *
+   * A cura é pontual e barulhenta: restaura a invariante, registra o que aconteceu e despeja as
+   * últimas fases. Não recarrega nada, não engole exceção, e só roda com diagnóstico ligado.
+   */
+  private checkInputWatchdog(delta: number): void {
+    if (!DIAGNOSTICS_ON) return;
+    this.watchdogAccumulatorMs += delta;
+    if (this.watchdogAccumulatorMs < 1000) return;
+    this.watchdogAccumulatorMs = 0;
+    const host = getScreenHost(this.game);
+    const transitioning = this.game.canvas.dataset.transition === "out";
+    if (this.game.input.enabled || host.isOpen || transitioning) return;
+    devAssert(false, "input do jogo desligado sem nenhuma tela aberta — restaurando", {
+      phase: this.lifecycle.phase,
+      overlay: this.game.canvas.dataset.overlay,
+    });
+    this.game.input.enabled = true;
   }
 
   private startNextWave(): void {
@@ -895,6 +1062,7 @@ export class GameScene extends Phaser.Scene {
             healthRatio: snapshot.boss.healthRatio,
             phaseIndex: snapshot.boss.phaseIndex,
             phaseCount: snapshot.boss.phaseCount,
+            weakPoints: snapshot.boss.weakPoints,
           }
         : null,
       difficulty: this.difficulty.id,
@@ -954,6 +1122,10 @@ export class GameScene extends Phaser.Scene {
     dataset.shrimpAssets = String(hasGuardianArt(this, "pistol-shrimp"));
     dataset.shrimpArt = String(shrimp?.usesSpriteArt ?? false);
     dataset.shrimpVisual = shrimp?.currentVisualKey ?? "";
+    // Sonda do item 15: com inimigo no alcance, isto TEM que passar por "idle" entre os golpes.
+    dataset.shrimpState = shrimp?.currentVisualState ?? "";
+    const weakPoints = this.match.snapshot().boss?.weakPoints;
+    dataset.bossWeakPoints = weakPoints ? `${weakPoints.remaining}/${weakPoints.total}` : "";
     dataset.shrimpTexture = shrimp?.currentTextureKey ?? "";
     const lastProjectile = [...this.projectileViews.values()].at(-1);
     dataset.projectileTexture = lastProjectile?.textureKey ?? "";
@@ -1024,7 +1196,16 @@ export class GameScene extends Phaser.Scene {
     } else if (placementMode === null) {
       this.ghost.hide();
     }
-    this.renderDebug();
+    // Nada de `renderDebug()` aqui. São três camadas diferentes e elas não podem se misturar:
+    //
+    //   (a) nós internos da rota  → só com o overlay E a flag `routeNodes` ligados;
+    //   (b) alcance e guia de posicionamento (o que este método desenha) → sempre que o jogador
+    //       seleciona um Guardião, porque é informação legítima de jogo;
+    //   (c) overlay de debug → só com `debugFlags.enabled`, repintado pelo acumulador do `update`.
+    //
+    // Este método é chamado por sete caminhos de seleção/venda/evolução. Enquanto ele repintava o
+    // overlay, SELECIONAR UM GUARDIÃO era o gatilho visível dos cones na pista — e ainda recriava
+    // um `Phaser.Text` por waypoint a cada clique.
   }
 
   private strokeRoute(graphics: Phaser.GameObjects.Graphics): void {

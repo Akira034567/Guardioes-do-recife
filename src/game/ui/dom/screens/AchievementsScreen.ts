@@ -4,7 +4,8 @@ import type { AchievementCategory } from "../../../data/achievements";
 import { levelBackgroundPath } from "../../../assets/levelBackgrounds";
 import { LEVELS } from "../../../data/levels";
 import { GLOBAL_CURRENCY } from "../../../data/progression";
-import { h } from "../h";
+import { fill, h } from "../h";
+import { preserveScroll } from "../scroll";
 import { ICONS } from "../icons";
 import type { Screen } from "../ScreenHost";
 import { shellSidebar, type ShellNav } from "../shell";
@@ -45,28 +46,29 @@ function isHidden(status: AchievementStatus): boolean {
  * à esquerda e a ficha da conquista escolhida à direita — conquista escondida não entrega o nome nem
  * o que pede, só que existe.
  */
-export function achievementsScreen(progression: ProgressionService, onBack: () => void, nav?: ShellNav): Screen {
+/** `embedded`: o AppShell já desenha a coluna e o fundo, então a tela entrega só o conteúdo (item 2). */
+export function achievementsScreen(progression: ProgressionService, onBack: () => void, nav?: ShellNav, embedded = false): Screen {
   let filter: AchievementFilter = "all";
   let chosen: string | null = null;
 
   return {
     id: "achievements",
     render() {
-      const root = h("div", { class: "gr-album gr-album--achievements", testId: "achievements-panel" });
+      const root = h("div", { class: `${"gr-album gr-album--achievements"}${embedded ? " gr-album--embedded" : ""}`, testId: "achievements-panel" });
       const art = levelBackgroundPath(LEVELS[5].backgroundKey);
-      if (art) root.append(h("div", { class: "gr-world__backdrop", style: `background-image:url(${art})` }));
+      if (art && !embedded) root.append(h("div", { class: "gr-world__backdrop", style: `background-image:url(${art})` }));
       const layout = h("div", { class: "gr-album__layout" });
       root.append(layout);
 
-      const draw = (): void => {
+      const redraw = (): void => {
         const statuses = achievementStatuses(progression.progress);
         const done = statuses.filter((status) => status.unlocked).length;
         const listed = statuses.filter((status) => filter === "all" || status.definition.category === filter);
         const current = listed.find((status) => status.definition.id === chosen) ?? listed.find((status) => status.unlocked) ?? listed[0];
         root.dataset.done = String(done);
 
-        layout.replaceChildren(
-          shellSidebar("achievements", nav ?? fallbackNav(onBack), {
+        fill(layout, 
+          embedded ? null : shellSidebar("achievements", nav ?? fallbackNav(onBack), {
             navId: (section) => `achievements-nav-${section}`,
             back: onBack,
             backId: "achievements-back",
@@ -105,7 +107,11 @@ export function achievementsScreen(progression: ProgressionService, onBack: () =
         );
       };
 
-      draw();
+      // Clicar num card reconstrói o miolo. A rolagem da grade e o foco do botão são
+      // repostos em volta disso, senão a tela salta para o topo a cada escolha (item 6).
+      const draw = (): void => preserveScroll(root, redraw);
+
+      redraw();
       return root;
     },
   };

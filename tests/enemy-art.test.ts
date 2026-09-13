@@ -46,9 +46,31 @@ describe("enemy art registry", () => {
     const dart = resolveEnemy(ENEMIES.dartfish).art;
     const shark = resolveEnemy(ENEMIES.corruptedShark).art;
     expect(dart.kind === "sprite" && dart.folder).toBe("peixe-flecha");
-    // O desenho do peixe-flecha já aponta para a direita; sem isto ele nadaria de ré.
-    expect(dart.kind === "sprite" && dart.facing).toBe("right");
     expect(shark.kind === "sprite" && shark.folder).toBe("predador-corrompido");
+  });
+
+  it("mantém toda a prancha apontando para a direita", () => {
+    // A prancha inteira foi desenhada com o nariz em +x, e `facing` ausente significa exatamente
+    // isso. Uma espécie declarando `"left"` sozinha nadaria de ré — foi o bug do item 9, que
+    // atingia sete dos oito inimigos porque a view espelhava tudo por padrão.
+    for (const enemyId of ENEMY_ORDER) {
+      const art = resolveEnemy(ENEMIES[enemyId]).art;
+      if (art.kind !== "sprite") continue;
+      expect(art.facing ?? "right", `${enemyId} olha para a direita`).toBe("right");
+    }
+  });
+
+  it("particiona os quadros do Cascudo entre nado e defesa", () => {
+    const art = resolveEnemy(ENEMIES.shellback).art;
+    expect(art.kind).toBe("sprite");
+    if (art.kind !== "sprite") return;
+    const loop = art.loopFrames ?? [];
+    const guard = art.guardFrames ?? [];
+    // Sem sobra nem repetição: todo quadro em disco pertence a exatamente um dos dois conjuntos.
+    expect([...loop, ...guard].sort((a, b) => a - b)).toEqual(Array.from({ length: art.frames }, (_, index) => index + 1));
+    expect(guard.length).toBeGreaterThan(0);
+    // A concha fechada é um evento, não um ciclo: nada de voltar a cada 800ms como antes.
+    expect(art.guard?.cooldownMs ?? 0).toBeGreaterThan(art.guard?.holdMs ?? 0);
   });
 
   it("usa uma pasta diferente para cada espécie", () => {
@@ -85,7 +107,9 @@ describe("enemy art registry", () => {
     // Nenhuma criatura vira um borrão que cobre o mapa nem some no fundo.
     for (const enemyId of ENEMY_ORDER) {
       const width = widthOnScreen(enemyId);
-      expect(width, `${enemyId} não é grande demais`).toBeLessThan(140);
+      // O chefe tem licença para ultrapassar a faixa da rota: é assim que ele se anuncia como chefe.
+      const ceiling = ENEMIES[enemyId].role === "boss" ? 200 : 140;
+      expect(width, `${enemyId} não é grande demais`).toBeLessThan(ceiling);
       expect(width, `${enemyId} não é pequeno demais`).toBeGreaterThan(15);
     }
   });

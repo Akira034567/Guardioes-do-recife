@@ -19,6 +19,16 @@ function inRange(context: CombatContext, guardian: MatchGuardian, radius = guard
   return context.enemies.filter((enemy) => !enemy.dead && !enemy.reachedGoal && enemy.distanceTo(guardian.x, guardian.y) <= radius);
 }
 
+/**
+ * Com a trava de alvo (item 16), o golpe se resolve mesmo com o alvo já fora do alcance — e aí o
+ * `inRange` não o inclui mais. Sem esta garantia, um ataque confirmado acertaria ZERO justamente no
+ * caso que a trava existe para consertar.
+ */
+function withLockedTarget(affected: MatchEnemy[], target: MatchEnemy): MatchEnemy[] {
+  if (target.dead || target.reachedGoal || affected.includes(target)) return affected;
+  return [target, ...affected];
+}
+
 function attacked(
   context: CombatContext,
   guardian: MatchGuardian,
@@ -82,9 +92,11 @@ export function resolveAttack(context: CombatContext, guardian: MatchGuardian, t
 function resolveChain(context: CombatContext, guardian: MatchGuardian, target: MatchEnemy): void {
   const stats = guardian.stats;
   const damages = stats.chainDamages;
-  const candidates = inRange(context, guardian)
-    .sort((a, b) => b.progress - a.progress)
-    .slice(0, damages.length);
+  // O alvo travado vem primeiro: é ele que leva o elo mais forte da corrente.
+  const candidates = withLockedTarget(
+    inRange(context, guardian).sort((a, b) => b.progress - a.progress),
+    target,
+  ).slice(0, damages.length);
   candidates.forEach((enemy, index) => {
     context.damage(enemy, damages[index] ?? damages[damages.length - 1], { sourceId: guardian.id, cause: "chain" });
     if (stats.slowFactor !== null) enemy.status.applySlow(stats.slowFactor, stats.slowDurationMs, context.now);
@@ -97,7 +109,7 @@ function resolveChain(context: CombatContext, guardian: MatchGuardian, target: M
 
 function resolvePulse(context: CombatContext, guardian: MatchGuardian, target: MatchEnemy): void {
   const stats = guardian.stats;
-  const affected = inRange(context, guardian);
+  const affected = withLockedTarget(inRange(context, guardian), target);
   affected.forEach((enemy) => {
     context.damage(enemy, stats.damage, { sourceId: guardian.id, cause: "pulse" });
     if (stats.slowFactor !== null) enemy.status.applySlow(stats.slowFactor, stats.slowDurationMs, context.now);
@@ -110,7 +122,7 @@ function resolveMelee(context: CombatContext, guardian: MatchGuardian, target: M
   const spinning = stats.spin !== null && guardian.attacksPerformed % stats.spin.everyAttacks === 0;
   const radius = spinning && stats.spin ? guardian.range * stats.spin.radiusMultiplier : guardian.range;
   const damage = spinning && stats.spin ? stats.spin.damage : stats.damage;
-  const targets = stats.areaAttack || spinning ? inRange(context, guardian, radius) : [target];
+  const targets = stats.areaAttack || spinning ? withLockedTarget(inRange(context, guardian, radius), target) : [target];
   if (stats.mark) registerSharkHit(guardian, target, context.now);
   targets.forEach((enemy) => {
     context.damage(enemy, damage, { armorPiercing: stats.armorPiercing, sourceId: guardian.id, cause: spinning ? "spin" : "melee" });

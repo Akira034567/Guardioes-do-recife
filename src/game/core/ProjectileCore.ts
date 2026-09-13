@@ -122,6 +122,14 @@ export class ProjectileCore {
     return target.alive && !this.hitIds.has(target.id);
   }
 
+  /**
+   * Um projétil disparado é INDEPENDENTE do alcance de quem o disparou (item 17): não existe
+   * caminho nenhum que o destrua por distância. Ele só some ao gastar as perfurações, ao estourar
+   * o tempo de vida (2200ms) ou ao sair do mundo.
+   *
+   * Quando o alvo rastreado morre ou já foi acertado, o projétil PARA DE FAZER CURVA e segue na
+   * velocidade atual — ainda acerta quem estiver no caminho, mas não passa a perseguir outro.
+   */
   private steer(deltaSeconds: number, targets: readonly ProjectileTarget[]): void {
     if (!this.homing || !this.targetId) return;
     const tracked = targets.find((target) => target.id === this.targetId && this.canHit(target));

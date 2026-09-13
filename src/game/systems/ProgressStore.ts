@@ -5,6 +5,7 @@ import { GUARDIAN_ORDER } from "../data/guardians";
 import { DECORATION_IDS } from "../data/reef/decorations";
 import { DEFAULT_UNLOCKED_GUARDIANS } from "../data/unlocks";
 import { LEVEL_IDS } from "../data/levels";
+import { DIFFICULTY_IDS } from "../data/difficulty";
 
 let manager: SaveManager | null = null;
 
@@ -26,6 +27,7 @@ export function getSaveManager(): SaveManager {
         enemyIds: ENEMY_ORDER,
         defaultUnlockedGuardians: DEFAULT_UNLOCKED_GUARDIANS,
         decorationIds: DECORATION_IDS,
+        difficultyIds: DIFFICULTY_IDS,
       },
     });
   }

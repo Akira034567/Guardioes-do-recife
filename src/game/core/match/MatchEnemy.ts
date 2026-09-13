@@ -71,6 +71,14 @@ export class MatchEnemy implements AbilityEnemy {
     return !this.definition.unblockable;
   }
 
+  /**
+   * Ponto fraco preso a um chefe (item 11). Fica aqui, e não num `instanceof` espalhado, para que
+   * quem precisa distinguir os dois casos pergunte uma coisa só.
+   */
+  get isWeakPoint(): boolean {
+    return false;
+  }
+
   /** Camuflados só podem ser mirados depois de revelados (ou atingidos, conforme a habilidade). */
   isTargetable(now: number): boolean {
     return !this.mods.hidden || this.status.isRevealed(now);

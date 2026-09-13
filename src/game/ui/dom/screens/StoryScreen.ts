@@ -3,7 +3,8 @@ import { GUARDIANS } from "../../../data/guardians";
 import { getLevel } from "../../../data/levels";
 import { STORY_SEQUENCES, type StorySequence } from "../../../data/story";
 import { hasSeenStory, markStorySeen } from "../../../systems/story";
-import { button, h } from "../h";
+import { fill, button, h } from "../h";
+import { preserveScroll } from "../scroll";
 import { ICONS } from "../icons";
 import type { Screen, ScreenHost } from "../ScreenHost";
 import { shellSidebar, type ShellNav } from "../shell";
@@ -26,7 +27,7 @@ export function storyScreen(sequence: StorySequence, onFinish: () => void): Scre
         onFinish();
       };
 
-      const draw = (): void => {
+      const redraw = (): void => {
         const slide = sequence.slides[index];
         const parts: Node[] = [
           h("span", { class: "gr-badge", text: `${index + 1} de ${sequence.slides.length}` }),
@@ -52,7 +53,11 @@ export function storyScreen(sequence: StorySequence, onFinish: () => void): Scre
         );
       };
 
-      draw();
+      // Clicar num card reconstrói o miolo. A rolagem da grade e o foco do botão são
+      // repostos em volta disso, senão a tela salta para o topo a cada escolha (item 6).
+      const draw = (): void => preserveScroll(root, redraw);
+
+      redraw();
       return root;
     },
   };
@@ -101,14 +106,20 @@ function coverArt(sequence: StorySequence): string | null {
  * Histórias do Recife (item 31): o índice dos capítulos. As lidas podem ser revistas; as demais ficam
  * em "???" com o estado de cada uma — a lista à esquerda, a ficha do capítulo à direita.
  */
-export function storyIndexScreen(onBack: () => void, nav?: ShellNav, isUnlocked: (levelId: string) => boolean = () => false): Screen {
+/** `embedded`: o AppShell já desenha a coluna e o fundo, então a tela entrega só o conteúdo (item 2). */
+export function storyIndexScreen(
+  onBack: () => void,
+  nav?: ShellNav,
+  isUnlocked: (levelId: string) => boolean = () => false,
+  embedded = false,
+): Screen {
   let filter: StoryFilter = "all";
   let chosen: string | null = null;
 
   return {
     id: "story-index",
     render(host: ScreenHost) {
-      const root = h("div", { class: "gr-album gr-album--stories", testId: "story-index" });
+      const root = h("div", { class: `${"gr-album gr-album--stories"}${embedded ? " gr-album--embedded" : ""}`, testId: "story-index" });
       const layout = h("div", { class: "gr-album__layout" });
       root.append(layout);
 
@@ -118,8 +129,8 @@ export function storyIndexScreen(onBack: () => void, nav?: ShellNav, isUnlocked:
         const listed = STORY_SEQUENCES.filter((sequence) => filter === "all" || states.get(sequence.id) === filter);
         const current = listed.find((sequence) => sequence.id === chosen) ?? listed.find((sequence) => states.get(sequence.id) === "read") ?? listed[0];
 
-        layout.replaceChildren(
-          shellSidebar("stories", nav ?? fallbackNav(onBack), {
+        fill(layout, 
+          embedded ? null : shellSidebar("stories", nav ?? fallbackNav(onBack), {
             navId: (section) => `stories-nav-${section}`,
             back: onBack,
             backId: "story-index-back",

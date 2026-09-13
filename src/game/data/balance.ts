@@ -22,6 +22,22 @@ export const ECONOMY = {
   earlyStartBonusPerSecond: 0,
 } as const;
 
+/**
+ * Janela de animação dos Guardiões (item 15). São números de APRESENTAÇÃO: nenhum deles entra em
+ * dano, alcance ou cooldown. 🔶 placeholders.
+ *
+ * `maxCycleFraction` é o que garante o repouso: a sequência golpe+recuperação nunca ocupa mais que
+ * essa fração do cooldown, então sempre sobra tempo visível em `idle`, por mais rápido que o
+ * Guardião ataque.
+ */
+export const GUARDIAN_VISUAL = {
+  maxWindupMs: 200,
+  maxAttackMs: 360,
+  maxRecoveryMs: 240,
+  maxCycleFraction: 0.6,
+  abilityMs: 420,
+} as const;
+
 export const GUARDIAN_BALANCE = {
   "pistol-shrimp": {
     cost: 80,

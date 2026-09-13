@@ -20,6 +20,8 @@ export interface BossSnapshot {
   phaseIndex: number;
   phaseCount: number;
   blockedById: string | null;
+  /** Pontos fracos deste chefe; `null` quando a dificuldade não os concede (item 11). */
+  weakPoints: { total: number; remaining: number } | null;
 }
 
 /** Resumo barato da partida para o HUD (montado sob demanda, não a cada tick). */

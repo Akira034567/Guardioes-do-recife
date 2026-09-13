@@ -10,6 +10,7 @@ import { HUD_LAYOUT } from "../hudLayout";
 import { hudIcon, type HudIconName } from "../ui/hud/HudIcons";
 import { GLOW_PAD, HUD_COLORS, HUD_FONT, hudBar, hudPanel, type PanelStyle } from "../ui/hud/HudSkin";
 import { publishUiRegistry, UI_REGISTRY } from "../ui/UiRegistry";
+import { devAssert, lifecycleLog } from "../systems/devLog";
 import type { BranchId, DebugFlags, GuardianId, HudSnapshot, UpgradeOption } from "../types";
 
 export { HUD_LAYOUT };
@@ -181,6 +182,7 @@ export class UIScene extends Phaser.Scene {
   private waveText!: Phaser.GameObjects.Text;
   private timerText!: Phaser.GameObjects.Text;
   private messageText!: Phaser.GameObjects.Text;
+  private messageBubble!: Phaser.GameObjects.Image;
   private cards: GuardianCard[] = [];
   private upgradeTitle!: Phaser.GameObjects.Text;
   private upgradeLevel!: Phaser.GameObjects.Text;
@@ -225,6 +227,8 @@ export class UIScene extends Phaser.Scene {
   private debugOpenText!: Phaser.GameObjects.Text;
   private debugButtons: DebugButton[] = [];
   private debugActionButtons: Array<{ background: Phaser.GameObjects.Rectangle; label: Phaser.GameObjects.Text }> = [];
+  /** Um marcador por ponto fraco do chefe em campo (item 11). */
+  private bossWeakPointPips: Phaser.GameObjects.Arc[] = [];
   private debugPanelCollapsed = false;
   private debugEnabled = false;
   private debugFromQuery = false;
@@ -239,6 +243,7 @@ export class UIScene extends Phaser.Scene {
   }
 
   create(): void {
+    this.resetTransientState();
     UI_REGISTRY.clear();
     this.createTopHud();
     this.createOverlayStrip();
@@ -252,11 +257,41 @@ export class UIScene extends Phaser.Scene {
       EventBus.off(Events.hudUpdate, this.renderSnapshot, this);
     });
 
-    this.input.keyboard?.on("keydown-F2", () => EventBus.emit(Events.toggleDebug));
-    this.input.keyboard?.on("keydown-SPACE", (event: KeyboardEvent) => {
-      event.preventDefault();
-      EventBus.emit(Events.skipCountdown);
+    this.input.keyboard?.on("keydown-F2", this.onDebugKey, this);
+    this.input.keyboard?.on("keydown-SPACE", this.onSkipKey, this);
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+      this.input.keyboard?.off("keydown-F2", this.onDebugKey, this);
+      this.input.keyboard?.off("keydown-SPACE", this.onSkipKey, this);
     });
+  }
+
+  private readonly onDebugKey = (): void => {
+    EventBus.emit(Events.toggleDebug);
+  };
+
+  private readonly onSkipKey = (event: KeyboardEvent): void => {
+    event.preventDefault();
+    EventBus.emit(Events.skipCountdown);
+  };
+
+  /**
+   * O Phaser REAPROVEITA a instância da cena entre `scene.stop` e `scene.launch` (`SceneManager.start`
+   * chama `sys.shutdown()` e depois `sys.start()` no mesmo objeto). Campos inicializados na
+   * declaração da classe, portanto, NÃO voltam ao valor inicial num reinício — eles continuam
+   * apontando para GameObjects que o `DisplayList.shutdown()` já destruiu.
+   *
+   * Era exatamente isto que travava o jogo: `panelIcon` sobrevivia ao reinício apontando para uma
+   * `Image` destruída (`destroy()` zera `gameObject.scene`), o `if (!this.panelIcon)` nunca entrava
+   * e o `setTexture` seguinte estourava dentro do `update()` — matando o loop do Phaser.
+   *
+   * Tudo que tiver inicializador na declaração precisa aparecer aqui.
+   */
+  private resetTransientState(): void {
+    this.panelIcon = null;
+    this.bossWeakPointPips = [];
+    this.debugPanelCollapsed = false;
+    this.debugEnabled = false;
+    lifecycleLog("ui", "create");
   }
 
   // ── Barra de cima ────────────────────────────────────────────────────────────
@@ -292,23 +327,34 @@ export class UIScene extends Phaser.Scene {
     this.podCaption(pods.wave.x + 40, "ONDA");
     this.waveText = this.podValue(pods.wave.x + 88, "1/5", HUD_COLORS.text);
 
-    // Pílula do relógio.
+    // Pílula da próxima onda: a legenda diz o que o número significa, como nas outras.
     this.pod(pods.timer.x, pods.timer.width, "hourglass", 20);
-    this.timerText = this.podValue(pods.timer.x + 42, "EM 10s", HUD_COLORS.cyanBright, 15);
+    this.podCaption(pods.timer.x + 40, "PRÓXIMA ONDA");
+    this.timerText = this.podValue(pods.timer.x + 176, "EM 10s", HUD_COLORS.cyanBright, 17);
 
+    this.createTopButtons();
+    this.createMessageToast();
+  }
+
+  /**
+   * Aviso curto da partida, logo abaixo da barra. Fora dela porque a barra é para ESTADO (moeda,
+   * vidas, onda, contagem) e o aviso é transitório: disputando a mesma faixa, um empurrava o outro.
+   */
+  private createMessageToast(): void {
+    this.messageBubble = this.add
+      .image(HUD_LAYOUT.messageX, HUD_LAYOUT.messageY, hudPanel(this, HUD_LAYOUT.messageWidth, 30, SKIN.pod))
+      .setVisible(false);
     this.messageText = this.add
-      .text(HUD_LAYOUT.messageX, topCenterY, "", {
+      .text(HUD_LAYOUT.messageX, HUD_LAYOUT.messageY, "", {
         fontFamily: HUD_FONT.body,
-        fontSize: "11px",
+        fontSize: "12px",
         fontStyle: "bold",
         color: HUD_COLORS.text,
         align: "center",
-        wordWrap: { width: HUD_LAYOUT.messageWidth },
-        maxLines: 3,
+        wordWrap: { width: HUD_LAYOUT.messageWidth - 24 },
+        maxLines: 2,
       })
       .setOrigin(0.5);
-
-    this.createTopButtons();
   }
 
   /** Fundo de uma pílula de estado, com o pictograma encostado à esquerda. */
@@ -787,6 +833,8 @@ export class UIScene extends Phaser.Scene {
       snapshot.waveState === "countdown" ? `EM ${snapshot.countdownSeconds}s` : snapshot.waveState === "victory" ? "CONCLUÍDO" : "EM CURSO",
     );
     this.messageText.setText(snapshot.message);
+    // O balão só existe quando há o que dizer: vazio, ele some junto com o texto.
+    this.messageBubble.setVisible(snapshot.message.length > 0);
     this.pauseButton.icon?.setTexture(hudIcon(this, snapshot.paused ? "play" : "pause", 20, HUD_COLORS.text));
     this.pauseButton.skin(hudPanel(this, topButtonSize, topButtonHeight, snapshot.paused ? SKIN.buttonOn : SKIN.button));
     this.muteButton.icon?.setTexture(hudIcon(this, snapshot.muted ? "muted" : "sound", 20, snapshot.muted ? HUD_COLORS.textDim : HUD_COLORS.text));
@@ -908,6 +956,28 @@ export class UIScene extends Phaser.Scene {
     const width = HUD_LAYOUT.bossBarWidth - 8;
     this.bossBarFill.setCrop(0, 0, width * ratio, 8);
     this.bossBarFill.setVisible(visible && ratio > 0);
+    this.renderBossWeakPoints(visible ? boss.weakPoints : null);
+  }
+
+  /**
+   * Marcadores dos pontos fracos ao lado da barra do chefe (item 11). Ocultos quando a dificuldade
+   * não os concede — no Normal a baleia não tem coral nenhum, e a barra fica como sempre foi.
+   */
+  private renderBossWeakPoints(weakPoints: { total: number; remaining: number } | null): void {
+    const total = weakPoints?.total ?? 0;
+    while (this.bossWeakPointPips.length < total) {
+      const index = this.bossWeakPointPips.length;
+      const x = HUD_LAYOUT.bossBarX + HUD_LAYOUT.bossBarWidth / 2 + 14 + index * 14;
+      this.bossWeakPointPips.push(this.add.circle(x, HUD_LAYOUT.bossBarY, 5).setStrokeStyle(2, 0xff8ae8, 0.95).setVisible(false));
+    }
+    this.bossWeakPointPips.forEach((pip, index) => {
+      const active = index < total;
+      pip.setVisible(active);
+      if (!active) return;
+      // Aceso = coral de pé; apagado = já rompido.
+      const intact = index < (weakPoints?.remaining ?? 0);
+      pip.setFillStyle(intact ? 0xb44bd6 : 0x123043, intact ? 1 : 0.6);
+    });
   }
 
   private renderUpgradePanel(snapshot: HudSnapshot): void {
@@ -1061,6 +1131,9 @@ export class UIScene extends Phaser.Scene {
    */
   private renderPanelIcon(guardianId: GuardianId | null, variant: string): void {
     const key = guardianId ? artTextureKeyForFolder(guardianId, variant, "idle") : null;
+    // `destroy()` zera `gameObject.scene`: conferir isso sobrevive a qualquer esquecimento futuro
+    // de repor o campo num reinício, sem depender só do `resetTransientState`.
+    if (this.panelIcon && !this.panelIcon.scene) this.panelIcon = null;
     if (!key || !this.textures.exists(key)) {
       this.panelIcon?.setVisible(false);
       return;
@@ -1093,6 +1166,9 @@ export class UIScene extends Phaser.Scene {
    * mantém o quadro inteiro, então o deslocamento centraliza só a parte que aparece.
    */
   private fitSprite(image: Phaser.GameObjects.Image, key: string, centerX: number, centerY: number, boxWidth: number, boxHeight: number): void {
+    // Um GameObject destruído ainda responde a `setTexture`, mas resolve a textura por `this.scene`
+    // — que o `destroy()` zerou. O erro estoura longe da causa; nomeá-lo aqui economiza a caçada.
+    devAssert(image.scene, "fitSprite recebeu um GameObject já destruído", { key });
     fitImageToBox(this, image, key, centerX, centerY, boxWidth, boxHeight);
   }
 
@@ -1161,7 +1237,8 @@ export class UIScene extends Phaser.Scene {
     this.debugToggle.setVisible(this.debugFromQuery);
     this.debugToggleText.setVisible(this.debugFromQuery);
 
-    this.debugPanel = this.add.rectangle(1120, 268, 282, 356, 0x001723, 0.94).setStrokeStyle(2, 0xff4df3, 0.8).setVisible(false);
+    // Topo fixo em y=90; a altura cresceu para caber a quinta linha de flags (`NÓS`).
+    this.debugPanel = this.add.rectangle(1120, 294, 282, 409, 0x001723, 0.94).setStrokeStyle(2, 0xff4df3, 0.8).setVisible(false);
     const title = this.add
       .text(1120, 105, "DEBUG OVERLAY", {
         fontFamily: "monospace",
@@ -1175,6 +1252,7 @@ export class UIScene extends Phaser.Scene {
 
     const definitions: Array<[keyof Omit<DebugFlags, "enabled">, string]> = [
       ["route", "ROTA"],
+      ["routeNodes", "NÓS"],
       ["ranges", "ALCANCE"],
       ["hitboxes", "HITBOXES"],
       ["current", "CORRENTE"],
@@ -1194,7 +1272,7 @@ export class UIScene extends Phaser.Scene {
     });
     this.createDebugActions();
     const hint = this.add
-      .text(1120, 427, "F2 fecha · ações marcam a partida como testada", {
+      .text(1120, 480, "F2 fecha · ações marcam a partida como testada", {
         fontFamily: "monospace",
         fontSize: "10px",
         color: "#8cbac4",
@@ -1240,7 +1318,7 @@ export class UIScene extends Phaser.Scene {
     this.debugActionButtons = actions.map(([text, onClick], index) => {
       const column = index % 3;
       const row = Math.floor(index / 3);
-      const background = this.button(1038 + column * 82, 350 + row * 40, 78, 34, text, onClick);
+      const background = this.button(1038 + column * 82, 403 + row * 40, 78, 34, text, onClick);
       const label = background.getData("label") as Phaser.GameObjects.Text;
       label.setFontSize(11);
       background.setFillStyle(0x2a1330, 1).setStrokeStyle(2, 0xff65ee, 0.8);

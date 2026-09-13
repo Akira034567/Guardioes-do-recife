@@ -48,7 +48,8 @@ export class DebugOverlay {
     this.labels = [];
     if (!flags.enabled) return;
 
-    if (flags.route) this.drawRoute();
+    if (flags.route) this.strokeRouteLine();
+    if (flags.routeNodes) this.drawRouteNodes();
     if (flags.current) this.drawCurrents(currents, currentReversed);
     if (flags.placements) this.drawPlacements(placementInfo, guardians);
     if (flags.controls) this.drawControls(controls, guardians, enemies);
@@ -117,10 +118,17 @@ export class DebugOverlay {
     this.labels.forEach((label) => label.destroy());
   }
 
-  private drawRoute(): void {
+  /** Só o traço da rota: onde os inimigos andam. */
+  private strokeRouteLine(): void {
     this.graphics.lineStyle(3, 0xff4df3, 0.9);
     this.strokeRoute();
+  }
 
+  /**
+   * Os nós que DEFINEM a rota. Isto é a estrutura de autoria do caminho aparecendo na tela, e já
+   * vazou para o jogador uma vez — por isso mora atrás da própria flag, separada do traço.
+   */
+  private drawRouteNodes(): void {
     this.route.points.forEach((point, index) => {
       this.graphics.fillStyle(index === 0 ? 0x5cff91 : index === this.route.points.length - 1 ? 0xff5c67 : 0xff4df3, 1);
       this.graphics.fillCircle(point.x, point.y, 5);

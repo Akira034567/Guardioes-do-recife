@@ -18,7 +18,9 @@ export type TargetStrategy =
   | "ELITE"
   | "BOSS"
   | "WOUNDED"
-  | "THREAT";
+  | "THREAT"
+  /** Pontos fracos primeiro; empata pelo mesmo critério de ameaça (item 12). */
+  | "WEAK_POINT";
 
 export const LEGACY_TARGETING: Record<TargetPolicyMode, TargetStrategy> = {
   leading: "FIRST",
@@ -50,19 +52,47 @@ export interface TargetPolicy {
   markedId?: string | null;
   /** Forma do alcance; ausente = radial. */
   shape?: TargetingShape;
+  /**
+   * Categorias em ordem de preferência (item 12). AUSENTE = comportamento idêntico ao de sempre —
+   * é o que garante que os Guardiões que não pedem prioridade nenhuma não mudem em nada.
+   */
+  priority?: readonly TargetTier[];
 }
 
 export function normalizeStrategy(mode: TargetPolicyMode | TargetStrategy): TargetStrategy {
   return (LEGACY_TARGETING as Record<string, TargetStrategy>)[mode] ?? (mode as TargetStrategy);
 }
 
+/**
+ * Categorias de alvo (item 12). São genéricas: nenhum Guardião conhece "coral" nem "baleia", só
+ * pede uma ORDEM de categorias, e qualquer chefe futuro reaproveita a mesma mecânica marcando as
+ * entidades filhas com a etiqueta `WEAK_POINT`.
+ */
+export type TargetTier = "weakPoint" | "elite" | "boss" | "normal";
+
+/** A ordem pedida no item 12: ponto fraco de chefe > elite > chefe > comum. */
+export const WEAK_POINT_FIRST: readonly TargetTier[] = ["weakPoint", "elite", "boss", "normal"];
+
+export function isWeakPoint(candidate: Pick<TargetCandidate, "definition">): boolean {
+  const tags = candidate.definition.tags;
+  return Boolean(tags?.includes("WEAK_POINT") || tags?.includes("PRIORITY_TARGET"));
+}
+
+export function tierOf(candidate: Pick<TargetCandidate, "definition">): TargetTier {
+  if (isWeakPoint(candidate)) return "weakPoint";
+  if (candidate.definition.role === "elite" || candidate.definition.tags?.includes("ELITE")) return "elite";
+  if (candidate.definition.isBoss || candidate.definition.role === "boss") return "boss";
+  return "normal";
+}
+
 export function threatTier(candidate: Pick<TargetCandidate, "definition">): number {
+  if (isWeakPoint(candidate)) return 3;
   if (candidate.definition.isBoss || candidate.definition.role === "boss") return 2;
   if (candidate.definition.role === "elite") return 1;
   return 0;
 }
 
-/** Ordem decrescente de ameaça: chefe > elite > mais vida máxima > mais avançado na rota. */
+/** Ordem decrescente de ameaça: ponto fraco > chefe > elite > mais vida máxima > mais avançado. */
 export function compareThreat(a: TargetCandidate, b: TargetCandidate): number {
   const tier = threatTier(b) - threatTier(a);
   if (tier !== 0) return tier;
@@ -101,6 +131,7 @@ const COMPARATORS: Record<TargetStrategy, (a: TargetCandidate, b: TargetCandidat
   BOSS: (a, b) => threatTier(b) - threatTier(a) || byProgress(a, b),
   WOUNDED: (a, b, context) => Number(isWounded(b, context.threshold)) - Number(isWounded(a, context.threshold)) || byProgress(a, b),
   THREAT: (a, b) => compareThreat(a, b),
+  WEAK_POINT: (a, b) => Number(isWeakPoint(b)) - Number(isWeakPoint(a)) || compareThreat(a, b),
 };
 
 /** Inimigos vivos, miráveis e dentro da forma de alcance. */
@@ -142,7 +173,16 @@ export function selectTarget<T extends TargetCandidate>(
   }
   const context: CompareContext = { origin, threshold: policy.threshold ?? 0.4, now };
   const comparator = COMPARATORS[normalizeStrategy(policy.mode)] ?? COMPARATORS.FIRST;
-  return [...pool].sort((a, b) => comparator(a, b, context))[0];
+  const priority = policy.priority;
+  if (!priority) return [...pool].sort((a, b) => comparator(a, b, context))[0];
+  // Ordena por categoria e só depois pelo comparador da estratégia. Categoria não listada vai para
+  // o fim — nunca é filtrada, senão o Guardião ficaria sem alvo num campo só de categorias que ele
+  // não prioriza.
+  const rank = (candidate: T): number => {
+    const index = priority.indexOf(tierOf(candidate));
+    return index === -1 ? priority.length : index;
+  };
+  return [...pool].sort((a, b) => rank(a) - rank(b) || comparator(a, b, context))[0];
 }
 
 /** Maior ameaça ao alcance (para marcar presa e para o Sonar). */

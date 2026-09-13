@@ -1,4 +1,5 @@
 import { artTextureKeyForFolder, artVariant, GUARDIAN_ART } from "../../../assets/guardianArt";
+import { DIFFICULTIES } from "../../../data/difficulty";
 import type { MatchResult } from "../../../core/progression/MatchResult";
 import { objectiveLabel } from "../../../core/progression/objectives";
 import type { MatchOutcome } from "../../../core/progression/ProgressionService";
@@ -67,6 +68,11 @@ function rewardBox(outcome: MatchOutcome): HTMLElement | null {
 function achievementToast(outcome: MatchOutcome): HTMLElement | null {
   const lines: string[] = outcome.achievements.map((definition) => `★ ${definition.name} — ${definition.description}`);
   if (outcome.challengeCompleted) lines.unshift("✦ Desafio cumprido");
+  // O desbloqueio de dificuldade é global e acontece longe da fase que o completou: sem anunciá-lo
+  // aqui, o jogador voltaria ao mapa sem saber que a campanha inteira abriu um nível novo (item 4).
+  if (outcome.difficultyUnlocked) {
+    lines.unshift(`⚑ ${DIFFICULTIES[outcome.difficultyUnlocked].name.toUpperCase()} LIBERADO — a campanha inteira agora pode ser jogada nele.`);
+  }
   if (lines.length === 0) return null;
   return h(
     "div",

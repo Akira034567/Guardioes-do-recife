@@ -2,6 +2,9 @@ import { artPath, GUARDIAN_ART } from "../../../assets/guardianArt";
 import { enemyPortraitPath } from "../../../assets/enemyArt";
 import { levelBackgroundPath } from "../../../assets/levelBackgrounds";
 import { challengeExpiresAt, challengeRule, currentChallenges, type ChallengeDefinition } from "../../../core/progression/challenges";
+import { highestUnlockedDifficulty } from "../../../core/progression/difficultyUnlocks";
+import { LEVEL_IDS } from "../../../data/levels";
+import { DIFFICULTY_IDS } from "../../../data/difficulty";
 import type { ProgressionService } from "../../../core/progression/ProgressionService";
 import { DIFFICULTIES } from "../../../data/difficulty";
 import { ENCOUNTERS, type EncounterDefinition } from "../../../data/encounters";
@@ -480,7 +483,12 @@ function threatTile(enemyId: EnemyId, seen: boolean): HTMLElement {
 function challengeRow(progression: ProgressionService, isUnlocked: (levelId: string) => boolean, actions: MapActions): HTMLElement {
   const now = new Date();
   const reachable = LEVELS.filter((level) => isUnlocked(level.id)).map((level) => level.id);
-  const challenges = currentChallenges(now, progression.progress.unlockedGuardians as never, reachable);
+  const challenges = currentChallenges(
+    now,
+    progression.progress.unlockedGuardians as never,
+    reachable,
+    DIFFICULTY_IDS.indexOf(highestUnlockedDifficulty(progression.progress, LEVEL_IDS)),
+  );
   return h(
     "div",
     { class: "gr-world__challenges", testId: "map-challenges" },

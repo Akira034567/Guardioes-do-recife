@@ -18,6 +18,31 @@ export type MatchEvent =
   | (Timed & { type: "bossPhaseChanged"; id: string; phaseIndex: number; phaseCount: number; announcement: string | null })
   | (Timed & { type: "bossDefeated"; id: string; enemyId: EnemyId; name: string; x: number; y: number })
   | (Timed & { type: "currentsReversed"; reversed: boolean; bossName: string | null })
+  // pontos fracos de chefe (item 11)
+  | (Timed & { type: "weakPointSpawned"; id: string; parentId: string; index: number; name: string; x: number; y: number; maxHealth: number })
+  | (Timed & {
+      type: "weakPointDamaged";
+      id: string;
+      parentId: string;
+      index: number;
+      amount: number;
+      health: number;
+      maxHealth: number;
+      x: number;
+      y: number;
+      sourceId: string | null;
+    })
+  | (Timed & {
+      type: "weakPointDestroyed";
+      id: string;
+      parentId: string;
+      index: number;
+      x: number;
+      y: number;
+      burstDamage: number;
+      /** `broken` = o jogador rompeu; `parentGone` = o chefe saiu de campo e levou o ponto junto. */
+      reason: "broken" | "parentGone";
+    })
   // inimigos
   | (Timed & { type: "enemySpawned"; id: string; enemyId: EnemyId; x: number; y: number; pathId: string })
   | (Timed & {

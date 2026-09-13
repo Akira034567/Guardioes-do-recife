@@ -6,6 +6,8 @@ import type { AchievementDefinition } from "../../data/achievements";
 import { achievementShells, applyAchievements } from "./achievements";
 import { countsForProgression, type MatchResult } from "./MatchResult";
 import { evaluateObjectives } from "./objectives";
+import { highestUnlockedDifficulty } from "./difficultyUnlocks";
+import type { DifficultyId } from "../../data/difficulty";
 import { computeLevelRewards, encounterRewards, type RewardBreakdown } from "./rewards";
 import { mergeLevelRecord, type LevelMerge } from "./stars";
 import { purchaseUnlock, reconcileUnlocks, unlockStatus, type PurchaseResult, type UnlockStatus } from "./unlocks";
@@ -34,6 +36,11 @@ export interface MatchOutcome {
   challengeCompleted: string | null;
   /** Fase seguinte liberada, quando houver. */
   nextLevelId: string | null;
+  /**
+   * Dificuldade que esta vitória acabou de abrir (item 4). Sem este aviso o jogador não teria como
+   * descobrir que terminar a campanha no Normal liberou o Difícil.
+   */
+  difficultyUnlocked: DifficultyId | null;
   /** Falso quando a partida usou comandos de debug: nada é salvo além da descoberta de inimigos. */
   counted: boolean;
 }
@@ -77,6 +84,9 @@ export class ProgressionService {
     const challengeDone =
       Boolean(challenge) && counted && result.victory && evaluateObjectives([challenge!.objective], result)[0] === true;
     let challengeCompleted: string | null = null;
+
+    // Lido antes e depois do `update` para saber o que ESTA vitória abriu.
+    const unlockedBefore = highestUnlockedDifficulty(this.save.progress, this.context.levelIds);
 
     this.save.update((draft) => {
       // Descobrir um inimigo vale para o bestiário mesmo em partida de teste.
@@ -128,6 +138,8 @@ export class ProgressionService {
       rewards.shells += achievementShells(achievements);
     }
 
+    const unlockedAfter = highestUnlockedDifficulty(this.save.progress, this.context.levelIds);
+
     return {
       levelId: result.levelId,
       victory: result.victory,
@@ -144,6 +156,7 @@ export class ProgressionService {
       achievements,
       challengeCompleted,
       nextLevelId: result.victory && !isEncounter ? this.nextLevelId(result.levelId) : null,
+      difficultyUnlocked: unlockedAfter !== unlockedBefore ? unlockedAfter : null,
       counted,
     };
   }
@@ -163,6 +176,17 @@ export class ProgressionService {
       draft.currency.lifetimeShells += bonus;
     });
     return unlocked;
+  }
+
+  /**
+   * Guarda o esquadrão escolhido na preparação, na ORDEM escolhida (item 7), sem esperar o fim da
+   * partida. Antes só `applyMatchResult` gravava, então sair da preparação perdia tanto a escolha
+   * quanto a ordem das vagas.
+   */
+  rememberLoadout(loadout: readonly GuardianId[]): void {
+    this.save.update((draft) => {
+      draft.lastLoadout = [...loadout];
+    });
   }
 
   /** Consome a fila de apresentações pendentes (a tela de desbloqueio mostra uma por vez). */

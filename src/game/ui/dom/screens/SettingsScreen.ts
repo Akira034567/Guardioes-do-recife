@@ -3,7 +3,7 @@ import type { PlayerSettings } from "../../../core/save/PlayerProgress";
 import { LEVELS } from "../../../data/levels";
 import { getSettings, updateSettings } from "../../../systems/settings";
 import { resetTutorial, tutorialDone } from "../../../systems/tutorial";
-import { h } from "../h";
+import { fill, h } from "../h";
 import { ICONS } from "../icons";
 import type { Screen, ScreenHost } from "../ScreenHost";
 import { shellSidebar, type ShellNav } from "../shell";
@@ -21,7 +21,8 @@ const UI_SCALE_LABELS: Array<[PlayerSettings["uiScale"], string]> = [
  * outras seções; aberta pela pausa, no meio de uma partida, ela vem sozinha — ali o menu do Recife
  * não faria sentido.
  */
-export function settingsScreen(onBack: () => void, nav?: ShellNav): Screen {
+/** `embedded`: o AppShell já desenha a coluna e o fundo, então a tela entrega só o conteúdo (item 2). */
+export function settingsScreen(onBack: () => void, nav?: ShellNav, embedded = false): Screen {
   let host: ScreenHost | null = null;
   let redraw = (): void => {};
   // A saída da tela cheia pode vir do jogador (tecla Esc), não só do botão: a tela escuta o navegador.
@@ -35,10 +36,10 @@ export function settingsScreen(onBack: () => void, nav?: ShellNav): Screen {
     render(screenHost: ScreenHost) {
       host = screenHost;
       document.addEventListener("fullscreenchange", onFullscreenChange);
-      const root = h("div", { class: `gr-album gr-config${nav ? "" : " gr-config--bare"}`, testId: "settings-panel" });
+      const root = h("div", { class: `gr-album gr-config${nav ? "" : " gr-config--bare"}${embedded ? " gr-album--embedded" : ""}`, testId: "settings-panel" });
       // Aberta pela pausa a tela fica por cima da partida; ali o fundo do Recife só atrapalharia.
       const art = nav ? levelBackgroundPath(LEVELS[1].backgroundKey) : null;
-      if (art) root.append(h("div", { class: "gr-world__backdrop", style: `background-image:url(${art})` }));
+      if (art && !embedded) root.append(h("div", { class: "gr-world__backdrop", style: `background-image:url(${art})` }));
       const layout = h("div", { class: "gr-album__layout" });
       root.append(layout);
 
@@ -49,8 +50,10 @@ export function settingsScreen(onBack: () => void, nav?: ShellNav): Screen {
           draw();
         };
 
-        layout.replaceChildren(
-          nav
+        fill(layout, 
+          embedded
+            ? null
+            : nav
             ? shellSidebar("settings", nav, {
                 navId: (section) => `settings-nav-${section}`,
                 back: onBack,

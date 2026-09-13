@@ -5,6 +5,10 @@ import { objectiveLabel } from "../../../core/progression/objectives";
 import type { ProgressionService } from "../../../core/progression/ProgressionService";
 import type { LevelRecord } from "../../../core/save/PlayerProgress";
 import { DIFFICULTIES, DIFFICULTY_IDS, type DifficultyId } from "../../../data/difficulty";
+import { difficultyGates, type DifficultyGate } from "../../../core/progression/difficultyUnlocks";
+import { LEVEL_IDS } from "../../../data/levels";
+import { enableReorder } from "../reorder";
+import { preserveScroll } from "../scroll";
 import { ENEMIES } from "../../../data/enemies";
 import { ENEMY_LORE } from "../../../data/enemyLore";
 import { GUARDIANS, GUARDIAN_ORDER, LOADOUT_SIZE } from "../../../data/guardians";
@@ -49,8 +53,18 @@ export function preparationScreen(
   // O quadro de Guardiões abre sob demanda ("Alterar Guardiões"): a tela começa mostrando a escolha
   // feita, não o catálogo inteiro.
   let rosterOpen = false;
+  /**
+   * Vaga que pediu o seletor (item 5). Quando ela existe, escolher um Guardião preenche AQUELA vaga
+   * e fecha o quadro na hora; quando é `null`, o quadro foi aberto pelo botão "Alterar Guardiões" e
+   * fica aberto para várias trocas seguidas.
+   */
+  let rosterSlot: number | null = null;
   const statuses = new Map(progression.unlockStatuses().map((status) => [status.guardianId, status]));
   const record = progression.record(level.id);
+  const gates = difficultyGates(progression.progress, LEVEL_IDS);
+  // Toda fase abre no Normal (item 4). O que ficou guardado no save não decide mais isto, e uma
+  // dificuldade que o jogador ainda não conquistou nunca vem pré-selecionada.
+  if (!initial.locked && !(gates.find((gate) => gate.id === difficulty)?.unlocked ?? true)) difficulty = "normal";
 
   return {
     id: "preparation",
@@ -62,60 +76,175 @@ export function preparationScreen(
       const layout = h("div", { class: "gr-prep__layout" });
       root.append(layout);
 
-      const draw = (): void => {
-        layout.replaceChildren(
-          topBar(actions.onBack),
-          h(
-            "div",
-            { class: "gr-prep__body" },
-            h(
-              "section",
-              { class: "gr-panel gr-prep__main", testId: "prep-panel", dataLevel: level.id },
-              hero(level, levelIndex, initial.encounter !== undefined, art),
-              initial.encounter
-                ? h("p", {
-                    class: "gr-hint",
-                    testId: "prep-encounter",
-                    text: `${initial.encounter.teaser} Vencer aqui traz ${GUARDIANS[initial.encounter.guardianId].name} para a coleção.`,
-                  })
-                : null,
-              initial.challenge
-                ? h("p", {
-                    class: "gr-hint",
-                    testId: "prep-challenge",
-                    text: `${initial.challenge.name}: vença ${initial.challenge.rule}. Vale ${GLOBAL_CURRENCY.symbol} ${initial.challenge.shells}.`,
-                  })
-                : null,
-              statsRow(level, record?.stars ?? 0),
-              objectives(level, record, difficulty),
-              ...bossCards(level, progression),
-            ),
-            h(
-              "aside",
-              { class: "gr-prep__side" },
-              initial.locked
-                ? lockedDifficulty(difficulty)
-                : difficultyPicker(difficulty, (next) => {
-                    difficulty = next;
-                    draw();
-                  }),
-              knownThreats(level, progression),
-              squadBlock(squad, statuses, progression, initial.locked ?? false, rosterOpen, {
-                redraw: draw,
-                toggleRoster: () => {
-                  rosterOpen = !rosterOpen;
-                  draw();
-                  // A coluna rola por dentro: abrir o quadro sem trazê-lo à vista o deixaria fora da tela.
-                  if (rosterOpen) layout.querySelector(".gr-prep__roster")?.scrollIntoView({ block: "nearest" });
+      // A árvore é montada UMA VEZ e só os pedaços que mudam são reescritos (item 6). A coluna da
+      // direita rola por dentro: trocar `.gr-prep__side` inteira a cada clique jogava o scroll de
+      // volta ao topo e tirava o foco do botão — a queixa era exatamente essa.
+      const objectivesBox = h("div", { class: "gr-prep__objectives-host" });
+      const difficultyBox = h("div", { class: "gr-prep__block-host" });
+      const squadTitle = blockTitle(ICONS.squad, `Selecione seus Guardiões (${squad.length}/${LOADOUT_SIZE})`);
+      const squadBox = h("div", { class: "gr-prep__squad", testId: "prep-slots", role: "list" });
+      const squadActions = h("div", { class: "gr-prep__squad-actions" });
+      const rosterHost = h("div", { class: "gr-prep__roster-host" });
+      const squadStatus = h("p", { class: "gr-sr-live", id: "prep-squad-status", "aria-live": "polite" });
+      const startButton = startAction(actions, () => difficulty, squad);
+
+      const syncSquad = (): void => {
+        squadTitle.replaceChildren(...blockTitleParts(ICONS.squad, `Selecione seus Guardiões (${squad.length}/${LOADOUT_SIZE})`));
+        squadBox.replaceChildren(...Array.from({ length: LOADOUT_SIZE }, (_, index) => slot(squad, index, initial.locked ?? false, handlers)));
+        startButton.disabled = squad.length !== LOADOUT_SIZE;
+        // A ordem escolhida é a ordem das cartas dentro da fase, então vale a pena guardá-la assim
+        // que ela muda — e não só no fim da partida, como antes.
+        if (!initial.locked) progression.rememberLoadout(squad);
+      };
+
+      const syncRoster = (): void => {
+        squadActions.replaceChildren(
+          initial.locked
+            ? h("span", {})
+            : h(
+                "button",
+                {
+                  class: `gr-prep__roster-toggle${rosterOpen ? " gr-prep__roster-toggle--on" : ""}`,
+                  testId: "prep-roster-toggle",
+                  type: "button",
+                  "aria-expanded": String(rosterOpen),
+                  onClick: handlers.toggleRoster,
                 },
-              }),
-            ),
-          ),
-          bottomBar(actions, () => difficulty, squad),
+                h("span", { class: "gr-icon", html: rosterOpen ? ICONS.close : ICONS.plus }),
+                h("span", { text: rosterOpen ? "Fechar" : "Alterar Guardiões" }),
+              ),
+        );
+        rosterHost.replaceChildren(
+          initial.locked || !rosterOpen ? h("span", {}) : roster(squad, statuses, progression, rosterSlot, handlers),
         );
       };
 
-      draw();
+      const syncDifficulty = (): void => {
+        difficultyBox.replaceChildren(
+          initial.locked
+            ? lockedDifficulty(difficulty)
+            : difficultyPicker(difficulty, gates, (next) => {
+                difficulty = next;
+                syncDifficulty();
+                syncObjectives();
+              }),
+        );
+      };
+
+      const syncObjectives = (): void => {
+        objectivesBox.replaceChildren(objectives(level, record, difficulty));
+      };
+
+      /**
+       * As vagas e o quadro são reescritos juntos, e a coluna da direita rola por dentro. Mesmo
+       * trocando só esses pedaços, o navegador reancora a rolagem quando a altura do conteúdo muda
+       * — o que fazia a página saltar ao escolher um Guardião. Repor a posição fecha o item 6.
+       */
+      const syncChoices = (): void =>
+        preserveScroll(root, () => {
+          syncSquad();
+          syncRoster();
+        });
+
+      const handlers: SquadHandlers = {
+        redraw: syncChoices,
+        openRosterFor: (index) => {
+          rosterSlot = index;
+          rosterOpen = true;
+          syncRoster();
+          // A coluna rola por dentro: abrir o quadro sem trazê-lo à vista o deixaria fora da tela.
+          rosterHost.querySelector(".gr-prep__roster")?.scrollIntoView({ block: "nearest" });
+        },
+        toggleRoster: () => {
+          rosterOpen = !rosterOpen;
+          rosterSlot = null;
+          syncRoster();
+          if (rosterOpen) rosterHost.querySelector(".gr-prep__roster")?.scrollIntoView({ block: "nearest" });
+        },
+        pick: (guardianId) => {
+          const slotIndex = rosterSlot;
+          const existing = squad.indexOf(guardianId);
+          if (slotIndex !== null) {
+            // Escolha dirigida a uma vaga: preenche AQUELA e fecha sozinha (item 5).
+            if (existing >= 0) squad.splice(existing, 1);
+            const at = Math.min(slotIndex, squad.length);
+            squad.splice(at, 0, guardianId);
+            squad.length = Math.min(squad.length, LOADOUT_SIZE);
+            rosterSlot = null;
+            rosterOpen = false;
+          } else if (existing >= 0) {
+            squad.splice(existing, 1);
+          } else if (squad.length < LOADOUT_SIZE) {
+            squad.push(guardianId);
+          }
+          syncChoices();
+        },
+        announce: (message) => {
+          squadStatus.textContent = message;
+        },
+      };
+
+      layout.replaceChildren(
+        topBar(actions.onBack),
+        h(
+          "div",
+          { class: "gr-prep__body" },
+          h(
+            "section",
+            { class: "gr-panel gr-prep__main", testId: "prep-panel", dataLevel: level.id },
+            hero(level, levelIndex, initial.encounter !== undefined, art),
+            initial.encounter
+              ? h("p", {
+                  class: "gr-hint",
+                  testId: "prep-encounter",
+                  text: `${initial.encounter.teaser} Vencer aqui traz ${GUARDIANS[initial.encounter.guardianId].name} para a coleção.`,
+                })
+              : null,
+            initial.challenge
+              ? h("p", {
+                  class: "gr-hint",
+                  testId: "prep-challenge",
+                  text: `${initial.challenge.name}: vença ${initial.challenge.rule}. Vale ${GLOBAL_CURRENCY.symbol} ${initial.challenge.shells}.`,
+                })
+              : null,
+            statsRow(level, record?.stars ?? 0),
+            objectivesBox,
+            ...bossCards(level, progression),
+          ),
+          h(
+            "aside",
+            { class: "gr-prep__side" },
+            difficultyBox,
+            knownThreats(level, progression),
+            h("section", { class: "gr-prep__block" }, squadTitle, squadBox, squadStatus, squadActions, rosterHost),
+          ),
+        ),
+        bottomBar(actions, startButton),
+      );
+
+      syncDifficulty();
+      syncObjectives();
+      syncSquad();
+      syncRoster();
+
+      if (!initial.locked) {
+        enableReorder({
+          container: squadBox,
+          columns: LOADOUT_SIZE,
+          itemSelector: ".gr-prep__slot",
+          ignoreSelector: ".gr-prep__slot-remove",
+          draggable: (item) => Boolean(item.dataset.guardian),
+          onReorder: (from, to) => {
+            const destination = Math.min(to, squad.length - 1);
+            const [moved] = squad.splice(from, 1);
+            if (!moved) return;
+            squad.splice(destination, 0, moved);
+            syncChoices();
+            handlers.announce(`${GUARDIANS[moved].name} movido para a vaga ${destination + 1} de ${LOADOUT_SIZE}.`);
+          },
+        });
+      }
+
       return root;
     },
   };
@@ -257,8 +386,12 @@ function bossCards(level: LevelDefinition, progression: ProgressionService): HTM
   });
 }
 
+function blockTitleParts(icon: string, text: string): HTMLElement[] {
+  return [h("span", { class: "gr-icon", html: icon }), h("span", { text })];
+}
+
 function blockTitle(icon: string, text: string): HTMLElement {
-  return h("h2", { class: "gr-prep__block-title" }, h("span", { class: "gr-icon", html: icon }), h("span", { text }));
+  return h("h2", { class: "gr-prep__block-title" }, ...blockTitleParts(icon, text));
 }
 
 /** Quantas cristas a dificuldade acende: a primeira uma, a última três. */
@@ -285,7 +418,16 @@ function lockedDifficulty(current: DifficultyId): HTMLElement {
   );
 }
 
-function difficultyPicker(current: DifficultyId, onPick: (id: DifficultyId) => void): HTMLElement {
+/**
+ * Dificuldade (item 4). As três aparecem sempre; as que ainda não foram conquistadas ficam visíveis,
+ * apagadas e com o requisito escrito.
+ *
+ * A bloqueada NÃO usa `disabled`: um botão desabilitado não recebe foco nem mostra o `title` de
+ * forma confiável, e o jogador precisa conseguir ler POR QUE não pode escolher. Ela vira
+ * `aria-disabled` com o requisito no lugar da chamada.
+ */
+function difficultyPicker(current: DifficultyId, gates: readonly DifficultyGate[], onPick: (id: DifficultyId) => void): HTMLElement {
+  const message = h("p", { class: "gr-hint gr-prep__choice-requirement", testId: "prep-difficulty-requirement", "aria-live": "polite" });
   return h(
     "section",
     { class: "gr-prep__block" },
@@ -295,7 +437,9 @@ function difficultyPicker(current: DifficultyId, onPick: (id: DifficultyId) => v
       { class: "gr-prep__choices", testId: "prep-difficulty", dataValue: current },
       ...DIFFICULTY_IDS.map((id) => {
         const definition = DIFFICULTIES[id];
-        const chosen = id === current;
+        const gate = gates.find((entry) => entry.id === id);
+        const locked = !(gate?.unlocked ?? true);
+        const chosen = id === current && !locked;
         return h(
           "button",
           {
@@ -304,14 +448,27 @@ function difficultyPicker(current: DifficultyId, onPick: (id: DifficultyId) => v
             type: "button",
             style: `--gr-accent:${definition.accent}`,
             "aria-pressed": String(chosen),
-            onClick: () => onPick(id),
+            "aria-disabled": String(locked),
+            dataState: locked ? "locked" : "open",
+            dataLocked: String(locked),
+            title: locked ? (gate?.requirement ?? "") : definition.description,
+            onClick: () => {
+              if (locked) {
+                message.textContent = gate?.requirement ?? "";
+                return;
+              }
+              message.textContent = "";
+              onPick(id);
+            },
           },
+          locked ? h("span", { class: "gr-icon gr-prep__choice-lock", html: ICONS.lock ?? ICONS.close }) : null,
           h("span", { class: "gr-prep__choice-name", text: definition.name.toUpperCase() }),
           h("span", { class: "gr-icon gr-icon--lg", html: ICONS.difficulty(difficultyWaves(id), definition.accent) }),
-          h("span", { class: "gr-prep__choice-pitch", text: definition.pitch }),
+          h("span", { class: "gr-prep__choice-pitch", text: locked ? (gate?.requirement ?? "") : definition.pitch }),
         );
       }),
     ),
+    message,
   );
 }
 
@@ -349,46 +506,12 @@ function guardianPortrait(guardianId: GuardianId): string {
 
 interface SquadHandlers {
   redraw: () => void;
+  /** Abre o quadro ligado a uma vaga: escolher fecha sozinho (item 5). */
+  openRosterFor: (index: number) => void;
+  /** Abre ou fecha o quadro livre, pelo botão "Alterar Guardiões": escolher NÃO fecha. */
   toggleRoster: () => void;
-}
-
-function squadBlock(
-  squad: GuardianId[],
-  statuses: Map<GuardianId, { state: string; hidden: boolean; hint: string; price: number | null }>,
-  progression: ProgressionService,
-  locked: boolean,
-  rosterOpen: boolean,
-  handlers: SquadHandlers,
-): HTMLElement {
-  return h(
-    "section",
-    { class: "gr-prep__block" },
-    blockTitle(ICONS.squad, `Selecione seus Guardiões (${squad.length}/${LOADOUT_SIZE})`),
-    h(
-      "div",
-      { class: "gr-prep__squad", testId: "prep-slots" },
-      ...Array.from({ length: LOADOUT_SIZE }, (_, index) => slot(squad, index, locked, handlers)),
-    ),
-    locked
-      ? null
-      : h(
-          "div",
-          { class: "gr-prep__squad-actions" },
-          h(
-            "button",
-            {
-              class: `gr-prep__roster-toggle${rosterOpen ? " gr-prep__roster-toggle--on" : ""}`,
-              testId: "prep-roster-toggle",
-              type: "button",
-              "aria-expanded": String(rosterOpen),
-              onClick: handlers.toggleRoster,
-            },
-            h("span", { class: "gr-icon", html: rosterOpen ? ICONS.close : ICONS.plus }),
-            h("span", { text: rosterOpen ? "Fechar" : "Alterar Guardiões" }),
-          ),
-        ),
-    locked || !rosterOpen ? null : roster(squad, statuses, progression, handlers.redraw),
-  );
+  pick: (guardianId: GuardianId) => void;
+  announce: (message: string) => void;
 }
 
 function slot(squad: GuardianId[], index: number, locked: boolean, handlers: SquadHandlers): HTMLElement {
@@ -400,18 +523,55 @@ function slot(squad: GuardianId[], index: number, locked: boolean, handlers: Squ
         class: "gr-prep__slot gr-prep__slot--empty",
         testId: `prep-slot-${index}`,
         dataGuardian: "",
+        role: "listitem",
         type: "button",
         disabled: locked,
-        onClick: handlers.toggleRoster,
+        // Vaga vazia abre o quadro LIGADO A ELA: escolher preenche esta vaga e fecha (item 5).
+        onClick: () => handlers.openRosterFor(index),
       },
       h("span", { class: "gr-icon gr-icon--lg", html: ICONS.plus }),
       h("span", { class: "gr-prep__slot-name", text: `Vaga ${index + 1}` }),
     );
   }
   const definition = GUARDIANS[guardianId];
+  // Vaga cheia NÃO pode ser um `<button>`: o `×` é um botão de verdade e botão dentro de botão é
+  // HTML inválido. Um item de lista focável dá o mesmo comportamento sem a armadilha.
   return h(
     "div",
-    { class: "gr-prep__slot", testId: `prep-slot-${index}`, dataGuardian: guardianId },
+    {
+      class: "gr-prep__slot",
+      testId: `prep-slot-${index}`,
+      dataGuardian: guardianId,
+      dataDraggable: String(!locked),
+      role: "listitem",
+      tabindex: locked ? "-1" : "0",
+      "aria-label": `Vaga ${index + 1}: ${definition.name}`,
+      onClick: (event: Event) => {
+        if (locked) return;
+        if ((event.target as HTMLElement).closest(".gr-prep__slot-remove")) return;
+        handlers.openRosterFor(index);
+      },
+      onKeyDown: (event: KeyboardEvent) => {
+        if (locked) return;
+        // Setas reordenam sem precisar de arrasto: o mesmo resultado, pelo teclado (item 7).
+        const direction = event.key === "ArrowLeft" ? -1 : event.key === "ArrowRight" ? 1 : 0;
+        if (direction !== 0) {
+          const to = Math.max(0, Math.min(squad.length - 1, index + direction));
+          if (to === index) return;
+          event.preventDefault();
+          const [moved] = squad.splice(index, 1);
+          squad.splice(to, 0, moved);
+          handlers.redraw();
+          handlers.announce(`${GUARDIANS[moved].name} movido para a vaga ${to + 1} de ${LOADOUT_SIZE}.`);
+          (event.currentTarget as HTMLElement).parentElement?.querySelectorAll<HTMLElement>(".gr-prep__slot")[to]?.focus();
+          return;
+        }
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault();
+          handlers.openRosterFor(index);
+        }
+      },
+    },
     locked
       ? null
       : h("button", {
@@ -420,12 +580,14 @@ function slot(squad: GuardianId[], index: number, locked: boolean, handlers: Squ
           type: "button",
           "aria-label": `Tirar ${definition.name} do esquadrão`,
           html: ICONS.close,
-          onClick: () => {
+          onClick: (event: Event) => {
+            event.stopPropagation();
             squad.splice(index, 1);
             handlers.redraw();
           },
         }),
-    h("img", { class: "gr-prep__slot-art", src: guardianPortrait(guardianId), alt: "" }),
+    // `draggable=false`: senão a imagem inicia o arrasto nativo e cancela o nosso (item 7).
+    h("img", { class: "gr-prep__slot-art", src: guardianPortrait(guardianId), alt: "", draggable: "false" }),
     h("span", { class: "gr-prep__slot-name", text: definition.shortName }),
   );
 }
@@ -435,11 +597,16 @@ function roster(
   squad: GuardianId[],
   statuses: Map<GuardianId, { state: string; hidden: boolean; hint: string; price: number | null }>,
   progression: ProgressionService,
-  redraw: () => void,
+  forSlot: number | null,
+  handlers: SquadHandlers,
 ): HTMLElement {
+  const redraw = handlers.redraw;
   return h(
     "div",
-    { class: "gr-prep__roster", testId: "prep-guardians" },
+    { class: "gr-prep__roster", testId: "prep-guardians", dataSlot: forSlot === null ? "" : String(forSlot) },
+    forSlot === null
+      ? null
+      : h("p", { class: "gr-hint gr-prep__roster-title", text: `Escolha o Guardião da Vaga ${forSlot + 1}.` }),
     ...GUARDIAN_ORDER.map((guardianId) => {
       const definition = GUARDIANS[guardianId];
       const status = statuses.get(guardianId);
@@ -470,13 +637,10 @@ function roster(
           testId: `prep-guardian-${guardianId}`,
           type: "button",
           "aria-pressed": String(chosen),
-          disabled: !chosen && squad.length >= LOADOUT_SIZE,
-          onClick: () => {
-            const index = squad.indexOf(guardianId);
-            if (index >= 0) squad.splice(index, 1);
-            else if (squad.length < LOADOUT_SIZE) squad.push(guardianId);
-            redraw();
-          },
+          // Escolhendo PARA uma vaga, trocar sempre é possível; no quadro livre, o esquadrão cheio
+          // só aceita tirar quem já está nele.
+          disabled: forSlot === null && !chosen && squad.length >= LOADOUT_SIZE,
+          onClick: () => handlers.pick(guardianId),
         },
         h("img", { class: "gr-prep__option-art", src: guardianPortrait(guardianId), alt: "" }),
         h("span", { class: "gr-prep__option-name", text: definition.shortName }),
@@ -486,7 +650,24 @@ function roster(
   );
 }
 
-function bottomBar(actions: PreparationActions, difficulty: () => DifficultyId, squad: readonly GuardianId[]): HTMLElement {
+/** O botão de começar é guardado à parte: só o `disabled` dele muda a cada escolha de Guardião. */
+function startAction(actions: PreparationActions, difficulty: () => DifficultyId, squad: readonly GuardianId[]): HTMLButtonElement {
+  return h(
+    "button",
+    {
+      class: "gr-button gr-button--primary gr-prep__go",
+      testId: "prep-start",
+      type: "button",
+      disabled: squad.length !== LOADOUT_SIZE,
+      onClick: () => actions.onStart(difficulty(), [...squad]),
+    },
+    h("span", { class: "gr-icon", html: ICONS.waves }),
+    h("span", { text: "PROTEGER O RECIFE" }),
+    h("span", { class: "gr-icon", html: ICONS.chevronRight }),
+  ) as HTMLButtonElement;
+}
+
+function bottomBar(actions: PreparationActions, start: HTMLButtonElement): HTMLElement {
   return h(
     "footer",
     { class: "gr-prep__actions" },
@@ -496,18 +677,6 @@ function bottomBar(actions: PreparationActions, difficulty: () => DifficultyId, 
       h("span", { class: "gr-icon", html: ICONS.chevronLeft }),
       h("span", { text: "VOLTAR" }),
     ),
-    h(
-      "button",
-      {
-        class: "gr-button gr-button--primary gr-prep__go",
-        testId: "prep-start",
-        type: "button",
-        disabled: squad.length !== LOADOUT_SIZE,
-        onClick: () => actions.onStart(difficulty(), [...squad]),
-      },
-      h("span", { class: "gr-icon", html: ICONS.waves }),
-      h("span", { text: "PROTEGER O RECIFE" }),
-      h("span", { class: "gr-icon", html: ICONS.chevronRight }),
-    ),
+    start,
   );
 }

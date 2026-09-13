@@ -93,7 +93,7 @@ describe("reef planting", () => {
     progress.completedLevels = [...LEVEL_IDS];
     progress.unlockedGuardians = [...GUARDIAN_ORDER];
     for (const levelId of LEVEL_IDS) {
-      progress.levelStars[levelId] = { stars: 3 as Stars, objectives: [], completions: 1, best: null };
+      progress.levelStars[levelId] = { stars: 3 as Stars, objectives: [], completions: 1, best: null, clearedDifficulties: [] };
     }
     reconcileReef(progress);
 

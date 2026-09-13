@@ -18,7 +18,9 @@ export type MatchCommand =
   | { type: "debug.spawnEnemy"; enemyId: EnemyId; elite?: EliteId; playerId?: PlayerId }
   | { type: "debug.skipWave"; playerId?: PlayerId }
   | { type: "debug.killAll"; playerId?: PlayerId }
-  | { type: "debug.invincible"; on: boolean; playerId?: PlayerId };
+  | { type: "debug.invincible"; on: boolean; playerId?: PlayerId }
+  /** Fere um alvo específico — inimigo OU ponto fraco de chefe — pelo caminho normal de dano. */
+  | { type: "debug.damageEnemy"; enemyId: string; amount: number; playerId?: PlayerId };
 
 export type RejectionReason =
   | "gameOver"

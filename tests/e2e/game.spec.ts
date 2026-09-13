@@ -276,10 +276,13 @@ test("migrates an old save so existing players keep their levels", async ({ page
   await expect(canvas).toHaveAttribute("data-screen", "menu");
   await expect(canvas).toHaveAttribute("data-unlocked-levels", "3");
   const saved = await page.evaluate(() => JSON.parse(window.localStorage.getItem("guardioes-do-recife.save") ?? "{}"));
-  expect(saved.saveVersion).toBe(3);
+  expect(saved.saveVersion).toBe(4);
   expect(saved.completedLevels).toEqual(["recife-1", "recife-2"]);
   expect(saved.levelStars["recife-1"].stars).toBe(1);
   expect(saved.currency.shells).toBeGreaterThan(0);
+  // v4 (item 4): a dificuldade passou a ser conquistada, e a migração é conservadora de propósito —
+  // save antigo não registrava em qual dificuldade cada fase caiu, então ninguém herda nada.
+  expect(saved.levelStars["recife-1"].clearedDifficulties).toEqual([]);
   const legacy = await page.evaluate(() => window.localStorage.getItem("guardioes-do-recife.progress.v1"));
   expect(legacy, "a chave antiga fica para trás como segurança").not.toBeNull();
   expect(pageErrors).toEqual([]);

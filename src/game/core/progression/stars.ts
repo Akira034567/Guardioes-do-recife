@@ -10,7 +10,7 @@ export interface LevelMerge {
   firstPerfect: boolean;
 }
 
-export const EMPTY_RECORD: LevelRecord = { stars: 0, objectives: [], completions: 0, best: null };
+export const EMPTY_RECORD: LevelRecord = { stars: 0, objectives: [], completions: 0, best: null, clearedDifficulties: [] };
 
 /** Estrelas = objetivos cumpridos. O primeiro objetivo é sempre concluir a fase. */
 export function starsFromObjectives(objectives: readonly boolean[]): Stars {
@@ -25,14 +25,24 @@ export function starsFromObjectives(objectives: readonly boolean[]): Stars {
 export function mergeLevelRecord(previous: LevelRecord | undefined, result: MatchResult, objectives: readonly boolean[]): LevelMerge {
   const before = previous ?? EMPTY_RECORD;
   if (!result.victory) {
-    return { next: { ...before, objectives: [...before.objectives] }, newObjectives: objectives.map(() => false), newStars: 0, firstCompletion: false, firstPerfect: false };
+    return {
+      next: { ...before, objectives: [...before.objectives], clearedDifficulties: [...before.clearedDifficulties] },
+      newObjectives: objectives.map(() => false),
+      newStars: 0,
+      firstCompletion: false,
+      firstPerfect: false,
+    };
   }
   const merged = objectives.map((achieved, index) => achieved || (before.objectives[index] ?? false));
   const newObjectives = objectives.map((achieved, index) => achieved && !(before.objectives[index] ?? false));
   const stars = starsFromObjectives(merged);
   const best = improveBest(before.best, result);
+  // Esta função monta `next` DO ZERO: campo que não for propagado aqui é apagado em toda vitória.
+  const clearedDifficulties = before.clearedDifficulties.includes(result.difficulty)
+    ? [...before.clearedDifficulties]
+    : [...before.clearedDifficulties, result.difficulty];
   return {
-    next: { stars, objectives: merged, completions: before.completions + 1, best },
+    next: { stars, objectives: merged, completions: before.completions + 1, best, clearedDifficulties },
     newObjectives,
     newStars: Math.max(0, stars - before.stars),
     firstCompletion: before.completions === 0,

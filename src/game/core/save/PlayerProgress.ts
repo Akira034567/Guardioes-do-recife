@@ -2,7 +2,7 @@
  * Progressão permanente do jogador (item 37). Nunca mistura com o estado de uma partida: o motor
  * (`core/match`) não conhece este documento, e este documento só recebe resultados no fim da partida.
  */
-export const SAVE_VERSION = 3;
+export const SAVE_VERSION = 4;
 
 export type Stars = 0 | 1 | 2 | 3;
 
@@ -12,6 +12,13 @@ export interface LevelRecord {
   objectives: boolean[];
   completions: number;
   best: { livesLost: number; durationMs: number; guardiansUsed: number; difficulty: string } | null;
+  /**
+   * Dificuldades em que esta fase já foi VENCIDA pelo menos uma vez. Nunca regride (item 4).
+   *
+   * Fica no registro da fase, e não numa lista global, porque é um fato SOBRE a fase: sanitiza com
+   * o mesmo `registry.levelIds` e some junto quando a fase sai do catálogo.
+   */
+  clearedDifficulties: string[];
 }
 
 export interface PlayerSettings {
@@ -121,6 +128,8 @@ export interface SanitizeRegistry {
   defaultUnlockedGuardians: readonly string[];
   /** Ids do catálogo de decoração; ausente = sem filtro (testes e ferramentas headless). */
   decorationIds?: readonly string[];
+  /** Ids de dificuldade válidos; ausente = sem filtro (testes e ferramentas headless). */
+  difficultyIds?: readonly string[];
 }
 
 export const DEFAULT_SETTINGS: PlayerSettings = {
@@ -180,7 +189,7 @@ const finite = (value: unknown, fallback: number, min = Number.NEGATIVE_INFINITY
 const bool = (value: unknown, fallback: boolean): boolean => (typeof value === "boolean" ? value : fallback);
 const text = (value: unknown, fallback: string): string => (typeof value === "string" && value.length > 0 ? value : fallback);
 
-function sanitizeLevelRecord(value: unknown): LevelRecord | null {
+function sanitizeLevelRecord(value: unknown, registry: SanitizeRegistry): LevelRecord | null {
   if (!isRecord(value)) return null;
   const objectives = Array.isArray(value.objectives) ? value.objectives.map((flag) => flag === true) : [];
   const stars = Math.max(0, Math.min(3, Math.floor(finite(value.stars, objectives.filter(Boolean).length)))) as Stars;
@@ -192,7 +201,10 @@ function sanitizeLevelRecord(value: unknown): LevelRecord | null {
         difficulty: text(value.best.difficulty, "normal"),
       }
     : null;
-  return { stars, objectives, completions: Math.floor(finite(value.completions, 0, 0)), best };
+  const clearedDifficulties = Array.isArray(value.clearedDifficulties)
+    ? [...new Set(value.clearedDifficulties.filter((id): id is string => typeof id === "string" && (registry.difficultyIds?.includes(id) ?? true)))]
+    : [];
+  return { stars, objectives, completions: Math.floor(finite(value.completions, 0, 0)), best, clearedDifficulties };
 }
 
 /**
@@ -207,7 +219,7 @@ export function sanitizeProgress(raw: unknown, registry: SanitizeRegistry, now: 
   if (isRecord(raw.levelStars)) {
     for (const [levelId, record] of Object.entries(raw.levelStars)) {
       if (!registry.levelIds.includes(levelId)) continue;
-      const clean = sanitizeLevelRecord(record);
+      const clean = sanitizeLevelRecord(record, registry);
       if (clean) levelStars[levelId] = clean;
     }
   }

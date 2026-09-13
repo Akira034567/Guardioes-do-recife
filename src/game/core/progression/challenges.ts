@@ -71,6 +71,7 @@ export function rollChallenge(
   rotation: string,
   unlockedGuardians: readonly GuardianId[],
   unlockedLevels: readonly string[] = LEVEL_IDS,
+  maxDifficultyRank: number = DIFFICULTY_IDS.length - 1,
 ): ChallengeDefinition {
   const rng = createRng(`${kind}:${rotation}`);
   const reachable = LEVEL_IDS.filter((id) => unlockedLevels.includes(id));
@@ -78,7 +79,11 @@ export function rollChallenge(
   // O desafio do dia evita a última fase alcançada; o da semana pode usá-la.
   const levels = kind === "weekly" ? playable : playable.slice(0, Math.max(1, playable.length - (playable.length > 1 ? 1 : 0)));
   const levelId = rng.pick(levels);
-  const difficulty = kind === "weekly" ? DIFFICULTY_IDS[Math.min(DIFFICULTY_IDS.length - 1, 1 + rng.int(2))] : DIFFICULTY_IDS[rng.int(2)];
+  // Sorteia como sempre e depois limita ao que o jogador já conquistou (item 4): um desafio numa
+  // dificuldade bloqueada seria uma promessa que ele não tem como cumprir.
+  const ceiling = Math.max(0, Math.min(DIFFICULTY_IDS.length - 1, maxDifficultyRank));
+  const rolled = kind === "weekly" ? Math.min(DIFFICULTY_IDS.length - 1, 1 + rng.int(2)) : rng.int(2);
+  const difficulty = DIFFICULTY_IDS[Math.min(rolled, ceiling)];
   const objective = rng.pick(OBJECTIVES);
 
   // O esquadrão sai só de quem o jogador já encontrou, para o desafio nunca ser impossível.
@@ -105,10 +110,15 @@ export function rollChallenge(
 }
 
 /** Os dois desafios abertos agora. */
-export function currentChallenges(date: Date, unlockedGuardians: readonly GuardianId[], unlockedLevels?: readonly string[]): ChallengeDefinition[] {
+export function currentChallenges(
+  date: Date,
+  unlockedGuardians: readonly GuardianId[],
+  unlockedLevels?: readonly string[],
+  maxDifficultyRank?: number,
+): ChallengeDefinition[] {
   return [
-    rollChallenge("daily", dayKey(date), unlockedGuardians, unlockedLevels),
-    rollChallenge("weekly", weekKey(date), unlockedGuardians, unlockedLevels),
+    rollChallenge("daily", dayKey(date), unlockedGuardians, unlockedLevels, maxDifficultyRank),
+    rollChallenge("weekly", weekKey(date), unlockedGuardians, unlockedLevels, maxDifficultyRank),
   ];
 }
 

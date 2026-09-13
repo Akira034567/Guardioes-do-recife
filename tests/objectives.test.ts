@@ -92,7 +92,7 @@ describe("stars", () => {
   });
 
   it("adds up the stars of every level", () => {
-    expect(totalStars({ "recife-1": { stars: 3, objectives: [], completions: 1, best: null }, "recife-2": { stars: 2, objectives: [], completions: 1, best: null } })).toBe(5);
+    expect(totalStars({ "recife-1": { stars: 3, objectives: [], completions: 1, best: null, clearedDifficulties: [] }, "recife-2": { stars: 2, objectives: [], completions: 1, best: null, clearedDifficulties: [] } })).toBe(5);
   });
 });
 

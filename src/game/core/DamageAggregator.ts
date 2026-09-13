@@ -15,7 +15,8 @@ export interface FloatingDamage {
   tone: DamageTone;
 }
 
-export type DamageTone = "hit" | "poison" | "area" | "reward";
+/** `weakPoint`: dano num ponto fraco de chefe — vale a própria cor, para o jogador notar. */
+export type DamageTone = "hit" | "poison" | "area" | "reward" | "weakPoint";
 
 export interface AggregatorOptions {
   /** Quanto tempo os acertos de um mesmo inimigo se somam antes de aparecer. */

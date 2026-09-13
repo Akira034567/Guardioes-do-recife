@@ -1,4 +1,5 @@
 import type { GuardianDefinition, GuardianId, GuardianState } from "../types";
+import { WEAK_POINT_FIRST } from "../core/Targeting";
 import { GUARDIAN_BALANCE } from "./balance";
 
 const stateProfile = (
@@ -410,9 +411,11 @@ export const GUARDIANS: Record<GuardianId, GuardianDefinition> = {
         upgrades: [
           {
             name: "Marcar Presa",
-            description: `A cada ${seconds(shark.alpha.level1.mark.cooldownMs)} marca chefe, elite ou o inimigo mais forte ao alcance: +${pct(shark.alpha.level1.mark.damageMultiplier)} de dano contra ele por ${seconds(shark.alpha.level1.mark.durationMs)}.`,
+            description: `A cada ${seconds(shark.alpha.level1.mark.cooldownMs)} marca pontos fracos de chefe, elites ou o inimigo mais forte ao alcance: +${pct(shark.alpha.level1.mark.damageMultiplier)} de dano contra ele por ${seconds(shark.alpha.level1.mark.durationMs)}.`,
             cost: shark.upgradeCosts[0],
             targeting: "threat",
+            // O Alfa lê o campo e vai no que importa: ponto fraco de chefe antes de tudo.
+            targetPriority: WEAK_POINT_FIRST,
             mark: { ...shark.alpha.level1.mark },
           },
           {
@@ -420,6 +423,7 @@ export const GUARDIANS: Record<GuardianId, GuardianDefinition> = {
             description: `${shark.alpha.level2.damage} de dano. Golpes seguidos na presa somam +${frac(shark.alpha.level2.mark.stacking.perHit)} cada (máx. +${frac(shark.alpha.level2.mark.stacking.max)}). Se a presa cai, marca outra na hora.`,
             cost: shark.upgradeCosts[1],
             targeting: "threat",
+            targetPriority: WEAK_POINT_FIRST,
             damage: shark.alpha.level2.damage,
             mark: { ...shark.alpha.level2.mark, stacking: { ...shark.alpha.level2.mark.stacking } },
           },
@@ -627,14 +631,17 @@ export const GUARDIANS: Record<GuardianId, GuardianDefinition> = {
         upgrades: [
           {
             name: "Olhos do Oceano",
-            description: `Pulso ${pct(dolphin.echo.level1.radiusMultiplier)} maior: revela, marca a ameaça prioritária (chefe > elite > mais vida > mais avançado) e aplica +${pct(dolphin.echo.level1.vulnerability.multiplier)} de dano recebido por ${seconds(dolphin.echo.level1.vulnerability.durationMs)}.`,
+            description: `Pulso ${pct(dolphin.echo.level1.radiusMultiplier)} maior: revela, marca a ameaça prioritária (ponto fraco > elite > chefe > mais avançado) e aplica +${pct(dolphin.echo.level1.vulnerability.multiplier)} de dano recebido por ${seconds(dolphin.echo.level1.vulnerability.durationMs)}.`,
             cost: dolphin.upgradeCosts[0],
+            // O Sonar identifica: ponto fraco exposto é prioridade assim que ele é revelado.
+            targetPriority: WEAK_POINT_FIRST,
             sonar: { ...dolphin.echo.level1, vulnerability: { ...dolphin.echo.level1.vulnerability } },
           },
           {
             name: "Oráculo das Profundezas",
             description: `Eco Perfeito: ${dolphin.echo.level2.echo.waves} ondas seguidas. Localiza, analisa (vulnerabilidade e prioridade) e coordena: Guardiões da área priorizam a maior ameaça dentro do próprio alcance por ${seconds(dolphin.echo.level2.echo.coordinateMs)}.`,
             cost: dolphin.upgradeCosts[1],
+            targetPriority: WEAK_POINT_FIRST,
             sonar: { ...dolphin.echo.level2, vulnerability: { ...dolphin.echo.level2.vulnerability }, echo: { ...dolphin.echo.level2.echo } },
           },
         ],

@@ -2,7 +2,9 @@ import type Phaser from "phaser";
 import type { GuardianId } from "../../types";
 import { getProgression } from "../../systems/progression";
 import { getScreenHost } from "./host";
-import type { Screen } from "./ScreenHost";
+import { appShell, type AppShellHandle, type ShellContent, type ShellView } from "./AppShell";
+import { levelBackgroundPath } from "../../assets/levelBackgrounds";
+import { LEVELS } from "../../data/levels";
 import { achievementsScreen } from "./screens/AchievementsScreen";
 import { bestiaryScreen } from "./screens/BestiaryScreen";
 import { collectionScreen } from "./screens/CollectionScreen";
@@ -48,14 +50,73 @@ export function sectionNav(router: SectionRouter): ShellNav {
 }
 
 /**
- * Abre uma seção por cima da tela raiz. A pilha nunca passa de duas telas: trocar de seção pelo menu
- * lateral volta à raiz e abre a nova, em vez de empilhar mais uma. Pedir a raiz, ou a outra cena,
- * despilha e (quando for o caso) troca de cena.
+ * Uma moldura por instância de jogo (item 2). Ela sobrevive à troca de seção; quem a derruba é o
+ * `host.clear()` das cenas, que dispara o `onClose` e limpa este registro.
+ */
+const SHELLS = new WeakMap<Phaser.Game, AppShellHandle>();
+
+/** O fundo de cada seção: cada uma empresta a arte de uma fase diferente, como antes. */
+const BACKDROPS: Record<ShellView, number> = {
+  collection: 0,
+  bestiary: 3,
+  stories: 2,
+  achievements: 5,
+  settings: 1,
+};
+
+function contentFor(section: ShellView, router: SectionRouter, options: SectionOptions, back: () => void, nav: ShellNav): ShellContent {
+  const progression = getProgression();
+  const screen =
+    section === "collection"
+      ? collectionScreen(progression, back, nav, { focus: options.collectionFocus }, true)
+      : section === "bestiary"
+        ? bestiaryScreen(progression, back, nav, true)
+        : section === "stories"
+          ? storyIndexScreen(back, nav, (levelId) => router.isUnlocked(levelId), true)
+          : section === "achievements"
+            ? achievementsScreen(progression, back, nav, true)
+            : settingsScreen(back, nav, true);
+  const host = getScreenHost(router.game);
+  return {
+    view: section,
+    element: screen.render(host),
+    backdrop: levelBackgroundPath(LEVELS[BACKDROPS[section]].backgroundKey),
+    navId: (item) => `${NAV_PREFIX[section]}-nav-${item}`,
+    backId: `${BACK_ID[section]}`,
+    onBack: back,
+    motto: section === "settings" ? "Ajuste do seu jeito. O importante é continuar no mar." : undefined,
+    onClose: screen.onClose?.bind(screen),
+  };
+}
+
+/**
+ * Os `data-testid` continuam os mesmos de sempre, por seção — só que agora aplicados a botões que
+ * NÃO são recriados. Manter os nomes evita reescrever os testes por uma mudança que é de estrutura.
+ */
+const NAV_PREFIX: Record<ShellView, string> = {
+  collection: "album",
+  bestiary: "bestiary",
+  stories: "stories",
+  achievements: "achievements",
+  settings: "settings",
+};
+
+const BACK_ID: Record<ShellView, string> = {
+  collection: "collection-back",
+  bestiary: "bestiary-back",
+  stories: "story-index-back",
+  achievements: "achievements-back",
+  settings: "settings-back",
+};
+
+/**
+ * Abre uma seção por cima da tela raiz. A pilha nunca passa de duas telas, e trocar de seção NÃO
+ * remonta a moldura: a coluna da esquerda continua a mesma e só o miolo é substituído.
  */
 export function openSection(section: ShellSection, router: SectionRouter, options: SectionOptions = {}): void {
   const host = getScreenHost(router.game);
-  while (host.isOpen && host.topId !== router.home) host.pop();
   if (section === router.home) {
+    while (host.isOpen && host.topId !== router.home) host.pop();
     router.onSectionClosed?.();
     return;
   }
@@ -67,15 +128,23 @@ export function openSection(section: ShellSection, router: SectionRouter, option
     router.goMap();
     return;
   }
-  const progression = getProgression();
+
   const back = (): void => openSection(router.home, router);
   const nav = sectionNav(router);
-  const screens: Record<Exclude<ShellSection, "hub" | "map">, () => Screen> = {
-    collection: () => collectionScreen(progression, back, nav, { focus: options.collectionFocus }),
-    bestiary: () => bestiaryScreen(progression, back, nav),
-    stories: () => storyIndexScreen(back, nav, (levelId) => router.isUnlocked(levelId)),
-    achievements: () => achievementsScreen(progression, back, nav),
-    settings: () => settingsScreen(back, nav),
-  };
-  host.push(screens[section]());
+  const content = contentFor(section, router, options, back, nav);
+  const existing = SHELLS.get(router.game);
+  if (existing && host.topId === "shell") {
+    existing.show(content);
+    return;
+  }
+  while (host.isOpen && host.topId !== router.home) host.pop();
+  const handle = appShell(content, nav);
+  SHELLS.set(router.game, handle);
+  host.push({
+    ...handle.screen,
+    onClose: () => {
+      handle.screen.onClose?.();
+      SHELLS.delete(router.game);
+    },
+  });
 }

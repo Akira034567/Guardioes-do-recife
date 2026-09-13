@@ -547,11 +547,39 @@
 
 /* ---- menu da esquerda */
 
+/* ---- colunas que rolam ------------------------------------------------------------------------
+ * `overflow-y: auto` sozinho NÃO deixa o eixo horizontal em `visible`: a especificação promove o
+ * outro eixo para `auto` junto. Toda coluna que rola, portanto, ganhava barra horizontal assim que
+ * um filho de largura total se deslocava alguns pixels no `:hover` — e a primeira linha de cards
+ * ficava cortada no topo, porque conteúdo acima da origem de rolagem é inalcançável.
+ *
+ * A correção é estrutural e vale para os dois eixos: travar a horizontal em `clip` e dar ao
+ * contêiner a folga que a animação do filho consome. `clip` em vez de `hidden` porque `hidden`
+ * criaria mais um contêiner de rolagem no meio do caminho.
+ */
+.gr-world__nav,
+.gr-album__grid,
+.gr-album__sheet,
+.gr-prep__main,
+.gr-prep__side {
+  overflow-x: clip;
+  /*
+   * A âncora de rolagem do navegador é o que fazia a página saltar ao escolher um Guardião: quando
+   * o conteúdo é reescrito, o Chromium tenta manter "o que estava visível" no lugar e reposiciona a
+   * rolagem sozinho. Aqui quem manda na posição é a tela, não o navegador (item 6).
+   */
+  overflow-anchor: none;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(117, 223, 244, 0.45) transparent;
+}
+
 .gr-world__side {
   display: flex;
   flex-direction: column;
   gap: calc(12px * var(--gr-scale));
   min-height: 0;
+  /* O VOLTAR desliza 2px para a esquerda no hover; sem esta folga ele encostava na borda. */
+  padding-left: calc(3px * var(--gr-scale));
 }
 
 .gr-world__brand {
@@ -587,6 +615,8 @@
   gap: calc(6px * var(--gr-scale));
   overflow-y: auto;
   min-height: 0;
+  /* Folga para o deslize de 2px do hover e para o brilho do item aceso (item 1). */
+  padding: calc(2px * var(--gr-scale)) calc(4px * var(--gr-scale));
 }
 
 .gr-world__nav-item {
@@ -1366,6 +1396,7 @@
  * ler um Guardião.
  */
 /* O álbum, o bestiário e as histórias dividem a mesma moldura de tela cheia. */
+.gr-screen[data-screen="shell"],
 .gr-screen[data-screen="collection"],
 .gr-screen[data-screen="bestiary"],
 .gr-screen[data-screen="story-index"],
@@ -1376,6 +1407,54 @@
   padding: 0;
   background: #02141f;
   backdrop-filter: none;
+}
+
+/* ---- moldura persistente das seções (item 2) -------------------------------------------------- */
+
+.gr-shell__content {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  min-width: 0;
+}
+
+/*
+ * Embutida no AppShell, a tela entrega só o miolo: a coluna da esquerda é da moldura, e a grade de
+ * duas colunas também. Sem isto o conteúdo cairia na faixa de 186px reservada ao menu.
+ *
+ * A cadeia de altura precisa ser explícita até aqui. `.gr-album__layout` pede `height: 100%`, e
+ * dentro de um pai flex isso resolve contra altura zero: as fichas das Configurações vazavam e uma
+ * cobria o clique da outra.
+ */
+.gr-album--embedded {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.gr-album--embedded > .gr-album__layout {
+  grid-template-columns: minmax(0, 1fr);
+  padding: 0;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.gr-shell__content--in {
+  animation: gr-view-in 150ms ease-out;
+}
+
+@keyframes gr-view-in {
+  from {
+    opacity: 0;
+    transform: translateY(calc(6px * var(--gr-scale)));
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .gr-shell__content--in {
+    animation: none;
+  }
 }
 
 .gr-album__layout {
@@ -1484,6 +1563,8 @@
   display: flex;
   gap: calc(8px * var(--gr-scale));
   flex-wrap: wrap;
+  /* As abas também sobem 2px no hover. */
+  padding-top: calc(3px * var(--gr-scale));
 }
 
 .gr-album__tab {
@@ -1533,9 +1614,9 @@
   gap: calc(8px * var(--gr-scale));
   overflow-y: auto;
   min-height: 0;
-  padding-right: calc(4px * var(--gr-scale));
-  scrollbar-width: thin;
-  scrollbar-color: rgba(117, 223, 244, 0.45) transparent;
+  /* O topo é o que importa: o card sobe 3px no hover e o escolhido projeta um brilho de 20px.
+     Sem `padding-top` a primeira linha era decepada — e nenhuma rolagem alcançava o que sumiu. */
+  padding: calc(6px * var(--gr-scale)) calc(6px * var(--gr-scale)) calc(8px * var(--gr-scale)) calc(2px * var(--gr-scale));
 }
 
 .gr-album__card {
@@ -2688,6 +2769,11 @@
   padding: calc(12px * var(--gr-scale));
 }
 
+.gr-prep__top {
+  /* O VOLTAR desliza 2px para a esquerda no hover. */
+  padding-left: calc(3px * var(--gr-scale));
+}
+
 .gr-prep__side {
   display: flex;
   flex-direction: column;
@@ -2695,11 +2781,12 @@
   min-width: 0;
   max-height: 100%;
   overflow-y: auto;
+  /* O `×` da quinta vaga fica em `right: -7px` e ainda cresce 10% no hover: sem esta folga à
+     direita ele estourava a coluna e abria barra de rolagem horizontal (item 3). */
+  padding: calc(10px * var(--gr-scale)) calc(10px * var(--gr-scale)) calc(4px * var(--gr-scale)) calc(2px * var(--gr-scale));
 }
 
 /* Barra de rolagem discreta: as colunas só rolam quando a fase tem conteúdo demais. */
-.gr-prep__main,
-.gr-prep__side,
 .gr-prep__roster {
   scrollbar-width: thin;
   scrollbar-color: rgba(117, 223, 244, 0.45) transparent;
@@ -2912,9 +2999,12 @@
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: calc(8px * var(--gr-scale));
+  /* Os cartões de dificuldade sobem 2px no hover e o escolhido projeta brilho. */
+  padding-top: calc(3px * var(--gr-scale));
 }
 
 .gr-prep__choice {
+  position: relative;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -3015,10 +3105,92 @@
 
 /* ---- esquadrão */
 
+/* ---- dificuldade bloqueada (item 4) ---------------------------------------------------------- */
+
+.gr-prep__choice[data-state="locked"] {
+  cursor: not-allowed;
+  filter: grayscale(0.85);
+  opacity: 0.55;
+  border-style: dashed;
+}
+
+/* Sem levantar no hover: o cartão bloqueado não finge ser clicável. */
+.gr-prep__choice[data-state="locked"]:hover,
+.gr-prep__choice[data-state="locked"]:focus-visible {
+  transform: none;
+  border-color: rgba(21, 129, 163, 0.45);
+}
+
+.gr-prep__choice-lock {
+  position: absolute;
+  top: calc(6px * var(--gr-scale));
+  right: calc(6px * var(--gr-scale));
+  opacity: 0.9;
+}
+
+.gr-prep__choice-requirement {
+  margin-top: calc(4px * var(--gr-scale));
+  min-height: calc(12px * var(--gr-scale));
+}
+
+/* ---- arrastar para reordenar as vagas (item 7) ------------------------------------------------ */
+
+/* `touch-action` só na vaga: em `.gr-prep__side` ele impediria o dedo de rolar a coluna. */
+.gr-prep__slot[data-draggable="true"] {
+  touch-action: none;
+  cursor: grab;
+}
+
+.gr-prep__slot[data-draggable="true"]:active {
+  cursor: grabbing;
+}
+
+/* O card levantado segue o ponteiro fora do fluxo, para nunca ser cortado por contêiner nenhum. */
+.gr-prep__drag-ghost {
+  position: fixed;
+  z-index: 60;
+  pointer-events: none;
+  opacity: 0.92;
+  transform: scale(1.06);
+  filter: drop-shadow(0 calc(10px * var(--gr-scale)) calc(18px * var(--gr-scale)) rgba(0, 0, 0, 0.55));
+}
+
+/* O buraco deixado para trás. */
+.gr-prep__slot--placeholder {
+  opacity: 0.25;
+  border-style: dashed;
+}
+
+/* Onde ele vai cair. */
+.gr-prep__slot--drop {
+  border-color: var(--gr-cyan);
+  box-shadow: 0 0 calc(16px * var(--gr-scale)) rgba(117, 223, 244, 0.5);
+}
+
+.gr-prep__roster-title {
+  grid-column: 1 / -1;
+  margin: 0;
+}
+
+/* Anúncio para leitor de tela: existe para quem não vê o card se mover. */
+.gr-sr-live {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
 .gr-prep__squad {
   display: grid;
   grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: calc(6px * var(--gr-scale));
+  /* Folga negativa: dá espaço ao `×` que fica pendurado fora da vaga sem mover o layout. */
+  padding: calc(9px * var(--gr-scale)) calc(9px * var(--gr-scale)) 0;
+  margin: calc(-9px * var(--gr-scale)) calc(-9px * var(--gr-scale)) 0;
 }
 
 .gr-prep__slot {

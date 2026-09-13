@@ -38,8 +38,8 @@ export const ENEMIES: Record<EnemyId, EnemyDefinition> = {
     ...ENEMY_BALANCE.dartfish,
     hitRadius: 11,
     scale: 0.82,
-    // Desenho único (sem quadros de nado) e com o bico virado para +x: daí `facing: "right"`.
-    art: { kind: "sprite", folder: "peixe-flecha", frames: 1, frameMs: 140, scale: 0.3, facing: "right", shapeFallback: "dart" },
+    // Desenho único, sem quadros de nado. O bico aponta para +x, como toda a prancha.
+    art: { kind: "sprite", folder: "peixe-flecha", frames: 1, frameMs: 140, scale: 0.3, shapeFallback: "dart" },
   },
   needlefish: {
     id: "needlefish",
@@ -48,9 +48,10 @@ export const ENEMIES: Record<EnemyId, EnemyDefinition> = {
     color: 0x5ef2c8,
     accent: 0xd6fff3,
     ...ENEMY_BALANCE.needlefish,
-    hitRadius: 10,
+    hitRadius: 11,
     scale: 0.78,
-    art: { kind: "sprite", folder: "raia-espinhosa", frames: 4, frameMs: 130, scale: 0.34, shapeFallback: "needle" },
+    // 🔶 placeholder de apresentação (item 10): a Raia era pequena demais para ser lida em campo.
+    art: { kind: "sprite", folder: "raia-espinhosa", frames: 4, frameMs: 130, scale: 0.4, shapeFallback: "needle" },
   },
   shellback: {
     id: "shellback",
@@ -61,7 +62,21 @@ export const ENEMIES: Record<EnemyId, EnemyDefinition> = {
     ...ENEMY_BALANCE.shellback,
     hitRadius: 18,
     scale: 1.18,
-    art: { kind: "sprite", folder: "caranguejo-eremita", frames: 4, frameMs: 200, scale: 0.42, rotate: "upright", shapeFallback: "shell" },
+    // Os três primeiros quadros são o caranguejo fora da concha; o quarto é a concha fechada. Em
+    // rodízio cego ele se escondia a cada 800ms e parecia piscar. Agora a concha fecha quando ele
+    // leva dano, e só de vez em quando por conta própria. 🔶 tempos placeholder (item 19).
+    art: {
+      kind: "sprite",
+      folder: "caranguejo-eremita",
+      frames: 4,
+      frameMs: 200,
+      scale: 0.42,
+      rotate: "upright",
+      loopFrames: [1, 2, 3],
+      guardFrames: [4],
+      guard: { trigger: "both", holdMs: 900, cooldownMs: 6000, idleIntervalMs: 9000, idleJitterMs: 4000 },
+      shapeFallback: "shell",
+    },
   },
   moray: {
     id: "moray",
@@ -82,11 +97,12 @@ export const ENEMIES: Record<EnemyId, EnemyDefinition> = {
     color: 0x4a3f8f,
     accent: 0xc46bff,
     ...ENEMY_BALANCE.corruptedShark,
-    hitRadius: 22,
+    hitRadius: 24,
     scale: 1.36,
     slowResistance: 0.4,
     resistances: { stun: 0.35 },
-    art: { kind: "sprite", folder: "predador-corrompido", frames: 3, frameMs: 140, scale: 0.42, shapeFallback: "shark" },
+    // 🔶 placeholder de apresentação (item 10).
+    art: { kind: "sprite", folder: "predador-corrompido", frames: 3, frameMs: 140, scale: 0.48, shapeFallback: "shark" },
     description: "Caçador da maré negra: dispara em investidas, ignora metade do controle e enlouquece ferido.",
     abilities: [
       { type: "speedBurst", intervalMs: SHARK_HUNT.burstIntervalMs, durationMs: SHARK_HUNT.burstMs, multiplier: SHARK_HUNT.burstMultiplier },
@@ -106,12 +122,14 @@ export const ENEMIES: Record<EnemyId, EnemyDefinition> = {
     color: 0xc8434f,
     accent: 0xffcf66,
     ...ENEMY_BALANCE.tidebreaker,
-    hitRadius: 30,
+    hitRadius: 36,
     scale: 1.8,
     isBoss: true,
     unblockable: true,
     slowResistance: 0.35,
-    art: { kind: "sprite", folder: "baleia-mare-negra", frames: 1, frameMs: 400, scale: 0.19, shapeFallback: "boss" },
+    // A Baleia precisa parecer um CHEFE à primeira vista: a 172px de comprimento ela ultrapassa a
+    // faixa de areia da rota (118px), que é o efeito pretendido. 🔶 placeholder (item 10).
+    art: { kind: "sprite", folder: "baleia-mare-negra", frames: 1, frameMs: 400, scale: 0.27, shapeFallback: "boss" },
     description: "O chefe das primeiras marés: inverte a corrente do recife em ciclos e não pode ser bloqueado.",
     abilities: [{ type: "reverseCurrents", cycleMs: BOSS_CURRENT.cycleMs, reverseMs: BOSS_CURRENT.reverseMs }],
   },

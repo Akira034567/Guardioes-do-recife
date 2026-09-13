@@ -5,6 +5,9 @@ import { NEUTRAL_AURA, sameAura } from "../core/Auras";
 import type { MatchGuardian } from "../core/match/MatchGuardian";
 import type { TrapPhase } from "../core/TrapCore";
 import type { GuardianState, ResolvedAura, Vec2 } from "../types";
+import { guardianVisualState, textureFor, visualTimings, type GuardianVisualState, type VisualTimings } from "../core/GuardianVisualState";
+import { GUARDIAN_VISUAL } from "../data/balance";
+import { spriteTilt } from "../core/SpriteOrientation";
 
 /**
  * Desenho de um Guardião. Todo estado de jogo vem do `MatchGuardian`; aqui ficam só os detalhes
@@ -15,7 +18,16 @@ export class GuardianView extends Phaser.GameObjects.Container {
   private readonly badgeGraphic: Phaser.GameObjects.Graphics;
   private readonly artSprite: Phaser.GameObjects.Image | null;
   private readonly artBaselineY = 34;
-  private visualState: GuardianState = "idle";
+  /** Estado do MOTOR, para detectar as transições. */
+  private engineState: GuardianState = "idle";
+  /** Estado VISUAL, que é o que decide textura e tween. Ver `core/GuardianVisualState`. */
+  private visualState: GuardianVisualState = "idle";
+  /** Instante do golpe: a âncora de toda a janela de animação. `null` = nenhum golpe em curso. */
+  private strikeAt: number | null = null;
+  private abilityUntilMs = 0;
+  private visualTimings: VisualTimings;
+  /** Lado do sprite na investida, com a mesma zona morta usada nos inimigos. */
+  private facingLeft = false;
   private dashTarget: Vec2 | null = null;
   private trapPhase: TrapPhase | null = null;
   private progressKey = "";
@@ -41,6 +53,7 @@ export class GuardianView extends Phaser.GameObjects.Container {
       this.artSprite = null;
     }
     this.trapPhase = guardian.trapPhase;
+    this.visualTimings = visualTimings(guardian.definition, guardian.stats.cooldownMs);
     this.progressKey = this.currentProgressKey();
     this.drawBody();
     this.drawBadge();
@@ -88,10 +101,20 @@ export class GuardianView extends Phaser.GameObjects.Container {
   sync(now: number, enemyPosition: (id: string) => Vec2 | null): void {
     const guardian = this.guardian;
     const state = guardian.state;
-    if (state !== this.visualState) {
-      this.visualState = state;
+    if (state !== this.engineState) {
+      const previous = this.engineState;
+      this.engineState = state;
+      if (state === "windup") {
+        // Estimativa: o golpe cai no fim do windup. O `attack` confirma logo em seguida.
+        const snapshot = guardian.fsmSnapshot();
+        this.strikeAt = snapshot.stateStartedAt + (snapshot.stateDurationMs ?? 0);
+      } else if (state === "attack") {
+        this.strikeAt = guardian.fsmSnapshot().stateStartedAt;
+      } else if (previous === "windup" || state === "disabled") {
+        // Golpe abortado (o alvo morreu antes do impacto): não pode chegar a mostrar ATAQUE.
+        this.strikeAt = null;
+      }
       if (state === "idle") this.dashTarget = null;
-      this.applyStateVisual();
     }
     if (guardian.targetId) {
       const target = enemyPosition(guardian.targetId);
@@ -100,14 +123,30 @@ export class GuardianView extends Phaser.GameObjects.Container {
     if (guardian.trapPhase !== this.trapPhase) {
       this.trapPhase = guardian.trapPhase;
       this.drawBody();
-      this.applyStateVisual();
     }
     const progressKey = this.currentProgressKey();
     if (progressKey !== this.progressKey) {
       this.progressKey = progressKey;
+      this.visualTimings = visualTimings(guardian.definition, guardian.stats.cooldownMs);
       this.drawBody();
       this.drawBadge();
       this.syncArtTexture();
+    }
+
+    // A janela de animação é curta e ancorada no golpe; fora dela o Guardião descansa, mesmo com
+    // inimigo no alcance e mesmo com o cooldown ainda correndo. Era esse o item 15.
+    const nextVisual = guardianVisualState({
+      now,
+      engineState: this.engineState,
+      strikeAt: this.strikeAt,
+      timings: this.visualTimings,
+      abilityUntilMs: this.abilityUntilMs,
+      returning: Boolean(guardian.stats.dash) && this.engineState === "recovery",
+      trapPhase: this.trapPhase,
+    });
+    if (nextVisual !== this.visualState) {
+      this.visualState = nextVisual;
+      this.applyStateVisual();
     }
     if (!sameAura(this.auraShown, guardian.aura)) {
       this.auraShown = { ...guardian.aura };
@@ -116,8 +155,35 @@ export class GuardianView extends Phaser.GameObjects.Container {
     this.animatePassiveVisual(now);
   }
 
+  /** Pose de habilidade (pulso, sonar, coro, tinta). Chamada pelos efeitos, quando o evento sai. */
+  playAbility(now: number, durationMs = GUARDIAN_VISUAL.abilityMs): void {
+    this.abilityUntilMs = now + durationMs;
+  }
+
   private currentProgressKey(): string {
     return `${this.guardian.branchId ?? "-"}:${this.guardian.upgradeLevel}`;
+  }
+
+  /**
+   * Antecipação e impacto por deformação. Com arte real isto não existia — havia um `return` cedo
+   * que deixava windup e recovery visualmente idênticos ao ataque.
+   *
+   * 🔶 números de apresentação, placeholders.
+   */
+  private stateSquash(): { x: number; y: number } {
+    switch (this.visualState) {
+      case "windup":
+        return { x: 0.94, y: 1.07 };
+      case "attack":
+        return { x: 1.12, y: 0.92 };
+      case "ability":
+        return { x: 1.05, y: 1.05 };
+      case "recovery":
+      case "returning":
+        return { x: 0.97, y: 1.02 };
+      default:
+        return { x: 1, y: 1 };
+    }
   }
 
   private applyStateVisual(): void {
@@ -126,26 +192,18 @@ export class GuardianView extends Phaser.GameObjects.Container {
       if (this.artSprite) this.artSprite.y = this.artBaselineY;
     }
     this.setAlpha(this.visualState === "disabled" ? 0.45 : 1);
+    const squash = this.stateSquash();
 
     if (this.artSprite) {
+      // A deformação vai no SPRITE, nunca no contêiner: a escala do contêiner é do tween de entrada.
+      const base = GUARDIAN_ART[this.guardian.guardianId].scale;
+      this.artSprite.setScale(base * squash.x, base * squash.y);
       this.setScale(1);
       this.syncArtTexture();
       return;
     }
 
-    switch (this.visualState) {
-      case "windup":
-        this.setScale(0.94, 1.07);
-        break;
-      case "attack":
-        this.setScale(1.12, 0.92);
-        break;
-      case "recovery":
-        this.setScale(0.96, 1);
-        break;
-      default:
-        this.setScale(1);
-    }
+    this.setScale(squash.x, squash.y);
   }
 
   private animatePassiveVisual(now: number): void {
@@ -155,9 +213,13 @@ export class GuardianView extends Phaser.GameObjects.Container {
     const buried = this.trapPhase === "arming" || this.trapPhase === "armed";
     const trapAlpha = this.trapPhase === "cooldown" ? 0.7 : this.trapPhase === "arming" ? 0.85 : 1;
     if (this.artSprite) {
+      // O recuo do golpe acompanha o lado para o qual a criatura está virada.
+      const mirror = this.facingLeft ? -1 : 1;
+      const nudge = this.visualState === "attack" ? -4 : this.visualState === "recovery" || this.visualState === "returning" ? -2 : 0;
       this.artSprite.y = this.artBaselineY + bob + dash.y + (buried ? 6 : 0);
-      this.artSprite.x = dash.x + (this.visualState === "attack" ? -4 : this.visualState === "recovery" ? -2 : 0);
-      this.artSprite.setAngle(dash.angle ?? (this.visualState === "attack" ? -2 : 0));
+      this.artSprite.x = dash.x + nudge * mirror;
+      this.artSprite.setFlipX(this.facingLeft);
+      this.artSprite.setAngle(dash.angle ?? (this.visualState === "attack" ? -2 * mirror : 0));
       this.artSprite.setAlpha(trapAlpha);
     } else {
       this.bodyGraphic.x = dash.x;
@@ -174,7 +236,7 @@ export class GuardianView extends Phaser.GameObjects.Container {
   private dashOffset(now: number): { x: number; y: number; angle: number | null } {
     const none = { x: 0, y: 0, angle: null };
     const stats = this.guardian.stats;
-    if (!stats.dash || !this.dashTarget || this.visualState === "idle" || this.visualState === "disabled") return none;
+    if (!stats.dash || !this.dashTarget || this.engineState === "idle" || this.engineState === "disabled") return none;
     const dx = this.dashTarget.x - this.x;
     const dy = this.dashTarget.y - this.y;
     const distance = Math.hypot(dx, dy);
@@ -184,21 +246,36 @@ export class GuardianView extends Phaser.GameObjects.Container {
     const duration = snapshot.stateDurationMs ?? 1;
     const elapsed = Math.max(0, Math.min(1, (now - snapshot.stateStartedAt) / Math.max(1, duration)));
     const speed = Math.max(1, stats.dashSpeedMultiplier);
+    const returning = this.engineState === "recovery";
     let fraction = 0;
-    if (this.visualState === "windup") fraction = Math.min(1, elapsed * speed);
-    else if (this.visualState === "attack") fraction = 1;
+    if (this.engineState === "windup") fraction = Math.min(1, elapsed * speed);
+    else if (this.engineState === "attack") fraction = 1;
     else fraction = 1 - Math.min(1, elapsed * speed);
     const eased = fraction * fraction * (3 - 2 * fraction);
+
+    // A cabeça aponta para onde ele NADA, não para onde está o alvo: na ida, o alvo; na volta, o
+    // posto. Antes o ângulo era `atan2 * 0.25` sem normalizar, o que virava um alvo à esquerda
+    // (180°) em 45° — o tubarão deitava para baixo-direita enquanto avançava para a esquerda.
+    const travelX = returning ? -dx : dx;
+    const travelY = returning ? -dy : dy;
+    const heading = Math.atan2(travelY, travelX);
+    if (Math.abs(Math.cos(heading)) >= 0.15) this.facingLeft = Math.cos(heading) < 0;
+    const tilt = Phaser.Math.RadToDeg(this.facingLeft ? -spriteTilt(heading) : spriteTilt(heading));
     return {
       x: (dx / distance) * reach * eased,
       y: (dy / distance) * reach * eased,
-      angle: eased > 0.05 ? Phaser.Math.RadToDeg(Math.atan2(dy, dx)) * 0.25 : null,
+      angle: eased > 0.05 ? tilt : null,
     };
   }
 
+  /** Só existem duas texturas em disco por variante; o resto é tween. */
   private get artVisualState(): "idle" | "attack" {
-    if (this.trapPhase) return this.trapPhase === "triggered" || this.trapPhase === "cooldown" ? "attack" : "idle";
-    return this.visualState === "idle" || this.visualState === "disabled" ? "idle" : "attack";
+    return textureFor(this.visualState);
+  }
+
+  /** Exposto para o HUD e as sondas de teste: qual pose está na tela agora. */
+  get currentVisualState(): GuardianVisualState {
+    return this.visualState;
   }
 
   private syncArtTexture(): void {

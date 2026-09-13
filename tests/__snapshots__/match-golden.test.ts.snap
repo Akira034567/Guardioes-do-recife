@@ -15,7 +15,7 @@ exports[`golden match results > recife-1 · concentrado + quebra-casco (referên
   "reef": 19,
   "state": "victory",
   "stepsExecuted": 6,
-  "timeMs": 134267,
+  "timeMs": 136967,
   "upgrades": 3,
   "wavesCleared": 5,
 }
@@ -25,19 +25,19 @@ exports[`golden match results > recife-1 · contenção com baiacu 1`] = `
 {
   "guardians": 3,
   "kills": {
-    "dartfish": 12,
+    "dartfish": 13,
     "swimmer": 19,
     "tidebreaker": 1,
   },
   "leaks": {
-    "dartfish": 3,
+    "dartfish": 2,
     "swimmer": 6,
   },
-  "pearls": 130,
-  "reef": 11,
+  "pearls": 137,
+  "reef": 12,
   "state": "victory",
   "stepsExecuted": 6,
-  "timeMs": 168183,
+  "timeMs": 166933,
   "upgrades": 3,
   "wavesCleared": 5,
 }
@@ -47,19 +47,19 @@ exports[`golden match results > recife-1 · duas unidades cruas 1`] = `
 {
   "guardians": 2,
   "kills": {
-    "dartfish": 9,
-    "swimmer": 18,
+    "dartfish": 12,
+    "swimmer": 19,
     "tidebreaker": 1,
   },
   "leaks": {
-    "dartfish": 6,
-    "swimmer": 7,
+    "dartfish": 3,
+    "swimmer": 6,
   },
-  "pearls": 453,
-  "reef": 7,
+  "pearls": 480,
+  "reef": 11,
   "state": "victory",
   "stepsExecuted": 2,
-  "timeMs": 166900,
+  "timeMs": 154917,
   "upgrades": 0,
   "wavesCleared": 5,
 }
@@ -81,7 +81,7 @@ exports[`golden match results > recife-1 · novatos: camarões + peixe-pedra ven
   "reef": 11,
   "state": "victory",
   "stepsExecuted": 6,
-  "timeMs": 177500,
+  "timeMs": 172250,
   "upgrades": 2,
   "wavesCleared": 5,
 }
@@ -102,13 +102,77 @@ exports[`golden match results > recife-1 · novatos: camarões + tartaruga corre
   "reef": 14,
   "state": "victory",
   "stepsExecuted": 6,
-  "timeMs": 176933,
+  "timeMs": 171817,
   "upgrades": 2,
   "wavesCleared": 5,
 }
 `;
 
 exports[`golden match results > recife-1 · novatos: tubarão alfa na margem + tartaruga casco + camarão 1`] = `
+{
+  "guardians": 3,
+  "kills": {
+    "dartfish": 15,
+    "swimmer": 22,
+    "tidebreaker": 1,
+  },
+  "leaks": {
+    "swimmer": 3,
+  },
+  "pearls": 154,
+  "reef": 17,
+  "state": "victory",
+  "stepsExecuted": 6,
+  "timeMs": 160900,
+  "upgrades": 3,
+  "wavesCleared": 5,
+}
+`;
+
+exports[`golden match results > recife-1 · novatos: tubarão frenesi + peixe-pedra emboscada + camarão 1`] = `
+{
+  "guardians": 3,
+  "kills": {
+    "dartfish": 15,
+    "swimmer": 22,
+    "tidebreaker": 1,
+  },
+  "leaks": {
+    "swimmer": 3,
+  },
+  "pearls": 164,
+  "reef": 17,
+  "state": "victory",
+  "stepsExecuted": 6,
+  "timeMs": 165617,
+  "upgrades": 3,
+  "wavesCleared": 5,
+}
+`;
+
+exports[`golden match results > recife-1 · perfuração + água-viva controle 1`] = `
+{
+  "guardians": 3,
+  "kills": {
+    "dartfish": 14,
+    "swimmer": 20,
+    "tidebreaker": 1,
+  },
+  "leaks": {
+    "dartfish": 1,
+    "swimmer": 5,
+  },
+  "pearls": 185,
+  "reef": 14,
+  "state": "victory",
+  "stepsExecuted": 6,
+  "timeMs": 166967,
+  "upgrades": 3,
+  "wavesCleared": 5,
+}
+`;
+
+exports[`golden match results > recife-1 · suporte com polvo (tinta) 1`] = `
 {
   "guardians": 3,
   "kills": {
@@ -120,78 +184,12 @@ exports[`golden match results > recife-1 · novatos: tubarão alfa na margem + t
     "dartfish": 1,
     "swimmer": 4,
   },
-  "pearls": 141,
+  "pearls": 136,
   "reef": 15,
   "state": "victory",
   "stepsExecuted": 6,
-  "timeMs": 161917,
+  "timeMs": 189283,
   "upgrades": 3,
-  "wavesCleared": 5,
-}
-`;
-
-exports[`golden match results > recife-1 · novatos: tubarão frenesi + peixe-pedra emboscada + camarão 1`] = `
-{
-  "guardians": 3,
-  "kills": {
-    "dartfish": 14,
-    "swimmer": 20,
-    "tidebreaker": 1,
-  },
-  "leaks": {
-    "dartfish": 1,
-    "swimmer": 5,
-  },
-  "pearls": 145,
-  "reef": 14,
-  "state": "victory",
-  "stepsExecuted": 6,
-  "timeMs": 166867,
-  "upgrades": 3,
-  "wavesCleared": 5,
-}
-`;
-
-exports[`golden match results > recife-1 · perfuração + água-viva controle 1`] = `
-{
-  "guardians": 3,
-  "kills": {
-    "dartfish": 13,
-    "swimmer": 20,
-    "tidebreaker": 1,
-  },
-  "leaks": {
-    "dartfish": 2,
-    "swimmer": 5,
-  },
-  "pearls": 178,
-  "reef": 13,
-  "state": "victory",
-  "stepsExecuted": 6,
-  "timeMs": 170033,
-  "upgrades": 3,
-  "wavesCleared": 5,
-}
-`;
-
-exports[`golden match results > recife-1 · suporte com polvo (tinta) 1`] = `
-{
-  "guardians": 3,
-  "kills": {
-    "dartfish": 10,
-    "swimmer": 17,
-    "tidebreaker": 1,
-  },
-  "leaks": {
-    "dartfish": 5,
-    "swimmer": 8,
-  },
-  "pearls": 184,
-  "reef": 7,
-  "state": "victory",
-  "stepsExecuted": 5,
-  "timeMs": 193333,
-  "upgrades": 2,
   "wavesCleared": 5,
 }
 `;
@@ -203,18 +201,18 @@ exports[`golden match results > recife-2 · controle: água-viva elétrica no ca
     "dartfish": 13,
     "minnow": 40,
     "shellback": 7,
-    "swimmer": 20,
+    "swimmer": 22,
     "tidebreaker": 1,
   },
   "leaks": {
     "shellback": 2,
-    "swimmer": 4,
+    "swimmer": 2,
   },
-  "pearls": 204,
-  "reef": 12,
+  "pearls": 216,
+  "reef": 14,
   "state": "victory",
   "stepsExecuted": 8,
-  "timeMs": 340083,
+  "timeMs": 333967,
   "upgrades": 3,
   "wavesCleared": 6,
 }
@@ -235,7 +233,7 @@ exports[`golden match results > recife-2 · dano: camarões nos laços e no cent
   "reef": 20,
   "state": "victory",
   "stepsExecuted": 9,
-  "timeMs": 272767,
+  "timeMs": 269050,
   "upgrades": 5,
   "wavesCleared": 6,
 }
@@ -256,7 +254,7 @@ exports[`golden match results > recife-2 · novatos: camarões nos laços + tuba
   "reef": 20,
   "state": "victory",
   "stepsExecuted": 9,
-  "timeMs": 288817,
+  "timeMs": 279933,
   "upgrades": 5,
   "wavesCleared": 6,
 }
@@ -269,17 +267,15 @@ exports[`golden match results > recife-2 · novatos: tubarão alfa + camarões +
     "dartfish": 13,
     "minnow": 40,
     "shellback": 9,
-    "swimmer": 23,
+    "swimmer": 24,
     "tidebreaker": 1,
   },
-  "leaks": {
-    "swimmer": 1,
-  },
-  "pearls": 211,
-  "reef": 19,
+  "leaks": {},
+  "pearls": 217,
+  "reef": 20,
   "state": "victory",
   "stepsExecuted": 8,
-  "timeMs": 298683,
+  "timeMs": 276583,
   "upgrades": 4,
   "wavesCleared": 6,
 }
@@ -290,23 +286,19 @@ exports[`golden match results > recife-3 · controle: água-viva no laço leste 
   "guardians": 5,
   "kills": {
     "dartfish": 8,
-    "minnow": 18,
+    "minnow": 20,
     "moray": 4,
-    "needlefish": 16,
+    "needlefish": 17,
     "shellback": 10,
-    "swimmer": 15,
+    "swimmer": 19,
     "tidebreaker": 1,
   },
-  "leaks": {
-    "minnow": 2,
-    "needlefish": 1,
-    "swimmer": 4,
-  },
-  "pearls": 301,
-  "reef": 12,
+  "leaks": {},
+  "pearls": 337,
+  "reef": 20,
   "state": "victory",
   "stepsExecuted": 9,
-  "timeMs": 462200,
+  "timeMs": 435050,
   "upgrades": 4,
   "wavesCleared": 7,
 }
@@ -329,7 +321,7 @@ exports[`golden match results > recife-3 · dano: camarões meio/norte/laço + c
   "reef": 20,
   "state": "victory",
   "stepsExecuted": 9,
-  "timeMs": 405050,
+  "timeMs": 388167,
   "upgrades": 5,
   "wavesCleared": 7,
 }
@@ -352,7 +344,7 @@ exports[`golden match results > recife-4 · controle: água-viva no arco externo
   "reef": 20,
   "state": "victory",
   "stepsExecuted": 10,
-  "timeMs": 311517,
+  "timeMs": 300650,
   "upgrades": 4,
   "wavesCleared": 7,
 }
@@ -367,18 +359,18 @@ exports[`golden match results > recife-4 · dano: camarões ilha/norte/oeste/les
     "moray": 3,
     "needlefish": 17,
     "shellback": 14,
-    "swimmer": 12,
+    "swimmer": 13,
     "tidebreaker": 1,
   },
   "leaks": {
     "moray": 1,
-    "swimmer": 2,
+    "swimmer": 1,
   },
-  "pearls": 413,
-  "reef": 14,
+  "pearls": 419,
+  "reef": 15,
   "state": "victory",
   "stepsExecuted": 10,
-  "timeMs": 296017,
+  "timeMs": 292467,
   "upgrades": 5,
   "wavesCleared": 7,
 }
@@ -390,24 +382,23 @@ exports[`golden match results > recife-5 · controle: água-viva na vala + baiac
   "kills": {
     "corruptedShark": 1,
     "dartfish": 13,
-    "minnow": 43,
+    "minnow": 44,
     "moray": 5,
     "needlefish": 17,
     "shellback": 16,
-    "swimmer": 9,
+    "swimmer": 10,
     "tidebreaker": 2,
   },
   "leaks": {
     "dartfish": 1,
-    "minnow": 3,
+    "minnow": 2,
     "moray": 1,
-    "swimmer": 1,
   },
-  "pearls": 124,
-  "reef": 11,
+  "pearls": 132,
+  "reef": 13,
   "state": "victory",
   "stepsExecuted": 15,
-  "timeMs": 264183,
+  "timeMs": 262633,
   "upgrades": 8,
   "wavesCleared": 8,
 }
@@ -419,24 +410,23 @@ exports[`golden match results > recife-5 · dano: camarões proa/popa/leste/nort
   "kills": {
     "corruptedShark": 1,
     "dartfish": 13,
-    "minnow": 43,
+    "minnow": 44,
     "moray": 5,
     "needlefish": 17,
     "shellback": 16,
-    "swimmer": 9,
+    "swimmer": 10,
     "tidebreaker": 2,
   },
   "leaks": {
     "dartfish": 1,
-    "minnow": 3,
+    "minnow": 2,
     "moray": 1,
-    "swimmer": 1,
   },
-  "pearls": 139,
-  "reef": 11,
+  "pearls": 147,
+  "reef": 13,
   "state": "victory",
   "stepsExecuted": 15,
-  "timeMs": 256433,
+  "timeMs": 252917,
   "upgrades": 9,
   "wavesCleared": 8,
 }
@@ -447,27 +437,24 @@ exports[`golden match results > recife-6 · controle: água-viva no casco + baia
   "guardians": 8,
   "kills": {
     "corruptedShark": 2,
-    "dartfish": 16,
-    "minnow": 49,
-    "moray": 4,
-    "needlefish": 20,
+    "dartfish": 17,
+    "minnow": 52,
+    "moray": 5,
+    "needlefish": 21,
     "shellback": 20,
-    "swimmer": 8,
+    "swimmer": 10,
     "tidebreaker": 3,
   },
   "leaks": {
-    "dartfish": 2,
-    "minnow": 3,
-    "moray": 1,
-    "needlefish": 1,
-    "swimmer": 3,
+    "dartfish": 1,
+    "swimmer": 1,
   },
-  "pearls": 179,
-  "reef": 6,
+  "pearls": 154,
+  "reef": 18,
   "state": "victory",
-  "stepsExecuted": 17,
-  "timeMs": 389433,
-  "upgrades": 9,
+  "stepsExecuted": 18,
+  "timeMs": 371200,
+  "upgrades": 10,
   "wavesCleared": 9,
 }
 `;
@@ -477,25 +464,21 @@ exports[`golden match results > recife-6 · dano: camarões convés/nordeste/mas
   "guardians": 7,
   "kills": {
     "corruptedShark": 2,
-    "dartfish": 16,
+    "dartfish": 18,
     "minnow": 52,
-    "moray": 4,
+    "moray": 5,
     "needlefish": 21,
     "shellback": 20,
-    "swimmer": 10,
+    "swimmer": 11,
     "tidebreaker": 3,
   },
-  "leaks": {
-    "dartfish": 2,
-    "moray": 1,
-    "swimmer": 1,
-  },
-  "pearls": 160,
-  "reef": 13,
+  "leaks": {},
+  "pearls": 132,
+  "reef": 20,
   "state": "victory",
-  "stepsExecuted": 17,
-  "timeMs": 365567,
-  "upgrades": 10,
+  "stepsExecuted": 18,
+  "timeMs": 338467,
+  "upgrades": 11,
   "wavesCleared": 9,
 }
 `;
@@ -504,8 +487,8 @@ exports[`golden match results > recife-6 · novatos: camarões + tubarão alfa +
 {
   "guardians": 7,
   "kills": {
-    "corruptedShark": 1,
-    "dartfish": 17,
+    "corruptedShark": 2,
+    "dartfish": 18,
     "minnow": 52,
     "moray": 5,
     "needlefish": 20,
@@ -514,15 +497,13 @@ exports[`golden match results > recife-6 · novatos: camarões + tubarão alfa +
     "tidebreaker": 3,
   },
   "leaks": {
-    "corruptedShark": 1,
-    "dartfish": 1,
     "needlefish": 1,
   },
-  "pearls": 116,
-  "reef": 9,
+  "pearls": 154,
+  "reef": 18,
   "state": "victory",
   "stepsExecuted": 17,
-  "timeMs": 363667,
+  "timeMs": 349500,
   "upgrades": 10,
   "wavesCleared": 9,
 }

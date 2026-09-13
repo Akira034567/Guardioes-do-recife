@@ -176,7 +176,13 @@ export class MatchGuardian {
       if (target) this.consume(this.fsm.beginAttack(target.id, now), enemies, onImpact);
     }
     const target = enemies.find((enemy) => enemy.id === this.fsm.targetId);
-    const valid = Boolean(target && !target.dead && !target.reachedGoal && target.distanceTo(this.x, this.y) <= this.range);
+    // TRAVA DE ALVO (item 16). O alcance decide a AQUISIÇÃO — o `selectTarget` acima já filtra por
+    // forma e raio — e nada mais. Depois que o golpe começou, ele vai até o fim mesmo que o inimigo
+    // saia do alcance; só desiste se o alvo deixar de existir (morreu ou chegou ao Recife).
+    //
+    // Antes, um inimigo que apenas passava de largada cancelava o golpe no meio e devolvia a unidade
+    // ao repouso sem custo, então ela reengajava no mesmo tique: animação quebrada em looping.
+    const valid = Boolean(target && !target.dead && !target.reachedGoal);
     this.consume(this.fsm.update(now, valid), enemies, onImpact);
   }
 

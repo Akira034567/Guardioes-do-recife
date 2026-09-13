@@ -24,6 +24,10 @@ export interface LaunchContext {
 }
 
 /**
+ * NÃO limite `?difficulty=` ao que o jogador já desbloqueou (item 4). O desbloqueio progressivo é
+ * regra da INTERFACE; este atalho é a porta das sondas de balanceamento e do desenvolvimento, e
+ * fechá-la quebraria a suíte inteira sem ganho nenhum para quem joga.
+ *
  * Lê os atalhos de URL (`?level=`, `?guardians=`, `?difficulty=`, `?debug=1&wave=N`) e completa o que
  * faltar com a progressão do jogador. Tira esse parse de dentro da cena.
  */

@@ -45,7 +45,9 @@ export type DamageCause =
   | "trap"
   | "field"
   | "contact"
-  | "poison";
+  | "poison"
+  /** Ruptura de ponto fraco de chefe: o estrago interno, não um golpe de Guardião (item 11). */
+  | "weakPoint";
 
 export interface DamageOptions {
   sourceId?: string;
@@ -88,6 +90,7 @@ export function targetPolicyFor(guardian: BehaviorGuardian, now: number): Target
     threshold: stats.frenzy?.healthThreshold,
     preferredId: runtime.preferredTargetId(now),
     markedId: stats.mark ? runtime.preyId : null,
+    priority: stats.targetPriority ?? undefined,
   };
 }
 

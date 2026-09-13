@@ -32,7 +32,7 @@ export class LevelProgressAdapter implements LevelProgressApi {
     if (index < 0) return null;
     this.save.update((draft) => {
       if (!draft.completedLevels.includes(levelId)) draft.completedLevels.push(levelId);
-      const record = draft.levelStars[levelId] ?? { stars: 0, objectives: [], completions: 0, best: null };
+      const record = draft.levelStars[levelId] ?? { stars: 0, objectives: [], completions: 0, best: null, clearedDifficulties: [] };
       record.completions += 1;
       if (record.stars < 1) {
         record.stars = 1;

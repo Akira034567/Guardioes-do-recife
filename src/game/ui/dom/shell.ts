@@ -56,6 +56,31 @@ export const MAP_NAV_IDS: Record<ShellSection, string> = {
   settings: "map-settings",
 };
 
+/**
+ * Acende a seção atual e reetiqueta os botões SEM remontar a coluna (item 2).
+ *
+ * O `data-testid` de cada item continua variando por seção porque os testes e2e o usam assim; a
+ * diferença é que agora ele muda de valor num elemento que permanece o mesmo, em vez de o elemento
+ * inteiro ser recriado.
+ */
+export function retargetShell(
+  side: HTMLElement,
+  active: ShellSection,
+  options: { navId(section: ShellSection): string; backId?: string; back?: () => void },
+): void {
+  side.querySelectorAll<HTMLButtonElement>("[data-section]").forEach((item) => {
+    const section = item.dataset.section as ShellSection;
+    const current = section === active;
+    item.classList.toggle("gr-world__nav-item--on", current);
+    item.dataset.testid = options.navId(section);
+    if (current) item.setAttribute("aria-current", "page");
+    else item.removeAttribute("aria-current");
+  });
+  const back = side.querySelector<HTMLButtonElement>(".gr-world__back");
+  if (back && options.backId) back.dataset.testid = options.backId;
+  if (back && options.back) back.onclick = options.back;
+}
+
 export function shellSidebar(active: ShellSection, nav: ShellNav, options: ShellOptions): HTMLElement {
   return h(
     "aside",
@@ -88,8 +113,11 @@ export function shellSidebar(active: ShellSection, nav: ShellNav, options: Shell
             dataSection: item.section,
             type: "button",
             "aria-current": current ? "page" : undefined,
-            onClick: () => {
-              if (!current) item.open(nav);
+            onClick: (event: MouseEvent) => {
+              // Lê o estado do DOM, e não o `current` do fechamento: `retargetShell` muda a classe
+              // sem recriar o botão, então o valor capturado aqui envelheceria.
+              if ((event.currentTarget as HTMLElement).classList.contains("gr-world__nav-item--on")) return;
+              item.open(nav);
             },
           },
           h("span", { class: "gr-icon gr-icon--lg", html: item.icon }),

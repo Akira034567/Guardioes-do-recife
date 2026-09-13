@@ -35,14 +35,36 @@ function fromV2(document: Record<string, unknown>): Record<string, unknown> {
   return {
     ...document,
     saveVersion: 3,
-    reef: { owned: [], placed: [], nextInstanceId: 1, granted: [], lastSeenStage: 0, residents: [] },
+    reef: { owned: [], placed: [], nextInstanceId: 1, granted: [], lastSeenStage: 0, residents: [], servedSlots: [] },
     migratedFrom: 2,
   };
+}
+
+/**
+ * v3 → v4: a dificuldade deixa de ser escolha livre e passa a ser conquistada (item 4).
+ *
+ * A migração é CONSERVADORA por decisão de produto: ninguém herda nada. Saves antigos nunca
+ * registraram em qual dificuldade cada fase caiu — `best.difficulty` guarda a dificuldade da última
+ * partida MELHOR, não a mais alta, então inferir dali daria um resultado errado com cara de certo.
+ * Todo mundo recomeça com o Normal aberto e reconquista Difícil e Abissal.
+ */
+function fromV3(document: Record<string, unknown>): Record<string, unknown> {
+  const levelStars = isRecord(document.levelStars) ? document.levelStars : {};
+  const migrated: Record<string, unknown> = {};
+  for (const [levelId, record] of Object.entries(levelStars)) {
+    migrated[levelId] = isRecord(record) ? { ...record, clearedDifficulties: [] } : record;
+  }
+  return { ...document, saveVersion: 4, levelStars: migrated, migratedFrom: 3 };
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 export const MIGRATIONS: Record<number, Migration> = {
   1: fromV1,
   2: fromV2,
+  3: fromV3,
 };
 
 /** Aplica as migrações em cadeia a partir de `fromVersion` até a versão alvo. */

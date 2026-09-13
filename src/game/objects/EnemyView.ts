@@ -3,6 +3,7 @@ import { enemyFrameKeys, hasEnemyArt } from "../assets/enemyArt";
 import { DEPTH } from "../constants";
 import type { MatchEnemy } from "../core/match/MatchEnemy";
 import { ELITES, type EliteId } from "../data/elites";
+import { orientationFor, spriteTilt } from "../core/SpriteOrientation";
 import { ENEMY_SHAPES } from "./EnemyShapes";
 
 /**
@@ -12,12 +13,21 @@ import { ENEMY_SHAPES } from "./EnemyShapes";
 export class EnemyView extends Phaser.GameObjects.Container {
   private lastHealth = Number.NaN;
   private statusSignature = "";
+  /** Lado atual do sprite, para a zona morta de `orientationFor` ter o que preservar. */
+  private facingLeft = false;
   /** Sprite animado, quando a pasta de arte do inimigo existe; senão o desenho vetorial. */
   private readonly sprite: Phaser.GameObjects.Image | null;
   private readonly frameKeys: string[] = [];
   private readonly frameMs: number;
   private frameIndex = 0;
   private frameClockMs = 0;
+  /** Quadros do nado normal e da pose de defesa, já resolvidos em chaves de textura. */
+  private readonly loopKeys: string[] = [];
+  private readonly guardKeys: string[] = [];
+  /** Até quando a pose de defesa vale, quando ela pode voltar e quando vem a próxima espontânea. */
+  private guardUntilMs = 0;
+  private guardReadyAtMs = 0;
+  private nextSpontaneousGuardMs = Number.POSITIVE_INFINITY;
   private readonly bodyGraphic: Phaser.GameObjects.Graphics;
   private readonly statusGraphic: Phaser.GameObjects.Graphics;
   private readonly healthBar: Phaser.GameObjects.Graphics;
@@ -34,10 +44,19 @@ export class EnemyView extends Phaser.GameObjects.Container {
     if (art.kind === "sprite" && hasEnemyArt(scene, enemy.definition)) {
       this.frameKeys = enemyFrameKeys(art);
       this.frameMs = art.frameMs ?? 160;
+      const pick = (indices: number[] | undefined): string[] =>
+        (indices ?? []).map((frame) => this.frameKeys[frame - 1]).filter((key): key is string => Boolean(key));
+      this.loopKeys = art.loopFrames ? pick(art.loopFrames) : [...this.frameKeys];
+      this.guardKeys = pick(art.guardFrames);
+      if (art.guard?.idleIntervalMs) {
+        // Semeado pelo id para os bichos da mesma onda não se recolherem todos no mesmo instante.
+        this.nextSpontaneousGuardMs = this.rollNextGuard(0, art.guard.idleIntervalMs, art.guard.idleJitterMs ?? 0);
+      }
       this.sprite = new Phaser.GameObjects.Image(scene, 0, 0, this.frameKeys[0]);
       this.sprite.setScale((art.scale ?? 0.5) * enemy.definition.scale);
-      // Os desenhos olham para a esquerda por padrão; o espelho põe o nariz em +x de uma vez por todas.
-      this.sprite.setFlipX(art.facing !== "right");
+      // O espelho horizontal é decidido quadro a quadro por `animate()`, que é a única fonte da
+      // verdade. O vertical nunca: nenhum bicho nada de barriga para cima.
+      this.sprite.setFlipY(false);
       this.add(this.sprite);
     } else {
       this.sprite = null;
@@ -58,38 +77,66 @@ export class EnemyView extends Phaser.GameObjects.Container {
   sync(now: number, deltaMs = 0): void {
     const enemy = this.enemy;
     this.setPosition(enemy.x, enemy.y);
-    if (this.sprite) this.animate(enemy.heading, deltaMs);
-    else this.bodyGraphic.setRotation(enemy.heading);
+    if (this.sprite) this.animate(now, enemy.heading, deltaMs);
+    else this.bodyGraphic.setRotation(spriteTilt(enemy.heading));
     if (enemy.health !== this.lastHealth) {
+      // A primeira leitura vem de NaN (a barra ainda não existia): não é dano, é o nascimento.
+      const tookDamage = !Number.isNaN(this.lastHealth) && enemy.health < this.lastHealth;
       this.lastHealth = enemy.health;
       this.drawHealth();
+      if (tookDamage) this.triggerGuard(now, "damage");
     }
+    if (now >= this.nextSpontaneousGuardMs) this.triggerGuard(now, "interval");
     this.refreshStatusVisual(now);
   }
 
   /** Troca de quadro no ritmo da arte e vira a criatura para o lado em que ela nada. */
-  private animate(heading: number, deltaMs: number): void {
+  private animate(now: number, heading: number, deltaMs: number): void {
     const sprite = this.sprite;
     if (!sprite) return;
     const art = this.enemy.definition.art;
-    const swimmingLeft = Math.cos(heading) < 0;
-    if (art.kind === "sprite" && art.rotate === "upright") {
-      // Bicho de leito: fica em pé e só olha para o lado em que anda.
-      sprite.setRotation(0);
-      sprite.setFlipY(false);
-      sprite.setFlipX(art.facing === "right" ? swimmingLeft : !swimmingLeft);
-    } else {
-      // O nariz do desenho aponta para +x depois do espelho; daí a criatura gira junto com a rota e
-      // vira de barriga para baixo quando nada para a esquerda (senão apareceria de cabeça para baixo).
-      sprite.setRotation(heading);
-      sprite.setFlipY(swimmingLeft);
+    // A cabeça segue a tangente da rota: espelho horizontal para o lado, inclinação atenuada para a
+    // subida ou descida. Sem espelho vertical — era ele que fazia a criatura nadar de ré.
+    const orientation = orientationFor(art, heading, this.facingLeft);
+    this.facingLeft = orientation.flipX;
+    sprite.setFlipX(orientation.flipX);
+    sprite.setRotation(orientation.rotation);
+
+    // Recolhido: segura a pose e congela o relógio do nado, para ele não voltar no meio do ciclo.
+    if (this.guardKeys.length > 0 && now < this.guardUntilMs) {
+      sprite.setTexture(this.guardKeys[0]);
+      return;
     }
-    if (this.frameKeys.length < 2) return;
+    if (this.loopKeys.length < 2) return;
     this.frameClockMs += deltaMs;
     if (this.frameClockMs < this.frameMs) return;
     this.frameClockMs = 0;
-    this.frameIndex = (this.frameIndex + 1) % this.frameKeys.length;
-    sprite.setTexture(this.frameKeys[this.frameIndex]);
+    this.frameIndex = (this.frameIndex + 1) % this.loopKeys.length;
+    sprite.setTexture(this.loopKeys[this.frameIndex]);
+  }
+
+  /** Próximo recolhimento espontâneo, espalhado pelo id para a onda inteira não sincronizar. */
+  private rollNextGuard(now: number, intervalMs: number, jitterMs: number): number {
+    let hash = 0;
+    for (const character of this.enemy.id) hash = (hash * 31 + character.charCodeAt(0)) % 9973;
+    const offset = jitterMs === 0 ? 0 : ((hash / 9973) * 2 - 1) * jitterMs;
+    return now + intervalMs + offset;
+  }
+
+  /**
+   * Recolhe a criatura. `damage` é o gatilho que importa: a concha fecha quando ela apanha, e não
+   * num rodízio cego. O `cooldownMs` impede que uma rajada de dano vire um estrobo.
+   */
+  private triggerGuard(now: number, reason: "damage" | "interval"): void {
+    const art = this.enemy.definition.art;
+    if (art.kind !== "sprite" || !art.guard || this.guardKeys.length === 0) return;
+    const wants = art.guard.trigger === "both" || art.guard.trigger === reason;
+    if (!wants || now < this.guardReadyAtMs) return;
+    this.guardUntilMs = now + art.guard.holdMs;
+    this.guardReadyAtMs = this.guardUntilMs + art.guard.cooldownMs;
+    if (art.guard.idleIntervalMs) {
+      this.nextSpontaneousGuardMs = this.rollNextGuard(this.guardReadyAtMs, art.guard.idleIntervalMs, art.guard.idleJitterMs ?? 0);
+    }
   }
 
   private refreshStatusVisual(now: number): void {

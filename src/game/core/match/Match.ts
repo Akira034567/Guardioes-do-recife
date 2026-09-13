@@ -38,6 +38,8 @@ import type { MatchSnapshot, MatchStatus } from "./MatchSnapshot";
 import { MatchStats } from "./MatchStats";
 import { AreaEffects } from "./systems/AreaEffects";
 import { resolveAttack } from "./systems/CombatSystem";
+import { MatchWeakPoint } from "./MatchWeakPoint";
+import { weakPointBurstDamage, weakPointDefinition } from "../WeakPoints";
 import { ProjectileSystem } from "./systems/ProjectileSystem";
 
 export interface PlayerConfig {
@@ -94,6 +96,15 @@ export class Match {
   readonly economyMode: "shared" | "individual";
   private readonly scheduler: WaveScheduler;
   private readonly enemyList: MatchEnemy[] = [];
+  /**
+   * Pontos fracos de chefe. Ficam FORA de `enemyList` de propósito (item 11): é a lista de
+   * inimigos que alimenta a contagem de vitória, o dano ao Recife, o bloqueio e a recompensa de
+   * abate. Mantê-los fora dela resolve tudo isso de uma vez, sem espalhar exceções.
+   */
+  private readonly weakPointList: MatchWeakPoint[] = [];
+  /** `enemyList` + pontos fracos: o que pode ser MIRADO e ATINGIDO. Só aloca quando há pontos. */
+  private targetPool: readonly MatchEnemy[] = [];
+  private weakPointSerial = 0;
   private readonly guardianList: MatchGuardian[] = [];
   private readonly projectileSystem = new ProjectileSystem();
   private readonly areas = new AreaEffects();
@@ -153,6 +164,10 @@ export class Match {
 
   get reef(): number {
     return this.reefValue;
+  }
+
+  get weakPoints(): readonly MatchWeakPoint[] {
+    return this.weakPointList;
   }
 
   get enemies(): readonly MatchEnemy[] {
@@ -231,10 +246,19 @@ export class Match {
     for (const enemy of [...this.enemyList]) {
       if (enemy.dead || enemy.reachedGoal) continue;
       enemy.dead = true;
+      // O chefe some e leva os pontos fracos presos a ele; senão ficariam órfãos em campo.
+      this.removeWeakPointsOf(enemy.id);
       this.abilitySystem.died(enemy, this.abilityWorld());
       this.bossEncounter.onRemoved(enemy);
       this.emit({ type: "enemyKilled", now: this.nowMs, id: enemy.id, enemyId: enemy.definition.id, x: enemy.x, y: enemy.y, reward: 0, killerId: null });
     }
+  }
+
+  /** Debug: fere um alvo pelo caminho normal de dano (serve para inimigo e para ponto fraco). */
+  private debugDamage(targetId: string, amount: number): void {
+    const target = this.enemyList.find((enemy) => enemy.id === targetId) ?? this.weakPointList.find((point) => point.id === targetId);
+    if (!target) return;
+    this.damage(target, Math.max(0, amount), { cause: "melee" });
   }
 
   /** Composição da próxima onda para o HUD (null na última). */
@@ -287,6 +311,12 @@ export class Match {
               health: boss.health,
               maxHealth: boss.definition.maxHealth,
               healthRatio: bossState.healthRatio,
+              weakPoints: boss.definition.weakPoints
+                ? {
+                    total: boss.definition.weakPoints.count,
+                    remaining: this.weakPointList.filter((point) => point.parent.id === boss.id && !point.dead).length,
+                  }
+                : null,
               phaseIndex: bossState.phaseIndex,
               phaseCount: bossState.phaseCount,
               blockedById: boss.blockedById,
@@ -414,6 +444,10 @@ export class Match {
         return this.startNextWave();
       case "interact":
         return this.interact(command);
+      case "debug.damageEnemy":
+        this.stats.cheated = true;
+        this.debugDamage(command.enemyId, command.amount);
+        return { ok: true };
       case "debug.addPearls":
         this.stats.cheated = true;
         this.earn(Math.max(0, command.amount), "SpecialReward", command.playerId ?? DEFAULT_PLAYER_ID);
@@ -578,6 +612,9 @@ export class Match {
     // Habilidades de escopo de mundo (inversão de corrente do chefe) rodam antes das ondas, como antes.
     this.abilitySystem.worldTick(deltaMs, this.abilityWorld());
 
+    // Um só array quando não há chefe com pontos fracos em campo: nada de alocar a 60Hz à toa.
+    this.targetPool = this.weakPointList.length > 0 ? [...this.enemyList, ...this.weakPointList] : this.enemyList;
+
     const alive = this.enemyList.filter((enemy) => !enemy.dead && !enemy.reachedGoal).length;
     for (const event of this.scheduler.tick(deltaMs, alive)) {
       if (event.type === "spawn") {
@@ -622,6 +659,7 @@ export class Match {
     for (const enemy of this.enemyList) {
       if (enemy.tick(this.nowMs, deltaMs, this.currents)) this.leak(enemy);
     }
+    for (const weakPoint of this.weakPointList) weakPoint.tick(this.nowMs, deltaMs, this.currents);
     this.drainPoison();
 
     const hooks = this.behaviorHooks();
@@ -634,18 +672,22 @@ export class Match {
       guardian.syncStatus(this.nowMs);
       updateFrenzy(guardian, this.enemyList, this.nowMs);
       updateMark(guardian, this.enemyList, hooks);
-      guardian.tick(this.nowMs, this.enemyList, (attacker, target) => this.resolveAttack(attacker, target));
+      guardian.tick(this.nowMs, this.targetPool, (attacker, target) => this.resolveAttack(attacker, target));
     }
     for (const guardian of this.guardianList) {
       updatePushWave(guardian, this.enemyList, hooks);
       updateSonar(guardian, this.enemyList, this.guardianList, hooks);
     }
     const damage = (enemy: MatchEnemy, amount: number, options?: DamageOptions) => this.damage(enemy, amount, options);
-    this.areas.update({ now: this.nowMs, enemies: this.enemyList, damage, emit: this.emitBound });
-    this.projectileSystem.update(deltaMs, { now: this.nowMs, enemies: this.enemyList, currents: this.currents, damage, emit: this.emitBound });
+    // Área, splash e corrente alcançam os pontos fracos de graça, por usarem o mesmo conjunto.
+    this.areas.update({ now: this.nowMs, enemies: this.targetPool, damage, emit: this.emitBound });
+    this.projectileSystem.update(deltaMs, { now: this.nowMs, enemies: this.targetPool, currents: this.currents, damage, emit: this.emitBound });
 
     for (let index = this.enemyList.length - 1; index >= 0; index -= 1) {
       if (this.enemyList[index].dead || this.enemyList[index].reachedGoal) this.enemyList.splice(index, 1);
+    }
+    for (let index = this.weakPointList.length - 1; index >= 0; index -= 1) {
+      if (this.weakPointList[index].dead) this.weakPointList.splice(index, 1);
     }
   }
 
@@ -671,6 +713,7 @@ export class Match {
     this.abilitySystem.register(enemy, this.abilityWorld());
     this.emit({ type: "enemySpawned", now: this.nowMs, id: enemy.id, enemyId, x: enemy.x, y: enemy.y, pathId: at.pathId });
     this.onBossEvents(this.bossEncounter.onSpawn(enemy), enemy);
+    this.spawnWeakPoints(enemy);
   }
 
   /** Traduz os eventos do encontro de chefe para eventos de partida (e paga a recompensa extra). */
@@ -736,6 +779,7 @@ export class Match {
   }
 
   private leak(enemy: MatchEnemy): void {
+    this.removeWeakPointsOf(enemy.id);
     this.bossEncounter.onRemoved(enemy);
     const damage = this.invincible ? 0 : Math.round(enemy.definition.reefDamage * enemy.mods.reefDamage);
     this.reefValue = Math.max(0, this.reefValue - damage);
@@ -798,7 +842,101 @@ export class Match {
     );
   }
 
+  /** Cria os pontos fracos declarados pelo chefe, se houver. */
+  private spawnWeakPoints(parent: MatchEnemy): void {
+    const plan = parent.definition.weakPoints;
+    if (!plan || plan.count <= 0) return;
+    const definition = weakPointDefinition(plan, parent.definition);
+    for (let index = 0; index < plan.count; index += 1) {
+      const anchor = plan.anchors[index % plan.anchors.length];
+      const weakPoint = new MatchWeakPoint(`W${++this.weakPointSerial}`, definition, parent, anchor, index);
+      this.weakPointList.push(weakPoint);
+      this.emit({
+        type: "weakPointSpawned",
+        now: this.nowMs,
+        id: weakPoint.id,
+        parentId: parent.id,
+        index,
+        name: plan.name,
+        x: weakPoint.x,
+        y: weakPoint.y,
+        maxHealth: weakPoint.definition.maxHealth,
+      });
+    }
+  }
+
+  /**
+   * Dano num ponto fraco. Deliberadamente NÃO passa por nada que pague o jogador: sem pérola de
+   * abate, sem `enemyKilled`, sem entrada no bestiário. O que ele dá é o estrago no chefe.
+   */
+  private damageWeakPoint(weakPoint: MatchWeakPoint, amount: number, options: DamageOptions): void {
+    const outcome = options.continuous ? weakPoint.takeContinuousDamage(amount, options) : weakPoint.takeDamage(amount, options);
+    if (outcome.applied <= 0 && !outcome.killed) return;
+    const source = options.sourceId ? this.guardian(options.sourceId) : undefined;
+    const cause = options.cause ?? "melee";
+    this.stats.recordDamage(outcome.applied, cause, options.sourceId ?? null, source?.guardianId ?? null);
+    this.emit({
+      type: "weakPointDamaged",
+      now: this.nowMs,
+      id: weakPoint.id,
+      parentId: weakPoint.parent.id,
+      index: weakPoint.index,
+      amount: outcome.applied,
+      health: weakPoint.health,
+      maxHealth: weakPoint.definition.maxHealth,
+      x: weakPoint.x,
+      y: weakPoint.y,
+      sourceId: options.sourceId ?? null,
+    });
+    if (!outcome.killed) return;
+
+    const plan = weakPoint.parent.definition.weakPoints;
+    const burst = plan ? weakPointBurstDamage(plan, weakPoint.parent.definition) : 0;
+    this.emit({
+      type: "weakPointDestroyed",
+      now: this.nowMs,
+      id: weakPoint.id,
+      parentId: weakPoint.parent.id,
+      index: weakPoint.index,
+      x: weakPoint.x,
+      y: weakPoint.y,
+      burstDamage: burst,
+      reason: "broken",
+    });
+    // Reentrância de um nível só, por construção: o pai é um inimigo comum e nunca é ponto fraco.
+    const parent = weakPoint.parent;
+    if (burst > 0 && !parent.dead && !parent.reachedGoal) {
+      // `continuous` porque é ruptura interna: ignora a armadura, mas passa pelo funil normal de
+      // dano, então as fases do chefe e o `bossDefeated` continuam avaliados como sempre.
+      this.damage(parent, burst, { continuous: true, cause: "weakPoint", sourceId: options.sourceId });
+    }
+  }
+
+  /** O chefe saiu de campo: os pontos presos a ele vão junto, sem recompensa nem estardalhaço. */
+  private removeWeakPointsOf(parentId: string): void {
+    for (let index = this.weakPointList.length - 1; index >= 0; index -= 1) {
+      const weakPoint = this.weakPointList[index];
+      if (weakPoint.parent.id !== parentId) continue;
+      this.weakPointList.splice(index, 1);
+      this.emit({
+        type: "weakPointDestroyed",
+        now: this.nowMs,
+        id: weakPoint.id,
+        parentId,
+        index: weakPoint.index,
+        x: weakPoint.x,
+        y: weakPoint.y,
+        burstDamage: 0,
+        reason: "parentGone",
+      });
+    }
+  }
+
   private damage(enemy: MatchEnemy, amount: number, options: DamageOptions = {}): void {
+    if (enemy.isWeakPoint) {
+      this.damageWeakPoint(enemy as MatchWeakPoint, amount, options);
+      return;
+    }
     const outcome = options.continuous ? enemy.takeContinuousDamage(amount, options) : enemy.takeDamage(amount, options);
     if (outcome.applied <= 0 && !outcome.killed) return;
     const cause = options.cause ?? (options.continuous ? "contact" : "melee");
@@ -821,6 +959,7 @@ export class Match {
       });
     }
     if (!outcome.killed) return;
+    this.removeWeakPointsOf(enemy.id);
     this.abilitySystem.died(enemy, this.abilityWorld());
     this.onBossEvents(this.bossEncounter.onRemoved(enemy), enemy);
     const reward = this.earn(enemy.definition.reward, "EnemyReward", DEFAULT_PLAYER_ID);

@@ -18,16 +18,23 @@ export const HUD_LAYOUT = {
   podHeight: POD_HEIGHT,
   /** Marca do jogo, encostada à esquerda. */
   brand: { x: 12, width: 160, height: 48 },
-  /** Pílulas de estado: pérolas, vida do Recife, onda e relógio, nesta ordem. */
+  /**
+   * Pílulas de estado: moeda, vida do Recife, onda e contagem da próxima onda, nesta ordem.
+   * A última ganhou largura para caber a legenda inteira, em vez de um "EM 10s" sem contexto.
+   */
   pods: {
     pearls: { x: 178, width: 122 },
     reef: { x: 310, width: 192 },
     wave: { x: 512, width: 148 },
-    timer: { x: 670, width: 156 },
+    timer: { x: 670, width: 300 },
   },
-  /** Aviso curto da partida, no vão entre a última pílula e os botões. */
-  messageX: 916,
-  messageWidth: 160,
+  /**
+   * Aviso curto da partida. Saiu da barra de cima (onde disputava espaço com as pílulas) e virou um
+   * balão discreto logo abaixo dela, sem encostar na plaquinha da fase nem na barra do chefe.
+   */
+  messageX: GAME_WIDTH / 2,
+  messageY: HUD_TOP + 54,
+  messageWidth: 420,
   /** Botões quadrados da direita: 1×, 2×, pausa, tela cheia e som. */
   topButtonY: TOP_CENTER,
   topButtonSize: 46,
@@ -62,16 +69,20 @@ export const HUD_LAYOUT = {
   cardY: GAME_HEIGHT - 48,
 
   // ── Barra de baixo: painel do Guardião em foco ───────────────────────────────
-  panelX: 818,
-  panelWidth: 434,
+  /**
+   * Painel do Guardião em foco. Encaixa entre a última carta (termina em 588) e o bloco de
+   * comandos (começa em 1042), com folga nos dois lados.
+   */
+  panelX: 820,
+  panelWidth: 440,
   panelY: GAME_HEIGHT - 58,
   panelHeight: 104,
   /** Botões do painel: ramo A à esquerda, ramo B no meio, venda à direita. */
   optionButtonY: GAME_HEIGHT - 27,
-  optionButtonXs: [678, 818] as const,
-  optionButtonWidth: 132,
+  optionButtonXs: [676, 820] as const,
+  optionButtonWidth: 138,
   optionButtonHeight: 34,
-  sellButtonX: 958,
+  sellButtonX: 964,
 
   // ── Barra de baixo: comandos da partida ──────────────────────────────────────
   /** Nome e número da fase, acima dos comandos. */

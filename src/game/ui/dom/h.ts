@@ -7,6 +7,7 @@ export interface Attributes {
   text?: string;
   html?: string;
   onClick?: (event: MouseEvent) => void;
+  onKeyDown?: (event: KeyboardEvent) => void;
   disabled?: boolean;
   [key: string]: unknown;
 }
@@ -19,7 +20,8 @@ export function h<K extends keyof HTMLElementTagNameMap>(tag: K, attributes: Att
     else if (key === "testId") element.dataset.testid = String(value);
     else if (key === "text") element.textContent = String(value);
     else if (key === "html") element.innerHTML = String(value);
-    else if (key === "onClick") element.addEventListener("click", value as EventListener);
+    // Qualquer `onXxx` vira um listener do evento `xxx`: `onClick`, `onKeyDown`, `onPointerDown`…
+    else if (key.startsWith("on") && typeof value === "function") element.addEventListener(key.slice(2).toLowerCase(), value as EventListener);
     else if (key === "disabled") (element as HTMLButtonElement).disabled = Boolean(value);
     else if (key.startsWith("data")) element.setAttribute(key.replace(/([A-Z])/g, "-$1").toLowerCase(), String(value));
     else element.setAttribute(key, String(value));
@@ -29,6 +31,18 @@ export function h<K extends keyof HTMLElementTagNameMap>(tag: K, attributes: Att
     element.append(child instanceof Node ? child : document.createTextNode(String(child)));
   }
   return element;
+}
+
+/**
+ * `replaceChildren` que aceita `null` e `false` como "não renderizar", igual ao `h()`. Sem isto,
+ * toda árvore com um filho condicional precisa de um `.filter` à mão no lugar da chamada.
+ */
+export function fill(parent: HTMLElement, ...children: Child[]): void {
+  parent.replaceChildren(
+    ...children
+      .filter((child): child is Node | string | number => child !== null && child !== undefined && child !== false)
+      .map((child) => (child instanceof Node ? child : document.createTextNode(String(child)))),
+  );
 }
 
 /** Botão do tema: `primary` para a ação principal, `ghost` para as secundárias. */

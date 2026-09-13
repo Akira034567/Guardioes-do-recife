@@ -23,7 +23,7 @@ function completeProgress(): PlayerProgress {
   const progress = emptyProgress();
   progress.completedLevels = [...LEVEL_IDS];
   for (const levelId of LEVEL_IDS) {
-    progress.levelStars[levelId] = { stars: 3 as Stars, objectives: [true, true, true], completions: 1, best: null };
+    progress.levelStars[levelId] = { stars: 3 as Stars, objectives: [true, true, true], completions: 1, best: null, clearedDifficulties: [] };
   }
   progress.unlockedGuardians = [...GUARDIAN_ORDER];
   progress.completedEncounters = ENCOUNTERS.map((encounter) => encounter.id);
@@ -52,7 +52,7 @@ describe("reef growth", () => {
     const steps: Array<(draft: PlayerProgress) => void> = [
       (draft) => draft.completedLevels.push("recife-1"),
       (draft) => {
-        draft.levelStars["recife-1"] = { stars: 3 as Stars, objectives: [true, true, true], completions: 1, best: null };
+        draft.levelStars["recife-1"] = { stars: 3 as Stars, objectives: [true, true, true], completions: 1, best: null, clearedDifficulties: [] };
       },
       (draft) => draft.unlockedGuardians.push("shark"),
       (draft) => draft.completedEncounters.push("gruta-do-predador"),
@@ -116,7 +116,7 @@ describe("reef growth", () => {
     expect(isDecorationUnlocked(decoration("alga-bolha")!, withLevel)).toBe(true);
 
     const withStars = emptyProgress();
-    withStars.levelStars["recife-1"] = { stars: 3 as Stars, objectives: [], completions: 1, best: null };
+    withStars.levelStars["recife-1"] = { stars: 3 as Stars, objectives: [], completions: 1, best: null, clearedDifficulties: [] };
     expect(isDecorationUnlocked(decoration("coral-leque-roxo")!, withStars)).toBe(true);
 
     const withSecret = emptyProgress();

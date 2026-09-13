@@ -35,6 +35,7 @@ const TONE_STYLE: Record<DamageTone, { color: string }> = {
   poison: { color: "#a8f58a" },
   area: { color: "#8fe3ff" },
   reward: { color: "#ffe69a" },
+  weakPoint: { color: "#ff8ae8" },
 };
 
 /** Veneno e dano em área ganham cor própria; o resto é acerto direto. */
@@ -46,6 +47,7 @@ const TONE_FOR_CAUSE: Partial<Record<DamageCause, DamageTone>> = {
   trap: "area",
   spin: "area",
   inkSecondary: "area",
+  weakPoint: "weakPoint",
 };
 
 export class MatchEffects {
@@ -104,6 +106,24 @@ export class MatchEffects {
           this.damageNumbers.add(event.id, event.x, event.y, event.amount, event.now, TONE_FOR_CAUSE[event.cause] ?? "hit", share);
         }
         return;
+      case "weakPointDamaged": {
+        audio.play("impact");
+        if (getSettings().damageNumbers) {
+          const share = event.maxHealth > 0 ? event.amount / event.maxHealth : 0;
+          this.damageNumbers.add(event.id, event.x, event.y, event.amount, event.now, "weakPoint", share);
+        }
+        this.shockwave(event.x, event.y, 0xff8ae8, 16);
+        return;
+      }
+      case "weakPointDestroyed": {
+        // `parentGone` é só o chefe saindo de campo; a ruptura de verdade é a que o jogador causou.
+        if (event.reason !== "broken") return;
+        this.shockwave(event.x, event.y, 0xff8ae8, 70);
+        audio.play("pulse");
+        if (getSettings().screenShake) this.host.scene.cameras.main.shake(180, 0.006);
+        this.host.showMessage("Coral corrompido rompido!", 1400);
+        return;
+      }
       case "enemyKilled": {
         if (!getSettings().damageNumbers) return;
         const pending = this.damageNumbers.take(event.id);
@@ -206,6 +226,7 @@ export class MatchEffects {
         return;
       }
       case "area": {
+        view.playAbility(this.host.match.now);
         effects.ring(this.abilityKeyFor(guardian, "ring"), event.x, event.y + 8, guardian.range * 2);
         this.burstAt(view, event.affectedIds.slice(0, 4), 0.7);
         this.shockwave(event.x, event.y, accent, guardian.range);
@@ -213,15 +234,36 @@ export class MatchEffects {
         return;
       }
       case "melee": {
+        // A regra dos dois pontos (item 18), que vale para todas as variantes:
+        //
+        //   habilidade → ONDE ELA ACONTECE. No próprio Guardião quando é um pulso/anel em volta
+        //                dele; no ponto do golpe quando ele se DESLOCA até o alvo (`stats.dash`).
+        //   impacto    → SEMPRE na posição do inimigo atingido.
+        //
+        // A variante base do Tubarão caía no ramo `ring` e desenhava um anel do tamanho do alcance
+        // na posição do próprio Tubarão: o golpe parecia acontecer nele, e não na presa.
         const stats = guardian.stats;
         const abilityStyle = artVariant(guardian.guardianId, guardian.progress).ability;
+        const scale = GUARDIAN_ART[guardian.guardianId].effectScale;
         if (stats.areaAttack || event.spinning) {
+          // Giro de verdade: o efeito é em volta do Guardião porque é ali que ele acontece.
           effects.ring(this.abilityKeyFor(guardian, "ring"), event.x, event.y + 8, event.radius * 2, { spin: event.spinning });
+        } else if (stats.dash) {
+          const burstKey = this.abilityKeyFor(guardian, "burst");
+          const rotation = Math.atan2(event.targetY - event.y, event.targetX - event.x);
+          if (burstKey) {
+            effects.burst(burstKey, event.targetX, event.targetY, { scale, rotation });
+          } else {
+            // 🔶 diâmetro placeholder: a mordida, e não o alcance do Guardião.
+            const bite = this.host.match.enemy(event.targetId ?? "");
+            const diameter = 2 * ((bite?.definition.hitRadius ?? 16) + 14);
+            effects.ring(this.abilityKeyFor(guardian, "ring"), event.targetX, event.targetY, diameter, { alpha: 0.75 });
+          }
         } else if (abilityStyle === "ring") {
           effects.ring(this.abilityKeyFor(guardian, "ring"), event.x, event.y + 8, guardian.range * 2, { alpha: 0.75 });
         } else {
           effects.burst(this.abilityKeyFor(guardian, "burst"), event.targetX, event.targetY, {
-            scale: GUARDIAN_ART[guardian.guardianId].effectScale,
+            scale,
             rotation: Math.atan2(event.targetY - event.y, event.targetX - event.x),
           });
         }
@@ -230,11 +272,15 @@ export class MatchEffects {
           const enemy = this.host.match.enemy(id);
           if (enemy) this.impactBurst(view, enemy.x, enemy.y, id === event.targetId ? 1 : 0.7);
         });
-        this.shockwave(event.x, event.y, accent, event.spinning ? event.radius : 30);
+        // O tranco também é no ponto do golpe quando o Guardião viajou até lá.
+        const shockX = stats.dash && !event.spinning ? event.targetX : event.x;
+        const shockY = stats.dash && !event.spinning ? event.targetY : event.y;
+        this.shockwave(shockX, shockY, accent, event.spinning ? event.radius : 30);
         audio.play(event.spinning ? "pulse" : "impact");
         return;
       }
       case "ink": {
+        view.playAbility(this.host.match.now);
         const jet = effects.beam(this.abilityKeyFor(guardian, "beam"), event.x + 14, event.y - 6, event.targetX, event.targetY, 0.5);
         if (!jet) this.inkSplash(guardian, event.targetX, event.targetY);
         // Ramo Maré Aliada: o desenho da habilidade é a onda de buff, exibida como pulso no próprio Polvo.
@@ -246,6 +292,7 @@ export class MatchEffects {
         return;
       }
       case "sonar": {
+        view.playAbility(this.host.match.now);
         const beam = effects.beam(this.abilityKeyFor(guardian, "beam"), event.x + 12, event.y - 4, event.targetX, event.targetY, 0.4);
         if (!beam) {
           const graphics = this.host.scene.add.graphics().setDepth(DEPTH.effects);
@@ -269,6 +316,9 @@ export class MatchEffects {
     const { scene, audio, effects } = this.host;
     const guardian = "guardianId" in event ? this.host.match.guardian(event.guardianId) : undefined;
     const view = guardian ? this.host.guardianView(guardian.id) : undefined;
+    // Todo comportamento ativo acende a pose de habilidade: é o momento em que o Guardião
+    // visivelmente FAZ alguma coisa, e ele não deve estar parado no repouso enquanto isso.
+    if (view && event.type !== "trapPhase") view.playAbility(this.host.match.now);
     switch (event.type) {
       case "trapPhase":
         if (event.phase === "armed" && guardian) this.shockwave(guardian.x, guardian.y, 0xffd166, 22);

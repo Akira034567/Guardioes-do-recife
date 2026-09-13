@@ -1,5 +1,7 @@
 import type { StatusType } from "./core/StatusEffects";
 import type { TargetingShape } from "./core/TargetingShape";
+import type { TargetTier } from "./core/Targeting";
+import type { WeakPointPlan } from "./core/WeakPoints";
 import type { EliteId } from "./data/elites";
 
 export interface Vec2 {
@@ -300,6 +302,11 @@ export interface GuardianUpgrade {
   targeting?: TargetPolicyMode;
   /** Forma do alcance (item 18); ausente = radial. */
   targetingShape?: TargetingShape;
+  /**
+   * Ordem de categorias de alvo (item 12). Genérico: o Guardião pede `WEAK_POINT_FIRST`, e quem
+   * é ponto fraco de quem é problema dos dados do inimigo, não daqui.
+   */
+  targetPriority?: readonly TargetTier[];
   /** Passa a render pérolas periodicamente (Ostra e afins). */
   generatesPearls?: PearlGeneration;
   frenzy?: FrenzyEffect;
@@ -345,6 +352,11 @@ export interface GuardianDefinition {
   targeting?: TargetPolicyMode;
   /** Forma do alcance (item 18); ausente = radial, como todos os Guardiões atuais. */
   targetingShape?: TargetingShape;
+  /**
+   * Ordem de categorias de alvo (item 12). Genérico: o Guardião pede `WEAK_POINT_FIRST`, e quem
+   * é ponto fraco de quem é problema dos dados do inimigo, não daqui.
+   */
+  targetPriority?: readonly TargetTier[];
   /** Rende pérolas periodicamente durante a partida (nenhum Guardião atual usa). */
   generatesPearls?: PearlGeneration;
   /** Investida visual curta até o alvo e volta (Tubarão). */
@@ -357,7 +369,23 @@ export interface GuardianDefinition {
 }
 
 /** Categorias de inimigo (item 5). Um inimigo pode ter várias; elites e chefes acumulam a própria. */
-export type EnemyTag = "NORMAL" | "FAST" | "TANK" | "SWARM" | "ARMORED" | "STEALTH" | "SUPPORT" | "ELITE" | "BOSS";
+/**
+ * `WEAK_POINT` e `PRIORITY_TARGET` são GENÉRICOS de propósito (item 12): marcam qualquer entidade
+ * que alguns Guardiões devem priorizar — o coral da baleia hoje, o que vier em chefes futuros.
+ * Nenhum código de mira sabe de que chefe elas são.
+ */
+export type EnemyTag =
+  | "NORMAL"
+  | "FAST"
+  | "TANK"
+  | "SWARM"
+  | "ARMORED"
+  | "STEALTH"
+  | "SUPPORT"
+  | "ELITE"
+  | "BOSS"
+  | "WEAK_POINT"
+  | "PRIORITY_TARGET";
 /** Formas vetoriais disponíveis para inimigos sem sprite (o antigo `switch` por id em `Enemy.drawBody`). */
 export type EnemyShapeKey = "fish" | "minnow" | "dart" | "needle" | "shell" | "moray" | "shark" | "boss";
 
@@ -370,13 +398,39 @@ export type EnemyArtRef =
       frames: number;
       frameMs?: number;
       scale?: number;
-      /** Para que lado a criatura foi desenhada; a view espelha quando ela nada para o outro. */
+      /**
+       * Para que lado a criatura foi desenhada; a view espelha quando ela nada para o outro.
+       * AUSENTE SIGNIFICA `"right"`: é assim que a prancha inteira foi desenhada.
+       */
       facing?: "left" | "right";
       /**
-       * `path` (padrão) gira a criatura ao longo da rota, como um peixe visto de cima.
+       * `path` (padrão) inclina a criatura ao longo da rota, como um peixe visto de cima.
        * `upright` mantém o desenho em pé e só espelha: para bichos que andam no leito (caranguejo).
        */
       rotate?: "path" | "upright";
+      /**
+       * Quadros do ciclo de nado normal (1-based). Ausente = todos. Existe para separar a animação
+       * contínua dos quadros que só aparecem num momento específico — ver `guard`.
+       */
+      loopFrames?: number[];
+      /** Quadros da pose de defesa (concha fechada, casco recolhido). */
+      guardFrames?: number[];
+      /**
+       * Quando a criatura se recolhe. É só apresentação: não muda regra nenhuma do motor.
+       * O Cascudo alternava os quatro quadros em rodízio cego, então fechava a concha a cada 800ms
+       * e parecia estar piscando em vez de se defender.
+       */
+      guard?: {
+        trigger: "damage" | "interval" | "both";
+        /** Quanto tempo fica recolhido. */
+        holdMs: number;
+        /** Intervalo mínimo entre dois recolhimentos, para o dano em rajada não virar estrobo. */
+        cooldownMs: number;
+        /** Média do recolhimento espontâneo, quando `trigger` inclui `interval`. */
+        idleIntervalMs?: number;
+        /** Variação em torno da média, para os bichos não se recolherem em uníssono. */
+        idleJitterMs?: number;
+      };
       shapeFallback?: EnemyShapeKey;
     };
 
@@ -455,6 +509,11 @@ export interface EnemyDefinition {
   /** 0 comum · 1 blindado · 2 elite · 3 chefe (preview de onda e bestiário). */
   threatLevel?: number;
   abilities?: EnemyAbility[];
+  /**
+   * Pontos fracos presos ao corpo (item 11). Ligado por dificuldade em `resolveLevelForDifficulty`,
+   * não escrito à mão no catálogo: no Normal o chefe não tem nenhum.
+   */
+  weakPoints?: WeakPointPlan;
   boss?: BossDefinition;
   /** Preenchidos por `applyElite`; nunca escritos à mão. */
   eliteId?: string;
@@ -570,7 +629,7 @@ export interface EnemyScaling {
 }
 
 /** Ajuste pontual de um inimigo em uma fase (aplicado antes de `enemyScaling`). */
-export type EnemyOverride = Partial<Pick<EnemyDefinition, "maxHealth" | "speed" | "reward" | "armor" | "reefDamage">>;
+export type EnemyOverride = Partial<Pick<EnemyDefinition, "maxHealth" | "speed" | "reward" | "armor" | "reefDamage" | "weakPoints">>;
 
 export interface LevelTheme {
   water: number;
@@ -655,7 +714,14 @@ export interface InteractableDefinition {
 
 export interface DebugFlags {
   enabled: boolean;
+  /** A linha da rota, sem os nós. */
   route: boolean;
+  /**
+   * Os nós internos que definem o caminho: bolinha, rótulo (`SPAWN`, `P3`, `RECIFE`) e seta de
+   * sentido entre eles. É estrutura de autoria, não informação de jogo — fica desligada por padrão
+   * até com o overlay ligado, porque já vazou para o jogador uma vez.
+   */
+  routeNodes: boolean;
   ranges: boolean;
   hitboxes: boolean;
   current: boolean;
@@ -732,6 +798,8 @@ export interface BossHudInfo {
   healthRatio: number;
   phaseIndex: number;
   phaseCount: number;
+  /** Pontos fracos deste chefe; `null` quando a dificuldade não os concede (item 11). */
+  weakPoints: { total: number; remaining: number } | null;
 }
 
 export interface HudSnapshot {
