@@ -305,6 +305,7 @@ export const ENEMY_BALANCE = {
   needlefish: { maxHealth: 45, speed: 118, reward: 7, armor: 0, reefDamage: 2 },
   shellback: { maxHealth: 130, speed: 40, reward: 10, armor: 4, reefDamage: 2 },
   moray: { maxHealth: 250, speed: 52, reward: 18, armor: 2, reefDamage: 4 },
+  corruptedShark: { maxHealth: 320, speed: 74, reward: 26, armor: 3, reefDamage: 5 },
   tidebreaker: { maxHealth: 550, speed: 29, reward: 60, armor: 3, reefDamage: 10 },
 } as const;
 
@@ -312,6 +313,20 @@ export const ENEMY_BALANCE = {
 export const BOSS_CURRENT = {
   cycleMs: 6500,
   reverseMs: 3000,
+} as const;
+
+/**
+ * Regras do Tubarão Corrompido: ele caça em investidas (arranque periódico) e enlouquece ferido.
+ * `burst*` alimenta a habilidade `speedBurst`; `enrage*`, a `enrageBelowHp`.
+ */
+export const SHARK_HUNT = {
+  burstIntervalMs: 5200,
+  burstMs: 1400,
+  burstMultiplier: 1.9,
+  enrageThreshold: 0.4,
+  enrageSpeed: 1.25,
+  enrageArmorBonus: 2,
+  enrageReefDamage: 1.5,
 } as const;
 
 /**

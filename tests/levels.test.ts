@@ -110,6 +110,7 @@ describe("level registry", () => {
     expect(firstLevelWithEnemy("shellback")).toBe(1);
     expect(firstLevelWithEnemy("needlefish")).toBe(2);
     expect(firstLevelWithEnemy("moray")).toBe(2);
+    expect(firstLevelWithEnemy("corruptedShark")).toBe(4);
     const typesPerLevel = LEVELS.map((level) => new Set(level.waves.flatMap((wave) => wave.groups.map((group) => group.enemyId))).size);
     typesPerLevel.slice(1).forEach((count, index) => expect(count).toBeGreaterThanOrEqual(typesPerLevel[index]));
   });

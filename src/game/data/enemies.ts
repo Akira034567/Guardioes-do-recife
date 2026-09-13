@@ -1,5 +1,5 @@
 import type { EnemyDefinition, EnemyId, EnemyOverride, EnemyRole, EnemyScaling, EnemyShapeKey, EnemyTag, ResolvedEnemyDefinition } from "../types";
-import { BOSS_CURRENT, ENEMY_BALANCE } from "./balance";
+import { BOSS_CURRENT, ENEMY_BALANCE, SHARK_HUNT } from "./balance";
 
 /**
  * Catálogo de inimigos. Números em `balance.ts`; aqui ficam identidade visual e
@@ -33,12 +33,13 @@ export const ENEMIES: Record<EnemyId, EnemyDefinition> = {
     id: "dartfish",
     name: "Peixe-Flecha",
     role: "fast",
-    color: 0xff6f91,
-    accent: 0xffd0dc,
+    color: 0x49b6ff,
+    accent: 0xfff0a8,
     ...ENEMY_BALANCE.dartfish,
     hitRadius: 11,
     scale: 0.82,
-    art: { kind: "sprite", folder: "predador-corrompido", frames: 3, frameMs: 140, scale: 0.28, shapeFallback: "dart" },
+    // Desenho único (sem quadros de nado) e com o bico virado para +x: daí `facing: "right"`.
+    art: { kind: "sprite", folder: "peixe-flecha", frames: 1, frameMs: 140, scale: 0.3, facing: "right", shapeFallback: "dart" },
   },
   needlefish: {
     id: "needlefish",
@@ -73,6 +74,30 @@ export const ENEMIES: Record<EnemyId, EnemyDefinition> = {
     scale: 1.32,
     slowResistance: 0.5,
     art: { kind: "sprite", folder: "moreia-das-correntes", frames: 3, frameMs: 180, scale: 0.37, shapeFallback: "moray" },
+  },
+  corruptedShark: {
+    id: "corruptedShark",
+    name: "Tubarão Corrompido",
+    role: "elite",
+    color: 0x4a3f8f,
+    accent: 0xc46bff,
+    ...ENEMY_BALANCE.corruptedShark,
+    hitRadius: 22,
+    scale: 1.36,
+    slowResistance: 0.4,
+    resistances: { stun: 0.35 },
+    art: { kind: "sprite", folder: "predador-corrompido", frames: 3, frameMs: 140, scale: 0.42, shapeFallback: "shark" },
+    description: "Caçador da maré negra: dispara em investidas, ignora metade do controle e enlouquece ferido.",
+    abilities: [
+      { type: "speedBurst", intervalMs: SHARK_HUNT.burstIntervalMs, durationMs: SHARK_HUNT.burstMs, multiplier: SHARK_HUNT.burstMultiplier },
+      {
+        type: "enrageBelowHp",
+        threshold: SHARK_HUNT.enrageThreshold,
+        speedMultiplier: SHARK_HUNT.enrageSpeed,
+        armorBonus: SHARK_HUNT.enrageArmorBonus,
+        reefDamageBonus: SHARK_HUNT.enrageReefDamage,
+      },
+    ],
   },
   tidebreaker: {
     id: "tidebreaker",
@@ -110,6 +135,7 @@ export const SHAPE_FOR_LEGACY_ID: Record<EnemyId, EnemyShapeKey> = {
   needlefish: "needle",
   shellback: "shell",
   moray: "moray",
+  corruptedShark: "shark",
   tidebreaker: "boss",
 };
 
@@ -130,7 +156,7 @@ export function resolveEnemy(definition: EnemyDefinition): ResolvedEnemyDefiniti
   };
 }
 
-export const ENEMY_ORDER: EnemyId[] = ["minnow", "swimmer", "dartfish", "needlefish", "shellback", "moray", "tidebreaker"];
+export const ENEMY_ORDER: EnemyId[] = ["minnow", "swimmer", "dartfish", "needlefish", "shellback", "moray", "corruptedShark", "tidebreaker"];
 
 /** Aplica a sobrescrita da fase (se houver) e depois o multiplicador da fase. */
 export function scaleEnemy(definition: EnemyDefinition, scaling: EnemyScaling, override: EnemyOverride = {}): ResolvedEnemyDefinition {

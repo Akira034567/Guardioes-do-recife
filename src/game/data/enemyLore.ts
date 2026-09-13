@@ -46,6 +46,12 @@ export const ENEMY_LORE: Record<EnemyId, EnemyLore> = {
     weaknesses: ["Foco de vários Guardiões", "Vulnerabilidade"],
     resistances: ["Lentidão (50%)"],
   },
+  corruptedShark: {
+    description: "Era o guardião da gruta antes de a maré negra alcançá-lo. Agora caça o Recife que aprendeu a proteger.",
+    trait: "Elite caçadora: nada em investidas curtas, resiste a lentidão e atordoamento e enlouquece com pouca vida.",
+    weaknesses: ["Dano concentrado antes da investida", "Bloqueio na rota", "Quebra de armadura depois da fúria"],
+    resistances: ["Lentidão (40%)", "Atordoamento (35%)"],
+  },
   tidebreaker: {
     description: "A maré em forma de bicho. Inverte a corrente do Recife em ciclos e atravessa qualquer bloqueio.",
     trait: "Chefe: não pode ser bloqueado e vira a correnteza contra os Guardiões que dependem dela.",

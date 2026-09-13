@@ -134,12 +134,13 @@ export const RECIFE_FIVE: LevelDefinition = {
       ],
     },
     {
-      name: "Tempestade",
+      name: "O Caçador da Gruta",
       groups: [
         { enemyId: "dartfish", count: 7, intervalMs: 550, delayMs: 0 },
         { enemyId: "minnow", count: 10, intervalMs: 220, delayMs: 2000 },
         { enemyId: "shellback", count: 3, intervalMs: 1400, delayMs: 4500 },
-        { enemyId: "moray", count: 1, intervalMs: 3000, delayMs: 9000 },
+        // Primeira aparição do Tubarão Corrompido: vem sozinho, no fim da onda, para ser visto.
+        { enemyId: "corruptedShark", count: 1, intervalMs: 3000, delayMs: 9000 },
       ],
     },
     {

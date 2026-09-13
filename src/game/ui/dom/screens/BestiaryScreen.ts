@@ -407,6 +407,8 @@ const SHAPE_PATHS: Record<EnemyShapeKey, (fill: string, line: string) => string>
     `<ellipse cx="56" cy="42" rx="34" ry="18" fill="${fill}"/><path d="M24 42 a32 26 0 0 1 64 0 Z" fill="${line}" opacity=".55"/><path d="M88 42 L112 30 L112 54 Z" fill="${line}" opacity=".8"/><circle cx="36" cy="40" r="3.4" fill="#02202e"/>`,
   moray: (fill, line) =>
     `<path d="M12 46 q26 -30 52 -12 q22 16 48 4 v16 q-28 14 -52 -2 q-22 -14 -48 8 Z" fill="${fill}"/><path d="M108 38 L118 30 L118 50 Z" fill="${line}" opacity=".8"/><circle cx="26" cy="42" r="3" fill="#02202e"/>`,
+  shark: (fill, line) =>
+    `<path d="M14 44 L40 28 q28 -14 58 6 q10 6 12 8 q-14 10 -28 12 q-30 6 -42 -4 Z" fill="${fill}"/><path d="M14 44 L2 28 L4 58 Z" fill="${line}" opacity=".85"/><path d="M52 24 L62 6 L74 26 Z" fill="${line}" opacity=".75"/><path d="M74 54 L84 68 L92 52 Z" fill="${line}" opacity=".6"/><path d="M84 42 q8 6 16 6" stroke="#02202e" stroke-width="3" fill="none" opacity=".8"/><circle cx="86" cy="34" r="3.4" fill="#02202e"/>`,
   boss: (fill, line) =>
     `<ellipse cx="58" cy="40" rx="40" ry="24" fill="${fill}"/><path d="M50 16 L66 2 L74 20 Z" fill="${line}"/><path d="M96 40 L120 18 L120 62 Z" fill="${line}" opacity=".9"/><path d="M22 34 q16 -10 32 -2" stroke="${line}" stroke-width="3" fill="none" opacity=".7"/><circle cx="38" cy="34" r="5" fill="#02202e"/>`,
 };

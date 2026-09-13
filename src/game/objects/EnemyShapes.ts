@@ -42,6 +42,16 @@ export const ENEMY_SHAPES: Record<EnemyShapeKey, EnemyShapeDrawer> = {
     graphic.fillStyle(color, 1);
     graphic.fillTriangle(radius * 0.9, -radius * 0.35, radius * 1.45, -radius * 0.1, radius * 0.9, radius * 0.1);
   },
+  shark: (graphic, radius, color, accent) => {
+    // Corpo fuselado, cauda em V e a barbatana dorsal que denuncia o caçador.
+    graphic.fillEllipse(0, 0, radius * 2.6, radius * 1.25);
+    graphic.fillTriangle(-radius * 1.05, 0, -radius * 2.05, -radius * 0.85, -radius * 2.05, radius * 0.85);
+    graphic.fillTriangle(-radius * 0.1, -radius * 0.5, radius * 0.35, -radius * 1.3, radius * 0.6, -radius * 0.45);
+    graphic.fillStyle(accent, 1);
+    graphic.fillTriangle(radius * 0.85, radius * 0.05, radius * 1.35, radius * 0.05, radius * 0.95, radius * 0.42);
+    graphic.fillCircle(radius * 0.75, -radius * 0.32, radius * 0.16);
+    graphic.fillStyle(color, 1);
+  },
   boss: (graphic, radius, color, accent) => {
     graphic.fillCircle(0, 0, radius);
     graphic.fillStyle(accent, 1);

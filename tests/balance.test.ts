@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { CROWD_CONTROL, ECONOMY, ENEMY_BALANCE, GUARDIAN_BALANCE, PLACEMENT } from "../src/game/data/balance";
-import { ENEMIES, ENEMY_ORDER, scaleEnemy } from "../src/game/data/enemies";
+import { ENEMIES, ENEMY_ORDER, resolveEnemy, scaleEnemy } from "../src/game/data/enemies";
 import { GUARDIANS } from "../src/game/data/guardians";
 import type { EnemyId, GuardianId } from "../src/game/types";
 
@@ -36,6 +36,7 @@ describe("balance sheet", () => {
       needlefish: { maxHealth: 45, reward: 7, reefDamage: 2 },
       shellback: { maxHealth: 130, reward: 10, reefDamage: 2 },
       moray: { maxHealth: 250, reward: 18, reefDamage: 4 },
+      corruptedShark: { maxHealth: 320, reward: 26, reefDamage: 5 },
       tidebreaker: { maxHealth: 550, reward: 60, reefDamage: 10 },
     };
     (Object.keys(expected) as EnemyId[]).forEach((id) => {
@@ -44,11 +45,22 @@ describe("balance sheet", () => {
       expect(ENEMIES[id].reefDamage).toBeGreaterThanOrEqual(1);
       expect(ENEMIES[id].reefDamage).toBeLessThanOrEqual(10);
     });
-    expect(ENEMY_ORDER).toHaveLength(7);
+    expect(ENEMY_ORDER).toHaveLength(8);
     expect(ENEMIES.shellback.armor).toBe(4);
     expect(ENEMIES.tidebreaker.isBoss).toBe(true);
     expect(ENEMIES.tidebreaker.unblockable).toBe(true);
     expect(ENEMIES.tidebreaker.reefDamage).toBeLessThan(ECONOMY.reefHealth);
+  });
+
+  it("makes the corrupted shark an elite hunter: bursts, rage and control resistance", () => {
+    const shark = resolveEnemy(ENEMIES.corruptedShark);
+    // Mais forte que o Peixe-Flecha de quem herdou a arte, e sem virar chefe.
+    expect(shark.maxHealth).toBeGreaterThan(ENEMIES.dartfish.maxHealth);
+    expect(shark.maxHealth).toBeLessThan(ENEMIES.tidebreaker.maxHealth);
+    expect(shark.isBoss).toBeUndefined();
+    expect(shark.threatLevel).toBe(2);
+    expect(shark.resistances).toMatchObject({ slow: 0.4, stun: 0.35 });
+    expect(shark.abilities.map((ability) => ability.type).sort()).toEqual(["enrageBelowHp", "speedBurst"]);
   });
 
   it("scales enemies per level without touching the reference sheet", () => {

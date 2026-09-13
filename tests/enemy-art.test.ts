@@ -8,7 +8,7 @@ import type { EnemyId } from "../src/game/types";
 const filesOnDisk = new Set(Object.keys(import.meta.glob("/public/assets/enemies/*/*.png")).map((path) => path.replace("/public/", "")));
 
 describe("enemy art registry", () => {
-  it("dá arte própria a todas as sete ameaças", () => {
+  it("dá arte própria a todas as oito ameaças", () => {
     for (const enemyId of ENEMY_ORDER) {
       const art = resolveEnemy(ENEMIES[enemyId]).art;
       expect(art.kind, `${enemyId} usa sprite`).toBe("sprite");
@@ -42,6 +42,15 @@ describe("enemy art registry", () => {
     }
   });
 
+  it("separa o Peixe-Flecha do Tubarão Corrompido, que herdou a arte antiga", () => {
+    const dart = resolveEnemy(ENEMIES.dartfish).art;
+    const shark = resolveEnemy(ENEMIES.corruptedShark).art;
+    expect(dart.kind === "sprite" && dart.folder).toBe("peixe-flecha");
+    // O desenho do peixe-flecha já aponta para a direita; sem isto ele nadaria de ré.
+    expect(dart.kind === "sprite" && dart.facing).toBe("right");
+    expect(shark.kind === "sprite" && shark.folder).toBe("predador-corrompido");
+  });
+
   it("usa uma pasta diferente para cada espécie", () => {
     const folders = ENEMY_ORDER.map((enemyId) => {
       const art = resolveEnemy(ENEMIES[enemyId]).art;
@@ -69,7 +78,8 @@ describe("enemy art registry", () => {
       const imageWidth = header.readUInt32BE(0);
       return imageWidth * (art.scale ?? 1) * definition.scale;
     };
-    expect(widthOnScreen("tidebreaker")).toBeGreaterThan(widthOnScreen("moray"));
+    expect(widthOnScreen("tidebreaker")).toBeGreaterThan(widthOnScreen("corruptedShark"));
+    expect(widthOnScreen("corruptedShark")).toBeGreaterThan(widthOnScreen("moray"));
     expect(widthOnScreen("moray")).toBeGreaterThan(widthOnScreen("swimmer"));
     expect(widthOnScreen("swimmer")).toBeGreaterThan(widthOnScreen("minnow"));
     // Nenhuma criatura vira um borrão que cobre o mapa nem some no fundo.

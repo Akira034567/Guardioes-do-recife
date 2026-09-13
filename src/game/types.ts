@@ -22,7 +22,7 @@ export type GuardianId =
   | "sea-turtle"
   | "stonefish"
   | "dolphin";
-export type EnemyId = "minnow" | "swimmer" | "dartfish" | "needlefish" | "shellback" | "moray" | "tidebreaker";
+export type EnemyId = "minnow" | "swimmer" | "dartfish" | "needlefish" | "shellback" | "moray" | "corruptedShark" | "tidebreaker";
 export type EnemyRole = "swarm" | "common" | "fast" | "armored" | "elite" | "boss";
 export type GuardianState = "idle" | "windup" | "attack" | "recovery" | "disabled";
 /**
@@ -359,7 +359,7 @@ export interface GuardianDefinition {
 /** Categorias de inimigo (item 5). Um inimigo pode ter várias; elites e chefes acumulam a própria. */
 export type EnemyTag = "NORMAL" | "FAST" | "TANK" | "SWARM" | "ARMORED" | "STEALTH" | "SUPPORT" | "ELITE" | "BOSS";
 /** Formas vetoriais disponíveis para inimigos sem sprite (o antigo `switch` por id em `Enemy.drawBody`). */
-export type EnemyShapeKey = "fish" | "minnow" | "dart" | "needle" | "shell" | "moray" | "boss";
+export type EnemyShapeKey = "fish" | "minnow" | "dart" | "needle" | "shell" | "moray" | "shark" | "boss";
 
 export type EnemyArtRef =
   | { kind: "procedural"; shape: EnemyShapeKey }

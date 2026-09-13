@@ -156,7 +156,7 @@ export const RECIFE_SIX: LevelDefinition = {
         { enemyId: "dartfish", count: 8, intervalMs: 450, delayMs: 0 },
         { enemyId: "minnow", count: 10, intervalMs: 230, delayMs: 2000 },
         { enemyId: "shellback", count: 4, intervalMs: 1200, delayMs: 4000 },
-        { enemyId: "moray", count: 2, intervalMs: 3000, delayMs: 9000 },
+        { enemyId: "corruptedShark", count: 2, intervalMs: 5000, delayMs: 9000 },
       ],
     },
     {

@@ -119,7 +119,7 @@ são o inimigo ficam em `extras.png` da pasta para ajuste manual.
 | `enemies/agua-viva-fantasma` | Água-Viva Fantasma | 4 |
 | `enemies/baiacu-corrompido` | Baiacu Corrompido | 4 (inflando) |
 | `enemies/ladrao-do-recife` | Ladrão do Recife | 4 (o 4º é a nuvem de tinta) |
-| `enemies/predador-corrompido` | Predador Corrompido | 3 |
+| `enemies/predador-corrompido` | Predador Corrompido | 3 (arte do Tubarão Corrompido) |
 | `enemies/carregador` | O Carregador | 4 |
 | `enemies/moreia-das-correntes` | Moreia das Correntes | 3 |
 | `enemies/raia-espinhosa` | Raia Espinhosa | 4 |
@@ -127,5 +127,9 @@ são o inimigo ficam em `extras.png` da pasta para ajuste manual.
 | `enemies/lider-do-cardume` | Líder do Cardume | 2 (+ `extras.png` com os peixinhos do cardume) |
 | `enemies/baleia-mare-negra` | Chefe: Baleia da Maré Negra | 1 (+ `extras.png` com o mergulhador de escala) |
 
-Ainda não há registro desses inimigos no código (`src/game/data/enemies.ts` usa outros ids); as pastas
-são só os assets.
+Fora da prancha, `enemies/peixe-flecha` tem um quadro único (arte entregue à parte, recortada e
+reduzida para 190 px de largura) e é o sprite do **Peixe-Flecha** (`dartfish`). O desenho olha para a
+direita, por isso a entrada dele em `data/enemies.ts` traz `facing: "right"`.
+
+As demais pastas ainda não têm registro no código (`src/game/data/enemies.ts` usa outros ids); são só
+os assets.
