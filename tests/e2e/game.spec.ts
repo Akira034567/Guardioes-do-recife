@@ -221,8 +221,11 @@ test("level select only opens unlocked levels", async ({ page }) => {
   await expect(page.getByTestId("map-node-recife-2")).toBeDisabled();
   await expect(page.getByTestId("map-node-gruta-do-predador")).toHaveAttribute("data-state", "locked");
 
-  // O nó abre a história de abertura; a preparação vem logo depois dela.
+  // O nó escolhe a fase e enche a ficha de baixo; quem entra na partida é o botão da ficha.
   await page.getByTestId("map-node-recife-1").click();
+  await expect(page.getByTestId("map-detail")).toHaveAttribute("data-level", "recife-1");
+  await expect(page.getByTestId("map-detail")).toContainText("Recife Costeiro");
+  await page.getByTestId("map-enter").click();
   await expect(page.getByTestId("story-panel")).toHaveAttribute("data-story", "abertura");
   await page.getByTestId("story-next").click();
   await expect(page.getByTestId("story-text")).toContainText("corrente virar");
@@ -380,6 +383,8 @@ test("rescues a guardian in an encounter and adds him to the collection", async 
   const { canvas, clickGame, pageErrors } = await openGame(page, "");
   await expect(page.getByTestId("map-node-rede-fantasma")).toHaveAttribute("data-state", "available");
   await page.getByTestId("map-node-rede-fantasma").click();
+  await expect(page.getByTestId("map-detail")).toHaveAttribute("data-kind", "encounter");
+  await page.getByTestId("map-enter").click();
   await expect(page.getByTestId("prep-encounter")).toContainText("Tartaruga");
   await page.getByTestId("prep-start").click();
   await expect(canvas).toHaveAttribute("data-level", "rede-fantasma");

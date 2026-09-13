@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { challengeRule, currentChallenges, dayKey, rollChallenge, weekKey } from "../src/game/core/progression/challenges";
+import { challengeExpiresAt, challengeRule, currentChallenges, dayKey, rollChallenge, weekKey } from "../src/game/core/progression/challenges";
 import { DIFFICULTY_IDS } from "../src/game/data/difficulty";
 import { GUARDIAN_ORDER, LOADOUT_SIZE } from "../src/game/data/guardians";
 import { LEVEL_IDS } from "../src/game/data/levels";
@@ -55,6 +55,19 @@ describe("challenges", () => {
     const daily = rollChallenge("daily", "2026-09-12", GUARDIAN_ORDER);
     expect(weekly.difficulty).not.toBe("normal");
     expect(weekly.shells).toBeGreaterThan(daily.shells);
+  });
+
+  it("sabe quando cada desafio vira", () => {
+    // 2026-09-12 é um sábado: o do dia vira à meia-noite, o da semana na segunda seguinte (dia 14).
+    const sabado = new Date(2026, 8, 12, 11, 26);
+    expect(challengeExpiresAt("daily", sabado)).toEqual(new Date(2026, 8, 13));
+    expect(challengeExpiresAt("weekly", sabado)).toEqual(new Date(2026, 8, 14));
+    // Na própria segunda, a semana vale sete dias inteiros.
+    const segunda = new Date(2026, 8, 14, 9, 0);
+    expect(challengeExpiresAt("weekly", segunda)).toEqual(new Date(2026, 8, 21));
+    // O prazo sempre cobre a rotação que está no ar.
+    expect(weekKey(new Date(challengeExpiresAt("weekly", sabado).getTime() - 1))).toBe(weekKey(sabado));
+    expect(dayKey(new Date(challengeExpiresAt("daily", sabado).getTime() - 1))).toBe(dayKey(sabado));
   });
 
   it("entrega os dois desafios abertos agora", () => {

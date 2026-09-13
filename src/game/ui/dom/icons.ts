@@ -72,11 +72,86 @@ export const ICONS = {
   difficulty: (count: 1 | 2 | 3, color: string): string =>
     svg(Array.from({ length: count }, (_, index) => crest(12 - (count - 1) * 3 + index * 6, color, 1 - index * 0.18)).join("")),
 
+  /** Rosa dos ventos: o mapa. */
+  compass: svg(
+    `<circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="1.8"/>` +
+      `<path d="M15.4 8.6 13 13l-4.4 2.4L11 11z" fill="currentColor"/>` +
+      `<circle cx="12" cy="12" r="1.1" fill="#02141f"/>`,
+  ),
+
+  /** Peixe de perfil: os Guardiões. */
+  fish: svg(
+    `<path d="M9.4 5.6c4.2 0 8 2.4 10.4 6.4-2.4 4-6.2 6.4-10.4 6.4-3 0-5.4-1.4-6.8-3.6l2.4-2.8-2.4-2.8c1.4-2.2 3.8-3.6 6.8-3.6z" fill="currentColor"/>` +
+      `<path d="m19.8 12 2.6-3.2v6.4z" fill="currentColor"/>` +
+      `<circle cx="7.6" cy="10.4" r="1.2" fill="#02141f"/>`,
+  ),
+
+  /** Baiacu espinhoso: as ameaças. */
+  spiky: svg(
+    `<g stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M12 1.6v2.6M12 19.8v2.6M1.6 12h2.6M19.8 12h2.6M4.6 4.6l1.9 1.9M17.5 17.5l1.9 1.9M19.4 4.6l-1.9 1.9M6.5 17.5l-1.9 1.9"/></g>` +
+      `<circle cx="12" cy="12" r="6.2" fill="currentColor"/><circle cx="9.9" cy="10.6" r="1.1" fill="#02141f"/><circle cx="14.1" cy="10.6" r="1.1" fill="#02141f"/>`,
+  ),
+
+  /** Livro aberto: as histórias. */
+  book: svg(
+    `<path d="M3 5.2h5.4c1.6 0 2.9.8 3.6 1.9.7-1.1 2-1.9 3.6-1.9H21v13h-5.4c-1.6 0-2.9.8-3.6 1.9-.7-1.1-2-1.9-3.6-1.9H3z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/>` +
+      `<path d="M12 7.1v12.9" fill="none" stroke="currentColor" stroke-width="1.7"/>`,
+  ),
+
+  /** Troféu: as conquistas. */
+  trophy: svg(
+    `<path d="M7 3.4h10v5.2a5 5 0 0 1-10 0z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/>` +
+      `<path d="M7 5.2H4.2v1.6A3.4 3.4 0 0 0 7.2 10M17 5.2h2.8v1.6A3.4 3.4 0 0 1 16.8 10" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>` +
+      `<path d="M12 13.8v3.4M8.6 20.6h6.8M9.6 17.2h4.8l1 3.4H8.6z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/>`,
+  ),
+
+  /** Engrenagem: as configurações. */
+  gear: svg(
+    `<path d="M12 8.2A3.8 3.8 0 1 0 12 15.8 3.8 3.8 0 0 0 12 8.2z" fill="none" stroke="currentColor" stroke-width="1.8"/>` +
+      `<path d="M19.4 14.6a1.5 1.5 0 0 0 .3 1.7l.1.1a1.8 1.8 0 1 1-2.6 2.6l-.1-.1a1.5 1.5 0 0 0-2.6 1.1v.3a1.8 1.8 0 0 1-3.6 0v-.2a1.5 1.5 0 0 0-2.6-1.1l-.1.1a1.8 1.8 0 1 1-2.6-2.6l.1-.1a1.5 1.5 0 0 0-1.1-2.6h-.3a1.8 1.8 0 1 1 0-3.6h.2a1.5 1.5 0 0 0 1.1-2.6l-.1-.1a1.8 1.8 0 1 1 2.6-2.6l.1.1a1.5 1.5 0 0 0 2.6-1.1v-.3a1.8 1.8 0 0 1 3.6 0v.2a1.5 1.5 0 0 0 2.6 1.1l.1-.1a1.8 1.8 0 1 1 2.6 2.6l-.1.1a1.5 1.5 0 0 0 1.1 2.6h.3a1.8 1.8 0 0 1 0 3.6h-.2a1.5 1.5 0 0 0-1.4.9z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/>`,
+  ),
+
+  /** Cadeado: região ou fase ainda fechada. */
+  lock: svg(
+    `<rect x="4.6" y="10.4" width="14.8" height="10.2" rx="2.4" fill="currentColor"/>` +
+      `<path d="M8.2 10.4V7.8a3.8 3.8 0 0 1 7.6 0v2.6" fill="none" stroke="currentColor" stroke-width="2"/>` +
+      `<circle cx="12" cy="15.2" r="1.5" fill="#02141f"/>`,
+  ),
+
+  /** Alvo: o desafio do dia. */
+  target: svg(
+    `<g fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="8.4"/><circle cx="12" cy="12" r="4"/></g><circle cx="12" cy="12" r="1.3" fill="currentColor"/>`,
+  ),
+
+  /** Calendário: o desafio da semana. */
+  calendar: svg(
+    `<rect x="3.4" y="5.4" width="17.2" height="15.2" rx="2.4" fill="none" stroke="currentColor" stroke-width="1.8"/>` +
+      `<path d="M3.4 10.2h17.2M8 3.4v4M16 3.4v4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>`,
+  ),
+
+  /** Ampulheta: o prazo do desafio. */
+  timer: svg(
+    `<circle cx="12" cy="13.4" r="7.4" fill="none" stroke="currentColor" stroke-width="1.8"/>` +
+      `<path d="M12 9.2v4.2l2.8 1.8M9.4 2.6h5.2" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>`,
+  ),
+
+  /** Triângulo cheio: entrar na fase. */
+  play: svg(`<path d="M7.6 4.6 19 12 7.6 19.4z" fill="currentColor"/>`),
+
   chevronLeft: svg(`<path d="M15 4.5 7.5 12 15 19.5" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>`),
   chevronRight: svg(`<path d="M9 4.5 16.5 12 9 19.5" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>`),
   close: svg(`<path d="M6.4 6.4l11.2 11.2M17.6 6.4L6.4 17.6" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"/>`),
   plus: svg(`<path d="M12 5.6v12.8M5.6 12h12.8" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"/>`),
 } as const;
+
+/** Rosa dos ventos do canto do mapa, com as letras em português (N, S, L, O). */
+export const MAP_COMPASS =
+  `<svg viewBox="0 0 64 64" aria-hidden="true" focusable="false">` +
+  `<g fill="none" stroke="#bfe8f7" stroke-width="1.6" opacity="0.75"><circle cx="32" cy="32" r="15"/><circle cx="32" cy="32" r="19.5" stroke-dasharray="2 4"/></g>` +
+  `<path d="M32 17.5 35.4 30 32 46.5 28.6 30z" fill="#f2fbff" opacity="0.9"/>` +
+  `<path d="M17.5 32 30 28.6 46.5 32 30 35.4z" fill="#7fd7f0" opacity="0.8"/>` +
+  `<g fill="#e9fbff" font-family="Arial, sans-serif" font-size="10" font-weight="bold" text-anchor="middle">` +
+  `<text x="32" y="9">N</text><text x="32" y="62">S</text><text x="58" y="36">L</text><text x="6" y="36">O</text></g></svg>`;
 
 /** A onda do logotipo, que é mais larga do que os pictogramas quadrados. */
 export const BRAND_WAVE = `<svg viewBox="0 0 120 18" aria-hidden="true" focusable="false"><path d="M2 11c9-9 18 5 27-3s18 5 27-3 18 5 27-3 18 5 27-3" fill="none" stroke="#4bb8e8" stroke-width="4" stroke-linecap="round"/></svg>`;

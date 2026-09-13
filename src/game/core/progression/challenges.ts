@@ -43,6 +43,17 @@ export function weekKey(date: Date): string {
   return `${copy.getUTCFullYear()}-W${String(week).padStart(2, "0")}`;
 }
 
+/**
+ * Quando o desafio vira: o do dia na próxima meia-noite local, o da semana na segunda-feira seguinte.
+ * É a mesma conta que `dayKey`/`weekKey` fazem para sortear, vista do outro lado — então o relógio do
+ * mapa nunca discorda do desafio que está no ar.
+ */
+export function challengeExpiresAt(kind: ChallengeKind, date: Date): Date {
+  const next = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+  next.setDate(next.getDate() + (kind === "daily" ? 1 : 8 - (date.getDay() || 7)));
+  return next;
+}
+
 const OBJECTIVES: Array<{ definition: LevelObjectiveDefinition; label: string }> = [
   { definition: { id: "desafio-sem-vazar", kind: "noLeaks" }, label: "sem deixar ninguém passar" },
   { definition: { id: "desafio-vidas", kind: "minLivesRemaining", value: 15 }, label: "com 15 vidas ou mais" },
