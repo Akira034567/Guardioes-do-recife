@@ -7,7 +7,7 @@ import type { TrapPhase } from "../core/TrapCore";
 import type { GuardianState, ResolvedAura, Vec2 } from "../types";
 import { guardianVisualState, textureFor, visualTimings, type GuardianVisualState, type VisualTimings } from "../core/GuardianVisualState";
 import { GUARDIAN_VISUAL } from "../data/balance";
-import { spriteTilt } from "../core/SpriteOrientation";
+import { facesLeftToward, spriteTilt } from "../core/SpriteOrientation";
 
 /**
  * Desenho de um Guardião. Todo estado de jogo vem do `MatchGuardian`; aqui ficam só os detalhes
@@ -26,9 +26,11 @@ export class GuardianView extends Phaser.GameObjects.Container {
   private strikeAt: number | null = null;
   private abilityUntilMs = 0;
   private visualTimings: VisualTimings;
-  /** Lado do sprite na investida, com a mesma zona morta usada nos inimigos. */
+  /** Lado do sprite, com a mesma zona morta usada nos inimigos. Vale para TODO Guardião, não só a investida. */
   private facingLeft = false;
   private dashTarget: Vec2 | null = null;
+  /** Onde está o alvo atual. É ele que decide para que lado a criatura olha ao atacar. */
+  private aimTarget: Vec2 | null = null;
   private trapPhase: TrapPhase | null = null;
   private progressKey = "";
   private auraShown: ResolvedAura = NEUTRAL_AURA;
@@ -118,7 +120,13 @@ export class GuardianView extends Phaser.GameObjects.Container {
     }
     if (guardian.targetId) {
       const target = enemyPosition(guardian.targetId);
-      if (target && Math.hypot(target.x - guardian.x, target.y - guardian.y) <= guardian.range) this.dashTarget = { x: target.x, y: target.y };
+      if (target) {
+        this.aimTarget = { x: target.x, y: target.y };
+        if (Math.hypot(target.x - guardian.x, target.y - guardian.y) <= guardian.range) this.dashTarget = { x: target.x, y: target.y };
+      }
+    } else if (state === "idle") {
+      // Sem alvo o lado congela no último: girar de volta sozinho no fim da onda é solavanco à toa.
+      this.aimTarget = null;
     }
     if (guardian.trapPhase !== this.trapPhase) {
       this.trapPhase = guardian.trapPhase;
@@ -206,10 +214,24 @@ export class GuardianView extends Phaser.GameObjects.Container {
     this.setScale(squash.x, squash.y);
   }
 
+  /**
+   * Lado da criatura quando ela NÃO investe (item 9): olha para o alvo, só com espelho horizontal.
+   *
+   * Quem tem `dash` — hoje só o Tubarão — já teve o lado resolvido dentro de `dashOffset`, pelo rumo
+   * do nado: na volta ao posto ele olha para o posto, não para a presa que ficou para trás. Essa
+   * regra é melhor do que esta aqui para quem se desloca, então ela continua mandando lá.
+   */
+  private updateAimFacing(): void {
+    if (this.guardian.stats.dash) return;
+    if (!this.aimTarget || this.visualState === "disabled") return;
+    this.facingLeft = facesLeftToward(this.aimTarget.x - this.x, this.facingLeft);
+  }
+
   private animatePassiveVisual(now: number): void {
     // O idle só flutua levemente: nunca alterna entre variantes/evoluções.
     const bob = Math.sin(now / 420 + this.x) * (this.visualState === "idle" ? 1.8 : 0.8);
     const dash = this.dashOffset(now);
+    this.updateAimFacing();
     const buried = this.trapPhase === "arming" || this.trapPhase === "armed";
     const trapAlpha = this.trapPhase === "cooldown" ? 0.7 : this.trapPhase === "arming" ? 0.85 : 1;
     if (this.artSprite) {
@@ -224,6 +246,9 @@ export class GuardianView extends Phaser.GameObjects.Container {
     } else {
       this.bodyGraphic.x = dash.x;
       this.bodyGraphic.y = (this.visualState === "idle" ? bob : 0) + dash.y + (buried ? 4 : 0);
+      // Mesmo espelho do sprite, no desenho vetorial: `Graphics` não tem `flipX`, e escalar em X por
+      // -1 é a mesma transformação. Vai no desenho e não no contêiner para não espelhar o selo do ramo.
+      this.bodyGraphic.scaleX = this.facingLeft ? -1 : 1;
       this.bodyGraphic.setAngle(dash.angle ?? 0);
       this.bodyGraphic.setAlpha(trapAlpha);
     }
@@ -276,6 +301,11 @@ export class GuardianView extends Phaser.GameObjects.Container {
   /** Exposto para o HUD e as sondas de teste: qual pose está na tela agora. */
   get currentVisualState(): GuardianVisualState {
     return this.visualState;
+  }
+
+  /** Para que lado a criatura está desenhada agora. Sonda das provas do item 9. */
+  get facingLeftNow(): boolean {
+    return this.facingLeft;
   }
 
   private syncArtTexture(): void {

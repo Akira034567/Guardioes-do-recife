@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { facesLeft, orientationFor, spriteTilt } from "../src/game/core/SpriteOrientation";
+import { facesLeft, facesLeftToward, orientationFor, spriteTilt } from "../src/game/core/SpriteOrientation";
 import { ENEMIES, ENEMY_ORDER, resolveEnemy } from "../src/game/data/enemies";
 import type { EnemyArtRef } from "../src/game/types";
 
@@ -73,6 +73,25 @@ describe("orientação dos sprites", () => {
     expect(spriteTilt(-Math.PI / 4)).toBeLessThan(0);
     // Subir indo para a esquerda inclina igual a subir indo para a direita: o lado é do espelho.
     expect(spriteTilt((3 * Math.PI) / 4)).toBeCloseTo(spriteTilt(Math.PI / 4));
+  });
+
+  it("vira o Guardião para o lado do alvo", () => {
+    // Alvo à direita: arte como foi desenhada. Alvo à esquerda: espelho, e só o espelho.
+    expect(facesLeftToward(120, false)).toBe(false);
+    expect(facesLeftToward(-120, false)).toBe(true);
+    // O lado troca nos dois sentidos, venha de onde vier o estado anterior.
+    expect(facesLeftToward(120, true)).toBe(false);
+    expect(facesLeftToward(-120, true)).toBe(true);
+  });
+
+  it("segura o lado do Guardião quando o alvo está quase em cima dele", () => {
+    // Um alvo logo acima faz `dx` oscilar em torno de zero a cada quadro; sem zona morta a criatura
+    // tremeria entre os dois lados no meio do golpe.
+    for (const previous of [false, true]) {
+      expect(facesLeftToward(0, previous)).toBe(previous);
+      expect(facesLeftToward(3, previous)).toBe(previous);
+      expect(facesLeftToward(-3, previous)).toBe(previous);
+    }
   });
 
   it("desenha toda espécie de sprite com a cabeça à frente", () => {

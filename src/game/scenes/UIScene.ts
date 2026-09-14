@@ -232,6 +232,11 @@ export class UIScene extends Phaser.Scene {
   private debugPanelCollapsed = false;
   private debugEnabled = false;
   private debugFromQuery = false;
+  /** Estado do gesto "sair e voltar à barra de baixo". Ver `watchDockReentry`. */
+  private pointerInDock = false;
+  private dockAbandoned = false;
+  /** Há carta escolhida agora? Vem do último `HudSnapshot`. */
+  private cardSelected = false;
 
   constructor() {
     super("UIScene");
@@ -291,6 +296,9 @@ export class UIScene extends Phaser.Scene {
     this.bossWeakPointPips = [];
     this.debugPanelCollapsed = false;
     this.debugEnabled = false;
+    this.pointerInDock = false;
+    this.dockAbandoned = false;
+    this.cardSelected = false;
     lifecycleLog("ui", "create");
   }
 
@@ -316,10 +324,10 @@ export class UIScene extends Phaser.Scene {
     this.pod(pods.pearls.x, pods.pearls.width, "pearl", 22);
     this.pearlText = this.podValue(pods.pearls.x + 44, "150", HUD_COLORS.pearl);
 
-    // Pílula da vida do Recife: onda, "RECIFE", alfinete e contagem.
+    // Pílula da vida do Recife: onda, "RECIFE", coração e contagem.
     this.pod(pods.reef.x, pods.reef.width, "waves", 22);
     this.podCaption(pods.reef.x + 40, "RECIFE");
-    this.add.image(pods.reef.x + 112, topCenterY, hudIcon(this, "pin", 18, HUD_COLORS.cyan));
+    this.add.image(pods.reef.x + 112, topCenterY, hudIcon(this, "heart", 18, HUD_COLORS.danger));
     this.healthText = this.podValue(pods.reef.x + 124, "20/20", HUD_COLORS.text);
 
     // Pílula da onda.
@@ -550,6 +558,42 @@ export class UIScene extends Phaser.Scene {
     this.createCards();
     this.createContextPanel();
     this.createCommands();
+    this.watchDockReentry();
+  }
+
+  /**
+   * Sair da barra de baixo e voltar a ela LARGA a carta escolhida.
+   *
+   * O gesto que isso resolve: o jogador escolhe um Guardião, leva o cursor ao mapa, muda de ideia e
+   * desce de volta ao menu. Sem isto ele voltava com a carta ainda presa e o fantasma colado no
+   * cursor, e o próximo clique em qualquer lugar do mapa posicionava uma unidade que ele não queria
+   * mais. Descer ao menu é desistir.
+   *
+   * O contorno é `pointermove` e não `pointerover`/`pointerout` numa zona porque a `InputPlugin` é
+   * `topOnly`: passar por cima de uma carta tiraria o "over" da zona de baixo e a barra inteira
+   * pareceria ter sido abandonada a cada carta que o cursor cruzasse.
+   *
+   * Larga só a CARTA. O Guardião já posicionado continua em foco de propósito: os botões de evoluir e
+   * vender moram nesta mesma barra, e fechar o painel no caminho até eles seria o mesmo defeito ao
+   * contrário.
+   */
+  private watchDockReentry(): void {
+    const dockTop = GAME_HEIGHT - HUD_BOTTOM;
+    const onMove = (pointer: Phaser.Input.Pointer): void => {
+      const inside = pointer.y >= dockTop;
+      if (inside === this.pointerInDock) return;
+      this.pointerInDock = inside;
+      if (!inside) {
+        this.dockAbandoned = true;
+        return;
+      }
+      // Primeira entrada da partida não conta como "voltar": ninguém saiu de lugar nenhum ainda.
+      if (!this.dockAbandoned) return;
+      this.dockAbandoned = false;
+      if (this.cardSelected) EventBus.emit(Events.cancelCardSelection);
+    };
+    this.input.on("pointermove", onMove, this);
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => this.input.off("pointermove", onMove, this));
   }
 
   private createCards(): void {
@@ -578,7 +622,14 @@ export class UIScene extends Phaser.Scene {
       UI_REGISTRY.register(`card:${id}`, x, centerY, cardWidth, cardHeight);
       // Apelido da primeira carta: o tutorial aponta para ela sem saber qual é o esquadrão.
       if (index === 0) UI_REGISTRY.register("card:first", x, centerY, cardWidth, cardHeight);
-      frame.on("pointerdown", () => EventBus.emit(Events.selectGuardian, id));
+      // Escolher e ARRASTAR são o mesmo gesto até o dedo levantar: a carta é escolhida já na
+      // descida, o fantasma passa a seguir o cursor, e quem soltar dentro do mapa posiciona ali
+      // (`GameScene.handleWorldPointerUp`). Quem soltar em cima da própria carta fez um clique, e
+      // segue valendo o fluxo de sempre: clicar na carta, depois clicar no mapa.
+      frame.on("pointerdown", () => {
+        EventBus.emit(Events.selectGuardian, id);
+        EventBus.emit(Events.beginGuardianDrag, id);
+      });
       frame.on("pointerover", () => frame.setAlpha(0.86));
       frame.on("pointerout", () => frame.setAlpha(1));
 
@@ -852,6 +903,7 @@ export class UIScene extends Phaser.Scene {
     this.renderTutorial(snapshot);
     this.renderLevelLabels(snapshot);
 
+    this.cardSelected = snapshot.selectedGuardianId !== null;
     this.cards.forEach((card) => {
       const selected = snapshot.selectedGuardianId === card.id;
       const affordable = snapshot.pearls >= GUARDIANS[card.id].cost;

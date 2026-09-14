@@ -13,7 +13,7 @@ type Ctx = CanvasRenderingContext2D;
 export type HudIconName =
   | "pearl"
   | "waves"
-  | "pin"
+  | "heart"
   | "hourglass"
   | "pause"
   | "play"
@@ -81,13 +81,17 @@ const ART: Record<HudIconName, (ctx: Ctx, color: string) => void> = {
     ctx.globalAlpha = 1;
   },
 
-  /** Alfinete: a vida do Recife é um lugar no mapa. */
-  pin: (ctx, color) => {
-    fill(ctx, "M12 2.4c-3.7 0-6.6 2.9-6.6 6.5 0 4.8 6.6 12.7 6.6 12.7s6.6-7.9 6.6-12.7c0-3.6-2.9-6.5-6.6-6.5z", color);
-    ctx.beginPath();
-    ctx.arc(12, 8.8, 2.5, 0, Math.PI * 2);
-    ctx.fillStyle = "#041a2b";
-    ctx.fill();
+  /**
+   * Coração: as vidas do Recife. Era um alfinete de mapa, que dizia "aqui" e não "quanto falta" — o
+   * número ao lado conta vidas, e vida se lê em coração em qualquer jogo. Mesmo desenho do
+   * `ICONS.heart` das telas em HTML, para os dois lugares contarem a mesma coisa do mesmo jeito.
+   */
+  heart: (ctx, color) => {
+    fill(ctx, "M12 20.8S3.8 15.3 3.8 9.6A4.6 4.6 0 0 1 12 6.9a4.6 4.6 0 0 1 8.2 2.7c0 5.7-8.2 11.2-8.2 11.2z", color);
+    // Brilho curto no alto à esquerda: dá volume ao coração sem virar um segundo ícone.
+    ctx.globalAlpha = 0.75;
+    stroke(ctx, "M8.4 8.8a2.4 2.4 0 0 1 2-1.2", "#ffffff", 1.5);
+    ctx.globalAlpha = 1;
   },
 
   /** Ampulheta: o tempo até a próxima onda. */

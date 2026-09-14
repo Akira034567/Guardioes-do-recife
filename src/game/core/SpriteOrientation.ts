@@ -46,6 +46,28 @@ export function facesLeft(heading: number, previousFlipX: boolean): boolean {
 }
 
 /**
+ * Faixa em pixels, à esquerda e à direita do Guardião, onde o lado NÃO é decidido de novo. Um alvo
+ * quase em cima da unidade tem `dx` oscilando em torno de zero a cada quadro; sem isto o Guardião
+ * tremeria entre os dois lados. 🔶 placeholder de apresentação.
+ */
+const AIM_DEADZONE_PX = 8;
+
+/**
+ * Para que lado o GUARDIÃO olha ao atacar (item 9, segunda metade).
+ *
+ * Os inimigos decidem o lado pelo rumo do nado; um Guardião fica parado no posto, então o que decide
+ * é para onde está o ALVO. `dx` é a distância horizontal até ele. Sem alvo, `previousFlipX`: virar
+ * de volta para a direita ao fim de cada onda seria um solavanco sem motivo na tela.
+ *
+ * Toda a arte dos Guardiões, como a prancha de inimigos, foi desenhada apontando para a DIREITA —
+ * por isso "olhar para a esquerda" é exatamente `flipX`, sem rotação nenhuma.
+ */
+export function facesLeftToward(dx: number, previousFlipX: boolean, deadzonePx = AIM_DEADZONE_PX): boolean {
+  if (Math.abs(dx) < deadzonePx) return previousFlipX;
+  return dx < 0;
+}
+
+/**
  * Como desenhar a criatura para que a cabeça aponte para onde ela vai.
  *
  * O sinal invertido da rotação quando há espelho é a parte que engana: `flipX` espelha a textura,

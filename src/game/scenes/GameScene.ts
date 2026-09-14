@@ -45,9 +45,24 @@ import { currentChallenges } from "../core/progression/challenges";
 import type { MatchSnapshot } from "../core/match/MatchSnapshot";
 import { TutorialDirector } from "../core/tutorial/TutorialDirector";
 import { createLevelProgress, getSaveManager } from "../systems/ProgressStore";
-import type { BranchId, DebugFlags, GuardianId, HudSnapshot, LevelDefinition, PlacementDefinition, TutorialHint, Vec2, WavePreviewChip } from "../types";
+import type {
+  BranchId,
+  DebugFlags,
+  GuardianDefinition,
+  GuardianId,
+  HudSnapshot,
+  LevelDefinition,
+  PlacementDefinition,
+  TutorialHint,
+  Vec2,
+  WavePreviewChip,
+} from "../types";
 
 const preventContextMenu = (event: Event): void => event.preventDefault();
+
+/** Verde da faixa de margem e o único alfa que ela usa. Ver `GameScene.marginBand()`. 🔶 placeholders. */
+const MARGIN_BAND_COLOR = 0x67f2ac;
+const MARGIN_BAND_ALPHA = 0.3;
 
 interface PlatformZone {
   definition: PlacementDefinition;
@@ -81,6 +96,8 @@ export class GameScene extends Phaser.Scene {
   private debugOverlay!: DebugOverlay;
   private selectionGraphic!: Phaser.GameObjects.Graphics;
   private placementGuideGraphic!: Phaser.GameObjects.Graphics;
+  /** Faixa da margem, pintada uma vez por fase. Ver `marginBand()`. */
+  private marginBandTexture: Phaser.GameObjects.RenderTexture | null = null;
   private ghost!: PlacementGhost;
   private debugFlags!: DebugFlags;
   private platforms: PlatformZone[] = [];
@@ -98,6 +115,8 @@ export class GameScene extends Phaser.Scene {
   private loadout: GuardianId[] = [];
   private selectedGuardianId: GuardianId | null = null;
   private selectedPlacedGuardianId: string | null = null;
+  /** Arraste em curso: o jogador apertou uma carta e ainda não soltou. Ver `handleWorldPointerUp`. */
+  private dragPlacing = false;
   private unlockedNextLevelId: string | null = null;
   private gameOverShown = false;
   private debugAllowed = false;
@@ -157,6 +176,9 @@ export class GameScene extends Phaser.Scene {
     this.lifecycle = new MatchLifecycle();
     this.lifecycle.transition("initializing");
     this.disposables = new Disposables();
+    // O Phaser reaproveita a instância da cena: a faixa da margem é da rota da fase ANTERIOR e o
+    // display list dela já foi embora. Repintar é barato; guardar a referência velha, não.
+    this.marginBandTexture = null;
     publishDiagnostics();
 
     // A `GameScene` era a única cena que não limpava a camada HTML ao entrar. Um overlay que
@@ -306,6 +328,7 @@ export class GameScene extends Phaser.Scene {
     this.tutorial = null;
     this.selectedGuardianId = null;
     this.selectedPlacedGuardianId = null;
+    this.dragPlacing = false;
 
     this.scene.stop("UIScene");
     getScreenHost(this.game).clear();
@@ -488,6 +511,8 @@ export class GameScene extends Phaser.Scene {
 
   private registerEvents(): void {
     EventBus.on(Events.selectGuardian, this.selectGuardian, this);
+    EventBus.on(Events.beginGuardianDrag, this.beginGuardianDrag, this);
+    EventBus.on(Events.cancelCardSelection, this.cancelCardSelection, this);
     EventBus.on(Events.upgradeGuardian, this.upgradeSelectedGuardian, this);
     EventBus.on(Events.sellGuardian, this.sellSelectedGuardian, this);
     EventBus.on(Events.togglePause, this.togglePause, this);
@@ -504,6 +529,7 @@ export class GameScene extends Phaser.Scene {
     EventBus.on(Events.openLevelSelect, this.openLevelSelect, this);
     this.input.on("pointermove", this.handleWorldPointerMove, this);
     this.input.on("pointerdown", this.handleWorldPointerDown, this);
+    this.input.on("pointerup", this.handleWorldPointerUp, this);
     // ESC desfaz a seleção; sem nada selecionado, abre o menu de pause.
     this.input.keyboard?.on("keydown-ESC", this.handleEscape, this);
     // O menu do navegador no botão direito atrapalha o cancelamento por clique.
@@ -513,6 +539,8 @@ export class GameScene extends Phaser.Scene {
     // cada uma, então uma que estoure não impede as seguintes de rodar.
     this.disposables.add("eventos do HUD", () => {
       EventBus.off(Events.selectGuardian, this.selectGuardian, this);
+      EventBus.off(Events.beginGuardianDrag, this.beginGuardianDrag, this);
+      EventBus.off(Events.cancelCardSelection, this.cancelCardSelection, this);
       EventBus.off(Events.upgradeGuardian, this.upgradeSelectedGuardian, this);
       EventBus.off(Events.sellGuardian, this.sellSelectedGuardian, this);
       EventBus.off(Events.togglePause, this.togglePause, this);
@@ -531,6 +559,7 @@ export class GameScene extends Phaser.Scene {
     this.disposables.add("input do mundo", () => {
       this.input.off("pointermove", this.handleWorldPointerMove, this);
       this.input.off("pointerdown", this.handleWorldPointerDown, this);
+      this.input.off("pointerup", this.handleWorldPointerUp, this);
       this.input.keyboard?.off("keydown-ESC", this.handleEscape, this);
     });
     this.disposables.add("listeners do canvas", () => {
@@ -553,6 +582,27 @@ export class GameScene extends Phaser.Scene {
       const definition = GUARDIANS[id];
       this.showMessage(`Toque em ${PLACEMENT_HINTS[definition.placementMode]} para posicionar ${definition.name}.`, 2200);
     }
+    this.emitHud();
+    this.renderPlacementState();
+  }
+
+  /**
+   * O jogador apertou uma carta. A partir daqui, SOLTAR dentro do mapa posiciona — é o arraste.
+   *
+   * A janela só abre se a carta ficou de fato selecionada: apertar a carta que já estava escolhida a
+   * larga (`selectGuardian` alterna), e nesse caso soltar não pode posicionar nada.
+   */
+  private beginGuardianDrag(id: GuardianId): void {
+    this.dragPlacing = this.selectedGuardianId === id;
+  }
+
+  /** Larga só a carta escolhida; o Guardião posicionado em foco continua onde estava. */
+  private cancelCardSelection(): void {
+    if (!this.selectedGuardianId) return;
+    this.selectedGuardianId = null;
+    this.dragPlacing = false;
+    this.ghost.setGuardian(null);
+    this.ghost.hide();
     this.emitHud();
     this.renderPlacementState();
   }
@@ -621,6 +671,9 @@ export class GameScene extends Phaser.Scene {
   }
 
   private handleWorldPointerDown(pointer: Phaser.Input.Pointer): void {
+    // Um clique que começa no mapa nunca é arraste de carta: fecha a janela antes de qualquer coisa,
+    // senão o `pointerup` deste mesmo clique tentaria posicionar um SEGUNDO Guardião no lugar.
+    this.dragPlacing = false;
     if (this.match.status !== "running" || pointer.y <= HUD_TOP || pointer.y >= GAME_HEIGHT - HUD_BOTTOM) return;
     if (pointer.rightButtonDown()) {
       this.cancelPlacement();
@@ -632,7 +685,37 @@ export class GameScene extends Phaser.Scene {
     }
     const definition = GUARDIANS[this.selectedGuardianId];
     if (definition.placementMode === "platform") return;
-    const result = this.place(definition.id, pointer.worldX, pointer.worldY);
+    this.dropOnField(definition, pointer.worldX, pointer.worldY);
+  }
+
+  /**
+   * Fim de um arraste: o jogador apertou a carta, trouxe até aqui e soltou.
+   *
+   * Conviver com o clique-clique de antes é o que exige a janela `dragPlacing`. Escolher a carta é um
+   * `pointerdown` + `pointerup` em cima do menu, e posicionar é um `pointerdown` no mapa: se todo
+   * `pointerup` dentro do mapa posicionasse, o clique de posicionar colocaria dois Guardiões (um na
+   * descida, outro na subida). Por isso só solta quem começou numa carta, e um `pointerdown` no mapa
+   * fecha a janela. Soltar ainda em cima do menu não faz nada: é o clique de escolher, como sempre foi.
+   */
+  private handleWorldPointerUp(pointer: Phaser.Input.Pointer): void {
+    if (!this.dragPlacing) return;
+    this.dragPlacing = false;
+    if (!this.selectedGuardianId || this.match.status !== "running") return;
+    if (pointer.y <= HUD_TOP || pointer.y >= GAME_HEIGHT - HUD_BOTTOM) return;
+    const definition = GUARDIANS[this.selectedGuardianId];
+    if (definition.placementMode === "platform") {
+      // Fora de qualquer plataforma o arraste simplesmente não vale — e a carta continua na mão,
+      // para o jogador tentar de novo sem ter de escolher tudo outra vez.
+      const platform = this.platformNear(pointer.worldX, pointer.worldY);
+      if (platform) this.handlePlatform(platform);
+      return;
+    }
+    this.dropOnField(definition, pointer.worldX, pointer.worldY);
+  }
+
+  /** Posiciona fora de plataforma (rota, margem, água livre) e conta o que aconteceu. */
+  private dropOnField(definition: GuardianDefinition, x: number, y: number): void {
+    const result = this.place(definition.id, x, y);
     if (!result.ok) return;
     const guardian = this.match.guardian(result.instanceId ?? "");
     if (definition.placementMode === "route") {
@@ -695,6 +778,7 @@ export class GameScene extends Phaser.Scene {
 
   /** Desiste do posicionamento (ESC, botão direito ou clique fora). */
   private cancelPlacement(): void {
+    this.dragPlacing = false;
     if (!this.selectedGuardianId && !this.selectedPlacedGuardianId) return;
     this.selectedGuardianId = null;
     this.selectedPlacedGuardianId = null;
@@ -1105,6 +1189,9 @@ export class GameScene extends Phaser.Scene {
     dataset.guardians = String(snapshot.guardianCount);
     dataset.upgrades = String(snapshot.upgradeCount);
     dataset.selected = this.selectedPlacedGuardianId ?? "";
+    // Carta na mão (vazio = nenhuma). Sonda de dois gestos: soltar a carta dentro do mapa posiciona,
+    // e descer de volta ao menu larga a carta.
+    dataset.card = this.selectedGuardianId ?? "";
     dataset.selectedBranch = selected?.branchId ?? "";
     dataset.selectedOptions = selected ? String(selected.options.length) : "";
     dataset.selectedVariant = selectedView?.artVariantFolder ?? "";
@@ -1112,6 +1199,7 @@ export class GameScene extends Phaser.Scene {
     dataset.loadout = this.loadout.join(",");
     dataset.debug = String(this.debugFlags.enabled);
     dataset.paused = String(this.clock.paused);
+    dataset.muted = String(this.audio.isMuted);
     dataset.tutorial = hud.tutorial?.id ?? "";
     dataset.interactables = snapshot.interactables.map((item) => `${item.id}:${item.state}:${Math.round(item.progress * 100)}`).join(",");
     dataset.speed = String(this.clock.speed);
@@ -1124,6 +1212,8 @@ export class GameScene extends Phaser.Scene {
     dataset.shrimpVisual = shrimp?.currentVisualKey ?? "";
     // Sonda do item 15: com inimigo no alcance, isto TEM que passar por "idle" entre os golpes.
     dataset.shrimpState = shrimp?.currentVisualState ?? "";
+    // Sonda do item 9: o Camarão está parado num posto, então isto só muda se ele virar para o alvo.
+    dataset.shrimpFacing = shrimp ? (shrimp.facingLeftNow ? "left" : "right") : "";
     const weakPoints = this.match.snapshot().boss?.weakPoints;
     dataset.bossWeakPoints = weakPoints ? `${weakPoints.remaining}/${weakPoints.total}` : "";
     dataset.shrimpTexture = shrimp?.currentTextureKey ?? "";
@@ -1171,6 +1261,7 @@ export class GameScene extends Phaser.Scene {
   private renderPlacementState(): void {
     this.selectionGraphic.clear();
     this.placementGuideGraphic.clear();
+    this.marginBandTexture?.setVisible(false);
     const selected = this.selectedPlacedGuardianId ? this.match.guardian(this.selectedPlacedGuardianId) : undefined;
     if (selected) {
       const color = selected.branch?.color ?? selected.definition.accent;
@@ -1188,11 +1279,7 @@ export class GameScene extends Phaser.Scene {
         this.placementGuideGraphic.strokeCircle(platform.definition.x, platform.definition.y, 38);
       });
     } else if (placementMode === "margin") {
-      // Faixa da margem: duas linhas paralelas à rota mostram onde o Tubarão pode ficar.
-      this.placementGuideGraphic.lineStyle(PLACEMENT.marginMax * 2, 0x67f2ac, 0.06);
-      this.strokeRoute(this.placementGuideGraphic);
-      this.placementGuideGraphic.lineStyle(PLACEMENT.marginMin * 2, 0x031d2d, 0.12);
-      this.strokeRoute(this.placementGuideGraphic);
+      this.marginBand().setVisible(true);
     } else if (placementMode === null) {
       this.ghost.hide();
     }
@@ -1206,6 +1293,39 @@ export class GameScene extends Phaser.Scene {
     // Este método é chamado por sete caminhos de seleção/venda/evolução. Enquanto ele repintava o
     // overlay, SELECIONAR UM GUARDIÃO era o gatilho visível dos cones na pista — e ainda recriava
     // um `Phaser.Text` por waypoint a cada clique.
+  }
+
+  /**
+   * Faixa onde o Tubarão pode ficar: a beira da correnteza, entre `marginMin` e `marginMax` da rota.
+   *
+   * Ela é uma TEXTURA, e não dois traços translúcidos por cima do mapa, por causa de como o Phaser
+   * desenha linha grossa: cada segmento vira um quadrilátero, e em cada curva da rota dois
+   * quadriláteros se sobrepõem. Com alfa menor que 1, a sobreposição soma duas vezes e cada curva do
+   * caminho ganhava uma cunha mais escura — a faixa parecia manchada exatamente onde o jogador mais
+   * olha. Aqui a rota é pintada OPACA numa textura à parte, o miolo proibido é apagado com
+   * `erase` (e não coberto por uma segunda camada escura, que era a outra fonte de escurecimento), e
+   * só no fim a textura inteira entra na tela com um alfa único. Resultado: uma cor só, chapada, do
+   * começo ao fim do caminho.
+   */
+  private marginBand(): Phaser.GameObjects.RenderTexture {
+    if (this.marginBandTexture) return this.marginBandTexture;
+    const texture = this.add.renderTexture(0, 0, GAME_WIDTH, GAME_HEIGHT).setOrigin(0, 0).setDepth(DEPTH.effects - 1);
+    const painter = this.make.graphics({ x: 0, y: 0 }, false);
+    painter.lineStyle(PLACEMENT.marginMax * 2, MARGIN_BAND_COLOR, 1);
+    this.strokeRoute(painter);
+    texture.draw(painter);
+    painter.clear();
+    painter.lineStyle(PLACEMENT.marginMin * 2, 0xffffff, 1);
+    this.strokeRoute(painter);
+    texture.erase(painter);
+    painter.destroy();
+    texture.setAlpha(MARGIN_BAND_ALPHA).setVisible(false);
+    this.marginBandTexture = texture;
+    this.disposables.add("faixa da margem", () => {
+      this.marginBandTexture?.destroy();
+      this.marginBandTexture = null;
+    });
+    return texture;
   }
 
   private strokeRoute(graphics: Phaser.GameObjects.Graphics): void {

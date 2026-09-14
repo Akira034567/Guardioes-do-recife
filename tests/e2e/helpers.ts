@@ -37,8 +37,26 @@ export async function openGame(page: Page, query = "level=recife-1") {
   await expect(canvas).toHaveAttribute("data-screen", /game|menu|hub/, { timeout: 15_000 });
   const box = await canvas.boundingBox();
   if (!box) throw new Error("Canvas bounds unavailable");
+  const toScreen = (x: number, y: number) => ({ x: box.x + (x * box.width) / 1280, y: box.y + (y * box.height) / 720 });
   const clickGame = (x: number, y: number) => page.mouse.click(box.x + (x * box.width) / 1280, box.y + (y * box.height) / 720);
-  return { canvas, clickGame, pageErrors };
+  /** Leva o cursor até um ponto do jogo sem apertar nada. */
+  const moveGame = async (x: number, y: number) => {
+    const point = toScreen(x, y);
+    await page.mouse.move(point.x, point.y, { steps: 6 });
+  };
+  /**
+   * Arrasta de um ponto do jogo até outro: aperta, anda em passos e solta. Os passos importam — um
+   * salto único não gera `pointermove` nenhum pelo caminho, e é o caminho que o jogo desenha.
+   */
+  const dragGame = async (fromX: number, fromY: number, toX: number, toY: number) => {
+    const from = toScreen(fromX, fromY);
+    const to = toScreen(toX, toY);
+    await page.mouse.move(from.x, from.y);
+    await page.mouse.down();
+    await page.mouse.move(to.x, to.y, { steps: 12 });
+    await page.mouse.up();
+  };
+  return { canvas, clickGame, moveGame, dragGame, pageErrors };
 }
 
 /**
