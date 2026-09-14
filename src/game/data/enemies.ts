@@ -53,6 +53,24 @@ export const ENEMIES: Record<EnemyId, EnemyDefinition> = {
     // 🔶 placeholder de apresentação (item 10): a Raia era pequena demais para ser lida em campo.
     art: { kind: "sprite", folder: "raia-espinhosa", frames: 4, frameMs: 130, scale: 0.4, shapeFallback: "needle" },
   },
+  ghostJelly: {
+    id: "ghostJelly",
+    name: "Água-viva Fantasma",
+    role: "common",
+    color: 0x9fb8ff,
+    accent: 0xe9f0ff,
+    ...ENEMY_BALANCE.ghostJelly,
+    hitRadius: 13,
+    scale: 0.9,
+    art: { kind: "sprite", folder: "agua-viva-fantasma", frames: 4, frameMs: 190, scale: 0.38, shapeFallback: "fish" },
+    description: "Some na água até alguém encostar nela: só aparece quando um bloqueador a segura ou o sonar a revela.",
+    tags: ["NORMAL", "STEALTH"],
+    /**
+     * `untilDamaged: false` de propósito — acertar por área NÃO a expõe. Ou um bloqueador da rota a
+     * segura (e aí ela fica visível de vez), ou o Golfinho a revela. São duas portas, não uma.
+     */
+    abilities: [{ type: "stealth", untilDamaged: false, revealOnBlock: true }],
+  },
   shellback: {
     id: "shellback",
     name: "Cascudo",
@@ -151,6 +169,7 @@ export const SHAPE_FOR_LEGACY_ID: Record<EnemyId, EnemyShapeKey> = {
   swimmer: "fish",
   dartfish: "dart",
   needlefish: "needle",
+  ghostJelly: "fish",
   shellback: "shell",
   moray: "moray",
   corruptedShark: "shark",
@@ -174,7 +193,17 @@ export function resolveEnemy(definition: EnemyDefinition): ResolvedEnemyDefiniti
   };
 }
 
-export const ENEMY_ORDER: EnemyId[] = ["minnow", "swimmer", "dartfish", "needlefish", "shellback", "moray", "corruptedShark", "tidebreaker"];
+export const ENEMY_ORDER: EnemyId[] = [
+  "minnow",
+  "swimmer",
+  "dartfish",
+  "needlefish",
+  "ghostJelly",
+  "shellback",
+  "moray",
+  "corruptedShark",
+  "tidebreaker",
+];
 
 /** Aplica a sobrescrita da fase (se houver) e depois o multiplicador da fase. */
 export function scaleEnemy(definition: EnemyDefinition, scaling: EnemyScaling, override: EnemyOverride = {}): ResolvedEnemyDefinition {

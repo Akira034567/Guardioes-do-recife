@@ -151,8 +151,9 @@ export const GUARDIANS: Record<GuardianId, GuardianDefinition> = {
         upgrades: [
           {
             name: "Toque Gélido",
-            description: `Lentidão mais forte: inimigos a ${Math.round(jelly.control.level1.slowFactor * 100)}% da velocidade por ${seconds(jelly.control.level1.slowDurationMs)}.`,
+            description: `${jelly.control.level1.damage} de dano e lentidão pesada: inimigos a ${Math.round(jelly.control.level1.slowFactor * 100)}% da velocidade por ${seconds(jelly.control.level1.slowDurationMs)}.`,
             cost: jelly.upgradeCosts[0],
+            damage: jelly.control.level1.damage,
             slowFactor: jelly.control.level1.slowFactor,
             slowDurationMs: jelly.control.level1.slowDurationMs,
           },
@@ -160,6 +161,7 @@ export const GUARDIANS: Record<GuardianId, GuardianDefinition> = {
             name: "Paralisia",
             description: `Paralisa o alvo por ${seconds(jelly.control.level2.stun.durationMs)}. Cada inimigo só pode ser paralisado de novo após ${seconds(jelly.control.level2.stun.immunityMs)}.`,
             cost: jelly.upgradeCosts[1],
+            damage: jelly.control.level2.damage,
             stun: { ...jelly.control.level2.stun },
           },
         ],
@@ -405,26 +407,29 @@ export const GUARDIANS: Record<GuardianId, GuardianDefinition> = {
       },
       {
         id: "b",
-        name: "Caçador Alfa",
-        tagline: "Marca e executa a maior ameaça.",
+        name: "Investida",
+        tagline: "Bote longo: marca e executa a maior ameaça.",
         color: 0x9fc9ff,
         upgrades: [
           {
-            name: "Marcar Presa",
-            description: `A cada ${seconds(shark.alpha.level1.mark.cooldownMs)} marca pontos fracos de chefe, elites ou o inimigo mais forte ao alcance: +${pct(shark.alpha.level1.mark.damageMultiplier)} de dano contra ele por ${seconds(shark.alpha.level1.mark.durationMs)}.`,
+            name: "Investida Predadora",
+            description: `Bote ofensivo: ${shark.alpha.level1.damage} de dano e +${pct(shark.alpha.level1.rangeMultiplier)} de alcance. A cada ${seconds(shark.alpha.level1.mark.cooldownMs)} marca pontos fracos de chefe, elites ou o inimigo mais forte ao alcance: +${pct(shark.alpha.level1.mark.damageMultiplier)} de dano contra ele por ${seconds(shark.alpha.level1.mark.durationMs)}.`,
             cost: shark.upgradeCosts[0],
             targeting: "threat",
             // O Alfa lê o campo e vai no que importa: ponto fraco de chefe antes de tudo.
             targetPriority: WEAK_POINT_FIRST,
+            damage: shark.alpha.level1.damage,
+            rangeMultiplier: shark.alpha.level1.rangeMultiplier,
             mark: { ...shark.alpha.level1.mark },
           },
           {
             name: "Predador Alfa",
-            description: `${shark.alpha.level2.damage} de dano. Golpes seguidos na presa somam +${frac(shark.alpha.level2.mark.stacking.perHit)} cada (máx. +${frac(shark.alpha.level2.mark.stacking.max)}). Se a presa cai, marca outra na hora.`,
+            description: `${shark.alpha.level2.damage} de dano no bote. Golpes seguidos na presa somam +${frac(shark.alpha.level2.mark.stacking.perHit)} cada (máx. +${frac(shark.alpha.level2.mark.stacking.max)}). Se a presa cai, marca outra na hora.`,
             cost: shark.upgradeCosts[1],
             targeting: "threat",
             targetPriority: WEAK_POINT_FIRST,
             damage: shark.alpha.level2.damage,
+            rangeMultiplier: shark.alpha.level2.rangeMultiplier,
             mark: { ...shark.alpha.level2.mark, stacking: { ...shark.alpha.level2.mark.stacking } },
           },
         ],

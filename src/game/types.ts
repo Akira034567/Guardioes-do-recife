@@ -24,7 +24,16 @@ export type GuardianId =
   | "sea-turtle"
   | "stonefish"
   | "dolphin";
-export type EnemyId = "minnow" | "swimmer" | "dartfish" | "needlefish" | "shellback" | "moray" | "corruptedShark" | "tidebreaker";
+export type EnemyId =
+  | "minnow"
+  | "swimmer"
+  | "dartfish"
+  | "needlefish"
+  | "ghostJelly"
+  | "shellback"
+  | "moray"
+  | "corruptedShark"
+  | "tidebreaker";
 export type EnemyRole = "swarm" | "common" | "fast" | "armored" | "elite" | "boss";
 export type GuardianState = "idle" | "windup" | "attack" | "recovery" | "disabled";
 /**
@@ -456,7 +465,11 @@ export type EnemyAbility =
   | { type: "enrageBelowHp"; threshold: number; speedMultiplier?: number; armorBonus?: number; reefDamageBonus?: number }
   | { type: "shieldAllies"; radius: number; damageReduction: number; onlyTags?: EnemyTag[] }
   | { type: "disruptGuardians"; radius: number; intervalMs: number; attackSpeedMultiplier: number; durationMs: number }
-  | { type: "stealth"; untilDamaged?: boolean }
+  /**
+   * Camuflagem. `untilDamaged`: um acerto qualquer já o expõe. `revealOnBlock`: encostar num
+   * bloqueador da rota o expõe DE VEZ — é a porta que não depende do Golfinho.
+   */
+  | { type: "stealth"; untilDamaged?: boolean; revealOnBlock?: boolean }
   | { type: "splitOnDeath"; enemyId: EnemyId; count: number; spreadPx?: number }
   | { type: "phaseChangeAtHp"; threshold: number; statMultipliers?: StatMultipliers; addAbilities?: EnemyAbility[]; announcement?: string }
   | { type: "speedBurst"; intervalMs: number; durationMs: number; multiplier: number }

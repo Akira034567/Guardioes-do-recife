@@ -21,8 +21,8 @@ export const RECIFE_ONE: LevelDefinition = {
   betweenWaveDelayMs: 8_000,
   /** Fase de aprendizado: inimigos com 75% da vida de referência e 20% mais pérolas por abate. */
   enemyScaling: { health: 0.75, speed: 1, reward: 1.2 },
-  /** Primeiro chefe: 360 de vida de base (270 após a escala) para que qualquer build razoável o derrube. */
-  enemyOverrides: { tidebreaker: { maxHealth: 360 } },
+  /** Primeiro chefe: 400 de base = 300 de vida em campo (V2: a curva de chefes é 300/475/650/800/1000/1300). */
+  enemyOverrides: { tidebreaker: { maxHealth: 400 } },
   objectives: [
     { id: "completar", kind: "complete" },
     { id: "vidas", kind: "minLivesRemaining", value: 15 },

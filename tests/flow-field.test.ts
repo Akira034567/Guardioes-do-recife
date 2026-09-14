@@ -23,6 +23,6 @@ describe("flow fields", () => {
     expect(flowSpeedMultiplier([boost], { x: 0, y: 0 }, 0.9)).toBeCloseTo(1.2);
     const effect = GUARDIANS["sea-turtle"].branches[1].upgrades[0].flowField!;
     const field = flowFieldFor({ id: "T", x: 10, y: 20 }, effect, 90);
-    expect(field).toMatchObject({ ownerId: "T", x: 10, y: 20, radius: 90 * effect.radiusMultiplier, speedFactor: 0.75, mode: "counter" });
+    expect(field).toMatchObject({ ownerId: "T", x: 10, y: 20, radius: 90 * effect.radiusMultiplier, speedFactor: 0.62, mode: "counter" });
   });
 });

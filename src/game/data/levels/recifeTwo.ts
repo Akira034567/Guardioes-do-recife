@@ -17,12 +17,13 @@ export const RECIFE_TWO: LevelDefinition = {
   quote: "Quem se esconde nas algas já decidiu atacar.",
   backgroundKey: LEVEL_BACKGROUND_KEYS["recife-2"],
   theme: { water: 0x0d6b8a, sand: 0x7fb8c7, path: 0x9ff0ff, rock: 0x2b4f66 },
-  startingPearls: ECONOMY.startingPearls + 40,
+  startingPearls: ECONOMY.startingPearls + 20,
   reefHealth: ECONOMY.reefHealth,
   initialWaveDelayMs: 10_000,
   betweenWaveDelayMs: 8_000,
   enemyScaling: { health: 0.9, speed: 1.03, reward: 1.15 },
-  enemyOverrides: { tidebreaker: { maxHealth: 480 } },
+  /** 528 de base = 475 em campo. */
+  enemyOverrides: { tidebreaker: { maxHealth: 528 } },
   objectives: [
     { id: "completar", kind: "complete" },
     { id: "intacto", kind: "noLeaks" },

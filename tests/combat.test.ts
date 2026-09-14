@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   hasReachedBlockerContact,
   isInRange,
+  armorReduction,
   mitigatedDamage,
   predictInterceptPoint,
   projectileTurnRate,
@@ -19,10 +20,19 @@ describe("combat rules", () => {
     expect(selectLeadingTarget(enemies, { x: 0, y: 0 }, 100)?.id).toBe("lead");
   });
 
-  it("includes the range boundary and guarantees chip damage", () => {
+  it("includes the range boundary and reduces damage by a fraction, never by subtraction", () => {
     expect(isInRange({ x: 0, y: 0 }, { x: 3, y: 4 }, 5)).toBe(true);
-    expect(mitigatedDamage(3, 8)).toBe(1);
-    expect(mitigatedDamage(12, 4)).toBe(8);
+    // V2: a armadura absorve `armadura/(armadura+16)`. Sem piso de 1, sem subtração.
+    expect(armorReduction(0)).toBe(0);
+    expect(armorReduction(4)).toBeCloseTo(0.2);
+    expect(armorReduction(9)).toBeCloseTo(0.36);
+    expect(armorReduction(16)).toBeCloseTo(0.5);
+    expect(mitigatedDamage(12, 0)).toBe(12);
+    expect(mitigatedDamage(12, 4)).toBeCloseTo(9.6);
+    // O golpe fraco perde a MESMA fração que o golpe forte: é isso que salva o dano distribuído.
+    expect(mitigatedDamage(3, 9) / 3).toBeCloseTo(mitigatedDamage(60, 9) / 60);
+    // Armadura nunca zera dano, por maior que seja.
+    expect(mitigatedDamage(10, 1000)).toBeGreaterThan(0);
   });
 
   it("leads a moving target for predictive projectiles", () => {

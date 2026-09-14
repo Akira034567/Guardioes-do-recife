@@ -34,6 +34,13 @@ export const ENEMY_LORE: Record<EnemyId, EnemyLore> = {
     weaknesses: ["Atordoamento", "Armadilhas"],
     resistances: [],
   },
+  ghostJelly: {
+    description:
+      "Não se esconde atrás de nada: ela some. O corpo dela some na água e só o que encosta nela sabe que estava ali.",
+    trait: "Invisível até ser contida ou revelada: nenhum tiro mira o que não dá para ver.",
+    weaknesses: ["Bloqueio na rota", "Sonar do Golfinho", "Dano em área"],
+    resistances: ["Camuflagem: não pode ser mirada enquanto invisível"],
+  },
   shellback: {
     description: "Carapaça velha de tanto raspar rocha. Anda devagar porque não precisa correr.",
     trait: "Armadura pesada: golpes fracos e repetidos quase não o arranham.",

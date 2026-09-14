@@ -49,13 +49,13 @@ describe("upgrade tree", () => {
 
   it("resolves the latest value along the applied path", () => {
     const heavy = shrimp.branches[1].upgrades;
-    expect(resolveLast(heavy.slice(0, 1), "damage")).toBe(34);
-    expect(resolveLast(heavy, "damage")).toBe(50);
-    expect(resolveLast(heavy, "splash")).toEqual({ radius: 42, damageMultiplier: 0.45 });
+    expect(resolveLast(heavy.slice(0, 1), "damage")).toBe(44);
+    expect(resolveLast(heavy, "damage")).toBe(72);
+    expect(resolveLast(heavy, "splash")).toEqual({ radius: 58, damageMultiplier: 0.5 });
     expect(resolveLast(heavy, "pierceDamages")).toBeUndefined();
     const pierce = shrimp.branches[0].upgrades;
-    expect(resolveLast(pierce.slice(0, 1), "pierceDamages")).toEqual([20, 15]);
-    expect(resolveLast(pierce, "pierceDamages")).toEqual([24, 19, 15]);
+    expect(resolveLast(pierce.slice(0, 1), "pierceDamages")).toEqual([24, 18]);
+    expect(resolveLast(pierce, "pierceDamages")).toEqual([26, 21, 16]);
     expect(resolveLast(pierce, "straightRicochet")).toBe(true);
   });
 });

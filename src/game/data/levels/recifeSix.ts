@@ -17,12 +17,13 @@ export const RECIFE_SIX: LevelDefinition = {
   quote: "Aqui não se recua: atrás de nós só tem casa.",
   backgroundKey: LEVEL_BACKGROUND_KEYS["recife-6"],
   theme: { water: 0x0b4f78, sand: 0x86a9b0, path: 0xaef0ff, rock: 0x4a3d2c },
-  startingPearls: ECONOMY.startingPearls + 160,
+  startingPearls: ECONOMY.startingPearls + 240,
   reefHealth: ECONOMY.reefHealth,
   initialWaveDelayMs: 10_000,
   betweenWaveDelayMs: 8_000,
   enemyScaling: { health: 1, speed: 1.05, reward: 1.2 },
-  enemyOverrides: { tidebreaker: { maxHealth: 600 } },
+  /** 1300 de base = 1300 em campo (a fase não escala vida). */
+  enemyOverrides: { tidebreaker: { maxHealth: 1300 } },
   objectives: [
     { id: "completar", kind: "complete" },
     { id: "vidas", kind: "minLivesRemaining", value: 8 },
@@ -124,6 +125,7 @@ export const RECIFE_SIX: LevelDefinition = {
       groups: [
         { enemyId: "shellback", count: 4, intervalMs: 1200, delayMs: 0 },
         { enemyId: "needlefish", count: 4, intervalMs: 600, delayMs: 3000 },
+        { enemyId: "ghostJelly", count: 3, intervalMs: 1400, delayMs: 5000 },
       ],
     },
     {
@@ -139,6 +141,7 @@ export const RECIFE_SIX: LevelDefinition = {
       groups: [
         { enemyId: "minnow", count: 12, intervalMs: 220, delayMs: 0 },
         { enemyId: "dartfish", count: 5, intervalMs: 550, delayMs: 2000 },
+        { enemyId: "ghostJelly", count: 3, intervalMs: 1200, delayMs: 4000 },
         { enemyId: "shellback", count: 3, intervalMs: 1400, delayMs: 6000 },
       ],
     },
@@ -164,6 +167,7 @@ export const RECIFE_SIX: LevelDefinition = {
       groups: [
         { enemyId: "moray", count: 2, intervalMs: 2500, delayMs: 0 },
         { enemyId: "shellback", count: 4, intervalMs: 1200, delayMs: 4000 },
+        { enemyId: "ghostJelly", count: 3, intervalMs: 1200, delayMs: 6500 },
         { enemyId: "needlefish", count: 6, intervalMs: 500, delayMs: 8000 },
         { enemyId: "tidebreaker", count: 2, intervalMs: 8000, delayMs: 11000 },
         { enemyId: "minnow", count: 8, intervalMs: 230, delayMs: 14000 },

@@ -136,7 +136,7 @@ export class MatchEnemy implements AbilityEnemy {
   takeDamage(rawDamage: number, options: DamageOptions = {}): DamageOutcome {
     if (this.dead || this.reachedGoal) return { applied: 0, killed: false };
     const armor = this.definition.armor + this.mods.armorBonus - this.status.armorBreak(this.now);
-    const base = options.armorPiercing ? Math.max(1, rawDamage) : mitigatedDamage(rawDamage, armor);
+    const base = options.armorPiercing ? Math.max(0, rawDamage) : mitigatedDamage(rawDamage, armor);
     return this.loseHealth(base * this.status.damageMultiplier(this.now) * this.status.markMultiplier(options.sourceId, this.now));
   }
 

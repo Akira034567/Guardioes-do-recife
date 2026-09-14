@@ -22,25 +22,26 @@ describe("trap core", () => {
     expect(trap.update(cooldownAt + base.cooldownMs, 3)).toEqual([{ type: "phase", phase: "arming" }]);
   });
 
-  it("grows the charge +5% every 2 s while armed, capped at +25%", () => {
+  it("grows the charge +6% every 2 s while armed, capped at +36%", () => {
     const trap = new TrapCore(base, 0);
     trap.update(base.armMs, 0);
     expect(trap.chargeBonus(base.armMs + 1999)).toBe(0);
-    expect(trap.chargeBonus(base.armMs + 2000)).toBeCloseTo(0.05);
-    expect(trap.chargeBonus(base.armMs + 60_000)).toBeCloseTo(0.25);
+    expect(trap.chargeBonus(base.armMs + 2000)).toBeCloseTo(0.06);
+    expect(trap.chargeBonus(base.armMs + 60_000)).toBeCloseTo(0.36);
     const [trigger] = trap.update(base.armMs + 6000, 1);
-    expect(trigger).toEqual({ type: "trigger", chargeBonus: expect.closeTo(0.15, 6) });
+    expect(trigger).toEqual({ type: "trigger", chargeBonus: expect.closeTo(0.18, 6) });
     expect(trapChargeMultipliers(base, 0.15)).toEqual({ damage: expect.closeTo(1.15, 6), control: 1 });
     expect(trapChargeMultipliers(ambush2, 0.15)).toEqual({ damage: 1, control: expect.closeTo(1.15, 6) });
   });
 
-  it("waits for three enemies or the maximum wait before Fúria Abissal fires", () => {
+  it("waits for two enemies or the maximum wait before Fúria Abissal fires", () => {
     const trap = new TrapCore(ambush2, 0);
     trap.update(ambush2.armMs, 0);
     const start = ambush2.armMs + 100;
+    // V2: a Fúria virou punição de alvo único — espera 2, não 3, e o dano é que subiu.
+    expect(ambush2.waitFor?.count).toBe(2);
     expect(trap.update(start, 1)).toEqual([]);
-    expect(trap.update(start + 1000, 2)).toEqual([]);
-    expect(trap.update(start + 1100, 3)[0]).toMatchObject({ type: "trigger" });
+    expect(trap.update(start + 1000, 2)[0]).toMatchObject({ type: "trigger" });
     const patient = new TrapCore(ambush2, 0);
     patient.update(ambush2.armMs, 0);
     expect(patient.update(start, 1)).toEqual([]);

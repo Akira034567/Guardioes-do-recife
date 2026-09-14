@@ -20,8 +20,27 @@ export function selectLeadingTarget<T extends TargetCandidate>(
     .sort((a, b) => b.progress - a.progress)[0];
 }
 
+/**
+ * Constante da curva de armadura (V2). Quanto maior, mais armadura é preciso para a mesma redução:
+ * a fração ignorada é `armadura / (armadura + ARMOR_CONSTANT)`.
+ */
+export const ARMOR_CONSTANT = 16;
+
+/** Fração do dano que a armadura absorve (0..1). Nunca chega a 1: armadura não zera dano. */
+export function armorReduction(armor: number): number {
+  const value = Math.max(0, armor);
+  return value / (value + ARMOR_CONSTANT);
+}
+
+/**
+ * Dano depois da armadura (V2): redução PERCENTUAL, não subtração.
+ *
+ * A subtração antiga (`max(1, dano − armadura)`) destruía qualquer build de muitos golpes fracos —
+ * um salto de 4 de dano virava 1 contra o Cascudo. Com a curva, todo golpe perde a mesma fração,
+ * então dano distribuído e dano concentrado sofrem igual e o piso artificial de 1 some.
+ */
 export function mitigatedDamage(rawDamage: number, armor: number): number {
-  return Math.max(1, rawDamage - Math.max(0, armor));
+  return Math.max(0, rawDamage) * (1 - armorReduction(armor));
 }
 
 export function projectileTurnRate(predictiveAim: boolean, priorHitCount: number): number {

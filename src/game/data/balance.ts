@@ -5,6 +5,17 @@
  * `guardians.ts` e `enemies.ts` apenas embrulham estes valores com nomes, cores e
  * textos; as fases em `levels/` definem geometria e composição de ondas.
  * Ajuste aqui e o jogo, o HUD e os testes de contrato seguem juntos.
+ *
+ * ---------------------------------------------------------------------------
+ * V2 (balanceamento dos Guardiões). O que mudou de princípio:
+ *
+ * 1. Armadura virou redução PERCENTUAL (`core/Combat.ts`): `1 − armadura/(armadura+16)`. Some o
+ *    piso de 1 e some a punição desproporcional a golpes fracos. Como a escala mudou, os valores de
+ *    armadura foram reescritos para manter a MESMA sensação de "blindado" (Cascudo 4 → 9 = 36%).
+ * 2. Cada Guardião tem uma função e é medido por VALOR POR PÉROLA na função dele, não por DPS.
+ *    Só o Camarão é DPS puro; ele é a régua com que os outros se comparam.
+ * 3. Controle precisa segurar de verdade: lentidão e zonas passaram a ter uptime alto o bastante
+ *    para mudar o resultado de uma onda, não só a animação.
  */
 
 export const ECONOMY = {
@@ -39,246 +50,256 @@ export const GUARDIAN_VISUAL = {
 } as const;
 
 export const GUARDIAN_BALANCE = {
+  /** Camarão-Pistola — DPS puro. Nenhuma utilidade: é a régua de pérola por dano do jogo. */
   "pistol-shrimp": {
     cost: 80,
     upgradeCosts: [70, 130] as const,
-    range: 188,
-    damage: 20,
-    cooldownMs: 1200,
-    projectileSpeed: 430,
+    range: 190,
+    damage: 24,
+    cooldownMs: 1100,
+    projectileSpeed: 460,
     /** Alcance máximo para ricochetear até um novo alvo depois de atravessar um inimigo. */
-    ricochetRange: 240,
+    ricochetRange: 260,
     pierce: {
-      level1: { pierceDamages: [20, 15] },
-      level2: { pierceDamages: [24, 19, 15] },
+      level1: { pierceDamages: [24, 18] },
+      level2: { pierceDamages: [26, 21, 16] },
     },
     heavy: {
-      level1: { damage: 34, cooldownMs: 1350 },
-      level2: { damage: 50, cooldownMs: 1400, splash: { radius: 42, damageMultiplier: 0.45 } },
+      level1: { damage: 44, cooldownMs: 1300 },
+      level2: { damage: 72, cooldownMs: 1400, splash: { radius: 58, damageMultiplier: 0.5 } },
     },
   },
+  /** Água-viva — dano distribuído + controle. Nunca ganha de um DPS no alvo único; ganha no conjunto. */
   jellyfish: {
-    cost: 100,
-    upgradeCosts: [85, 145] as const,
-    range: 166,
-    damage: 9,
-    cooldownMs: 1000,
-    slowFactor: 0.68,
-    slowDurationMs: 1500,
+    cost: 90,
+    upgradeCosts: [80, 135] as const,
+    range: 170,
+    damage: 12,
+    cooldownMs: 950,
+    slowFactor: 0.7,
+    slowDurationMs: 1600,
     electric: {
-      level1: { chainDamages: [9, 6, 4] },
+      level1: { chainDamages: [14, 11, 9] },
       level2: {
-        radius: 72,
-        durationMs: 2500,
-        cooldownMs: 5000,
-        pulseIntervalMs: 500,
-        damage: 6,
-        maxDamagePerTarget: 30,
-        slowFactor: 0.6,
-        slowDurationMs: 600,
+        radius: 84,
+        durationMs: 3200,
+        cooldownMs: 5200,
+        pulseIntervalMs: 450,
+        damage: 8,
+        maxDamagePerTarget: 56,
+        slowFactor: 0.62,
+        slowDurationMs: 800,
       },
     },
     control: {
-      level1: { slowFactor: 0.5, slowDurationMs: 1800 },
-      level2: { stun: { durationMs: 600, immunityMs: 3500 } },
+      level1: { damage: 14, slowFactor: 0.45, slowDurationMs: 2200 },
+      /** Stun curto com imunidade interna: 900ms a cada 3s no mesmo alvo, e nunca encadeia. */
+      level2: { damage: 14, stun: { durationMs: 900, immunityMs: 3000 } },
     },
   },
+  /** Baiacu — bloqueio. Ramo A segura mais gente; ramo B troca a contenção por pulsos de área. */
   pufferfish: {
-    cost: 110,
-    upgradeCosts: [90, 150] as const,
-    range: 112,
+    cost: 105,
+    upgradeCosts: [85, 145] as const,
+    range: 115,
     /** Base não pulsa: contém 1 inimigo e causa dano de contato. */
     damage: 0,
-    cooldownMs: 4000,
+    cooldownMs: 3600,
     blockCapacity: 1,
-    contactDamagePerSecond: 8,
+    contactDamagePerSecond: 11,
     fortress: {
-      level1: { blockCapacity: 2, contactDamagePerSecond: 12 },
+      level1: { blockCapacity: 3, contactDamagePerSecond: 15 },
       level2: {
-        blockCapacity: 3,
-        contactDamagePerSecond: 15,
-        bossHold: { durationMs: 1200, immunityMs: 9000 },
+        blockCapacity: 5,
+        contactDamagePerSecond: 19,
+        bossHold: { durationMs: 1600, immunityMs: 8000 },
       },
     },
     pulse: {
-      level1: { damage: 25, cooldownMs: 4000 },
-      level2: { damage: 40, cooldownMs: 4000, slowFactor: 0.75, slowDurationMs: 900 },
+      level1: { damage: 34, cooldownMs: 3000 },
+      level2: { damage: 58, cooldownMs: 2800, slowFactor: 0.7, slowDurationMs: 1200 },
     },
   },
+  /** Caranguejo-Recife — brawler de alcance curtíssimo. Paga o melhor dano por pérola do jogo por ficar na rota. */
   "reef-crab": {
     cost: 90,
     upgradeCosts: [80, 140] as const,
-    range: 70,
-    damage: 28,
-    cooldownMs: 1400,
+    range: 78,
+    damage: 34,
+    cooldownMs: 1250,
     shellbreaker: {
-      level1: { damage: 32 },
-      level2: { damage: 45, vulnerability: { multiplier: 1.2, durationMs: 3000 } },
+      level1: { damage: 40 },
+      level2: { damage: 58, vulnerability: { multiplier: 1.25, durationMs: 3500 } },
     },
     sweep: {
-      level1: { damage: 22 },
-      level2: { damage: 22, spin: { everyAttacks: 4, damage: 35, radiusMultiplier: 1.5 } },
+      level1: { damage: 28 },
+      level2: { damage: 28, spin: { everyAttacks: 3, damage: 56, radiusMultiplier: 1.7 } },
     },
   },
+  /** Polvo-Tinteiro — debuffer. Ramo A vulnerabilidade e lentidão em área; ramo B a melhor aura permanente. */
   "ink-octopus": {
-    cost: 120,
-    upgradeCosts: [100, 170] as const,
-    range: 150,
-    damage: 10,
-    cooldownMs: 1600,
-    vulnerability: { multiplier: 1.1, durationMs: 2500 },
+    cost: 105,
+    upgradeCosts: [90, 155] as const,
+    range: 155,
+    damage: 12,
+    cooldownMs: 1500,
+    vulnerability: { multiplier: 1.12, durationMs: 3000 },
     ink: {
-      level1: { damage: 12, vulnerability: { multiplier: 1.15, durationMs: 2500, radius: 40 } },
+      level1: { damage: 15, vulnerability: { multiplier: 1.2, durationMs: 3000, radius: 55 } },
       level2: {
-        radius: 70,
-        durationMs: 3000,
+        radius: 90,
+        durationMs: 4000,
         cooldownMs: 6000,
-        slowFactor: 0.7,
-        vulnerabilityMultiplier: 1.15,
+        slowFactor: 0.62,
+        /** Teto de vulnerabilidade do jogo: nada multiplica com nada, vale sempre a maior. */
+        vulnerabilityMultiplier: 1.3,
       },
     },
     tide: {
-      level1: { attackSpeedMultiplier: 1.1, rangeMultiplier: 1 },
-      level2: { attackSpeedMultiplier: 1.15, rangeMultiplier: 1.12 },
+      level1: { attackSpeedMultiplier: 1.18, rangeMultiplier: 1 },
+      level2: { attackSpeedMultiplier: 1.25, rangeMultiplier: 1.15 },
     },
   },
-  /** Tubarão — Instinto Predador: investida curta, dano alto, prioriza inimigos com pouca vida. */
+  /** Tubarão — dano direto. Ramo A frenesi contra feridos; ramo B a investida longa que bate uma vez e bate forte. */
   shark: {
     cost: 110,
     upgradeCosts: [90, 150] as const,
     /** Precisa cobrir a margem (até PLACEMENT.marginMax) mais o raio do maior inimigo. */
-    range: 160,
-    damage: 30,
-    cooldownMs: 1300,
+    range: 165,
+    damage: 36,
+    cooldownMs: 1250,
     targeting: "lowestHealth" as const,
     frenzy: {
-      level1: { healthThreshold: 0.4, attackSpeedBonus: 0.35 },
-      level2: { healthThreshold: 0.4, attackSpeedBonus: 0.35, perWoundedBonus: 0.12, maxBonus: 0.6 },
+      level1: { healthThreshold: 0.45, attackSpeedBonus: 0.4 },
+      level2: { healthThreshold: 0.45, attackSpeedBonus: 0.4, perWoundedBonus: 0.12, maxBonus: 0.65 },
     },
     alpha: {
-      level1: { mark: { damageMultiplier: 1.3, durationMs: 6000, cooldownMs: 8000 } },
+      /** Investida ofensiva: o bote vai mais longe e chega mais pesado. */
+      level1: { damage: 46, rangeMultiplier: 1.25, mark: { damageMultiplier: 1.35, durationMs: 6000, cooldownMs: 7000 } },
       level2: {
-        damage: 34,
-        mark: { damageMultiplier: 1.3, durationMs: 6000, cooldownMs: 8000, stacking: { perHit: 0.1, max: 0.5 }, rearmOnDeath: true },
+        damage: 58,
+        rangeMultiplier: 1.25,
+        mark: { damageMultiplier: 1.35, durationMs: 6000, cooldownMs: 7000, stacking: { perHit: 0.1, max: 0.5 }, rearmOnDeath: true },
       },
     },
   },
-  /** Tartaruga-Marinha — Guardiã do Recife: dano mínimo, controle de rota. */
+  /** Tartaruga-Marinha — controle em área. Dano quase nulo; o valor é a zona e o bloqueio temporário. */
   "sea-turtle": {
-    cost: 100,
-    upgradeCosts: [85, 145] as const,
-    range: 90,
-    damage: 6,
+    cost: 85,
+    upgradeCosts: [75, 130] as const,
+    range: 100,
+    damage: 8,
     cooldownMs: 1500,
     /** Batida base: slow leve no alvo. */
-    slowFactor: 0.85,
-    slowDurationMs: 1000,
+    slowFactor: 0.75,
+    slowDurationMs: 1400,
     shell: {
       level1: {
-        blockCapacity: 3,
-        blockHold: { durationMs: 3000, releaseCooldownMs: 4000, eliteSlots: 2, bossSlow: { factor: 0.7, durationMs: 1000 } },
-        /** Turbulência: slow ambiental leve em volta. */
-        flowField: { radiusMultiplier: 1.4, speedFactor: 0.9 },
+        blockCapacity: 4,
+        blockHold: { durationMs: 4000, releaseCooldownMs: 3000, eliteSlots: 2, bossSlow: { factor: 0.6, durationMs: 1400 } },
+        /** Turbulência: slow ambiental em volta. */
+        flowField: { radiusMultiplier: 1.5, speedFactor: 0.8 },
       },
       level2: {
-        blockCapacity: 5,
-        blockHold: { durationMs: 4000, releaseCooldownMs: 4000, eliteSlots: 2, bossSlow: { factor: 0.7, durationMs: 1000 } },
-        flowField: { radiusMultiplier: 1.4, speedFactor: 0.9 },
+        blockCapacity: 6,
+        blockHold: { durationMs: 5000, releaseCooldownMs: 3000, eliteSlots: 2, bossSlow: { factor: 0.5, durationMs: 1600 } },
+        flowField: { radiusMultiplier: 1.5, speedFactor: 0.78 },
         /** Repulsa Ancestral. */
-        pushWave: { cooldownMs: 11000, distance: 90, eliteFactor: 0.5, bossSlow: { factor: 0.6, durationMs: 1200 }, visualMs: 700 },
+        pushWave: { cooldownMs: 9000, distance: 110, eliteFactor: 0.6, bossSlow: { factor: 0.5, durationMs: 1600 }, visualMs: 700 },
       },
     },
     current: {
-      level1: { flowField: { radiusMultiplier: 1.6, speedFactor: 0.75 } },
+      level1: { flowField: { radiusMultiplier: 1.8, speedFactor: 0.62 } },
       level2: {
-        flowField: { radiusMultiplier: 1.6, speedFactor: 0.75 },
-        /** Corrente forte. */
-        pushWave: { cooldownMs: 12000, distance: 120, eliteFactor: 0.5, bossSlow: { factor: 0.5, durationMs: 1500 }, visualMs: 1500 },
+        flowField: { radiusMultiplier: 1.9, speedFactor: 0.55 },
+        /** Controle pesado periódico: a corrente devolve a onda inteira 170px rota abaixo. */
+        pushWave: { cooldownMs: 9000, distance: 170, eliteFactor: 0.6, bossSlow: { factor: 0.45, durationMs: 2000 }, visualMs: 1500 },
       },
     },
   },
-  /** Peixe-Pedra — Emboscador do Recife: armadilha enterrada na rota. `range` é o raio de acionamento. */
+  /** Peixe-Pedra — armadilha. Espera muito e cobra caro: o valor está no instante em que ativa. */
   stonefish: {
     cost: 95,
     upgradeCosts: [80, 140] as const,
-    range: 60,
+    range: 65,
     /** Não ataca pela FSM: tudo acontece na armadilha. */
     damage: 0,
-    cooldownMs: 6000,
+    cooldownMs: 5000,
     trap: {
-      armMs: 3000,
-      cooldownMs: 6000,
-      triggerRadius: 60,
-      damage: 18,
-      charge: { everyMs: 2000, bonus: 0.05, max: 0.25, applyTo: "damage" as const },
+      armMs: 2600,
+      cooldownMs: 5000,
+      triggerRadius: 65,
+      damage: 40,
+      charge: { everyMs: 2000, bonus: 0.06, max: 0.36, applyTo: "damage" as const },
     },
     venom: {
-      level1: { damage: 14, poison: { damagePerTick: 4, tickMs: 1000, durationMs: 5000, maxStacks: 2 } },
+      level1: { damage: 34, poison: { damagePerTick: 9, tickMs: 1000, durationMs: 5000, maxStacks: 2 } },
       level2: {
-        damage: 14,
-        poison: { damagePerTick: 5, tickMs: 1000, durationMs: 6000, maxStacks: 2 },
-        cloud: { radius: 70, durationMs: 3000, poison: { damagePerTick: 4, tickMs: 1000, durationMs: 6000, maxStacks: 2 } },
+        damage: 34,
+        poison: { damagePerTick: 10, tickMs: 1000, durationMs: 6000, maxStacks: 2 },
+        cloud: { radius: 95, durationMs: 4500, poison: { damagePerTick: 8, tickMs: 1000, durationMs: 6000, maxStacks: 2 } },
       },
     },
     ambush: {
       level1: {
-        damage: 22,
-        stun: { durationMs: 800, eliteFactor: 0.6, bossFactor: 0.25 },
-        charge: { everyMs: 2000, bonus: 0.05, max: 0.25, applyTo: "control" as const },
+        damage: 58,
+        stun: { durationMs: 1100, eliteFactor: 0.6, bossFactor: 0.3 },
+        charge: { everyMs: 2000, bonus: 0.06, max: 0.36, applyTo: "control" as const },
       },
       level2: {
-        damage: 30,
-        stun: { durationMs: 1200, eliteFactor: 0.6, bossFactor: 0.2 },
-        knockback: { distance: 50, eliteFactor: 0.5 },
-        waitFor: { count: 3, maxWaitMs: 2500 },
-        charge: { everyMs: 2000, bonus: 0.05, max: 0.25, applyTo: "control" as const },
+        damage: 96,
+        stun: { durationMs: 1600, eliteFactor: 0.6, bossFactor: 0.25 },
+        knockback: { distance: 90, eliteFactor: 0.5 },
+        waitFor: { count: 2, maxWaitMs: 2000 },
+        charge: { everyMs: 2000, bonus: 0.06, max: 0.36, applyTo: "control" as const },
       },
     },
   },
-  /** Golfinho — Mensageiro do Recife: suporte por sonar e coro. */
+  /** Golfinho — suporte puro por sonar. Não anda, não invoca: revela, enfraquece e rege o cardume. */
   dolphin: {
-    cost: 120,
-    upgradeCosts: [100, 170] as const,
-    range: 150,
-    damage: 8,
+    cost: 110,
+    upgradeCosts: [95, 160] as const,
+    range: 155,
+    damage: 9,
     cooldownMs: 1400,
-    sonar: { cooldownMs: 6000, radiusMultiplier: 1, revealMs: 4000, vulnerability: { multiplier: 1.05, durationMs: 4000 } },
+    /** Base: 10% de vulnerabilidade, como combinado. */
+    sonar: { cooldownMs: 5500, radiusMultiplier: 1, revealMs: 5000, vulnerability: { multiplier: 1.1, durationMs: 4500 } },
     chorus: {
       level1: {
-        durationMs: 5000,
-        cooldownMs: 12000,
-        radiusMultiplier: 1,
-        aura: { attackSpeedMultiplier: 1.1, abilityCooldownMultiplier: 0.9, rangeMultiplier: 1.05 },
-        speciesBonus: 0.02,
+        durationMs: 6000,
+        cooldownMs: 11000,
+        radiusMultiplier: 1.3,
+        aura: { attackSpeedMultiplier: 1.3, abilityCooldownMultiplier: 0.8, rangeMultiplier: 1.15 },
+        speciesBonus: 0.03,
         maxSpecies: 5,
       },
       level2: {
-        durationMs: 5000,
-        cooldownMs: 12000,
-        radiusMultiplier: 1.3,
-        aura: { attackSpeedMultiplier: 1.12, abilityCooldownMultiplier: 0.88, rangeMultiplier: 1.08 },
-        speciesBonus: 0.02,
+        durationMs: 6500,
+        cooldownMs: 10500,
+        radiusMultiplier: 1.6,
+        aura: { attackSpeedMultiplier: 1.38, abilityCooldownMultiplier: 0.75, rangeMultiplier: 1.2 },
+        speciesBonus: 0.03,
         maxSpecies: 5,
         thematic: {
           shark: { dashSpeedMultiplier: 1.25 },
-          "sea-turtle": { controlDurationMultiplier: 1.15 },
-          pufferfish: { rangeMultiplier: 1.1 },
-          "reef-crab": { damageMultiplier: 1.1 },
-          "ink-octopus": { debuffDurationMultiplier: 1.2 },
-          stonefish: { rearmMultiplier: 0.8 },
-          "pistol-shrimp": { projectileSpeedMultiplier: 1.15 },
+          "sea-turtle": { controlDurationMultiplier: 1.2 },
+          pufferfish: { rangeMultiplier: 1.15 },
+          "reef-crab": { damageMultiplier: 1.15 },
+          "ink-octopus": { debuffDurationMultiplier: 1.25 },
+          stonefish: { rearmMultiplier: 0.75 },
+          "pistol-shrimp": { projectileSpeedMultiplier: 1.2 },
         },
       },
     },
     echo: {
-      level1: { cooldownMs: 6000, radiusMultiplier: 1.5, revealMs: 5000, vulnerability: { multiplier: 1.12, durationMs: 5000 }, markPriority: true },
+      level1: { cooldownMs: 5000, radiusMultiplier: 1.6, revealMs: 6000, vulnerability: { multiplier: 1.22, durationMs: 5500 }, markPriority: true },
       level2: {
-        cooldownMs: 6000,
-        radiusMultiplier: 1.5,
-        revealMs: 5000,
-        vulnerability: { multiplier: 1.12, durationMs: 5000 },
+        cooldownMs: 5000,
+        radiusMultiplier: 1.7,
+        revealMs: 6000,
+        vulnerability: { multiplier: 1.25, durationMs: 5500 },
         markPriority: true,
-        echo: { waves: 3, intervalMs: 400, coordinateMs: 3500 },
+        echo: { waves: 3, intervalMs: 350, coordinateMs: 4000 },
       },
     },
   },
@@ -313,16 +334,24 @@ export const PLACEMENT = {
   platformHitRadius: 47,
 } as const;
 
-/** Valores de referência da fase 1; cada fase aplica `enemyScaling` por cima. */
+/**
+ * Valores de referência da fase 1; cada fase aplica `enemyScaling` por cima.
+ *
+ * V2: a VIDA não subiu (decisão explícita). O que mudou foi a ARMADURA, reescrita para a curva
+ * percentual — os números antigos (4, 3, 2) valiam quase nada nela. Redução efetiva:
+ * 9 → 36%, 7 → 30%, 6 → 27%, 5 → 24%, 2 → 11%.
+ */
 export const ENEMY_BALANCE = {
   minnow: { maxHealth: 18, speed: 72, reward: 2, armor: 0, reefDamage: 1 },
   swimmer: { maxHealth: 55, speed: 58, reward: 5, armor: 0, reefDamage: 1 },
   dartfish: { maxHealth: 35, speed: 92, reward: 6, armor: 0, reefDamage: 1 },
   needlefish: { maxHealth: 45, speed: 118, reward: 7, armor: 0, reefDamage: 2 },
-  shellback: { maxHealth: 130, speed: 40, reward: 10, armor: 4, reefDamage: 2 },
-  moray: { maxHealth: 250, speed: 52, reward: 18, armor: 2, reefDamage: 4 },
-  corruptedShark: { maxHealth: 320, speed: 74, reward: 26, armor: 3, reefDamage: 5 },
-  tidebreaker: { maxHealth: 550, speed: 29, reward: 60, armor: 3, reefDamage: 10 },
+  /** Camuflado: só aparece se um bloqueador o segurar ou o sonar do Golfinho o revelar. */
+  ghostJelly: { maxHealth: 60, speed: 70, reward: 9, armor: 2, reefDamage: 1 },
+  shellback: { maxHealth: 130, speed: 40, reward: 10, armor: 9, reefDamage: 2 },
+  moray: { maxHealth: 250, speed: 52, reward: 18, armor: 5, reefDamage: 4 },
+  corruptedShark: { maxHealth: 320, speed: 74, reward: 26, armor: 6, reefDamage: 5 },
+  tidebreaker: { maxHealth: 550, speed: 29, reward: 60, armor: 7, reefDamage: 10 },
 } as const;
 
 /** Regras do chefe: ciclo de inversão da corrente. */
@@ -341,7 +370,7 @@ export const SHARK_HUNT = {
   burstMultiplier: 1.9,
   enrageThreshold: 0.4,
   enrageSpeed: 1.25,
-  enrageArmorBonus: 2,
+  enrageArmorBonus: 4,
   enrageReefDamage: 1.5,
 } as const;
 
@@ -350,7 +379,7 @@ export const SHARK_HUNT = {
  * `armorBonus` é aditivo; o resto multiplica. A recompensa sobe junto com a ameaça.
  */
 export const ELITE_BALANCE = {
-  armored: { maxHealth: 1.3, armorBonus: 3, speed: 0.95, rewardMultiplier: 1.6 },
+  armored: { maxHealth: 1.3, armorBonus: 6, speed: 0.95, rewardMultiplier: 1.6 },
   swift: { maxHealth: 0.9, speed: 1.35, rewardMultiplier: 1.4 },
   regenerating: { maxHealth: 1.15, hpPerSecond: 0.02, delayAfterHitMs: 1500, rewardMultiplier: 1.6 },
   furious: { maxHealth: 1.1, threshold: 0.5, speedMultiplier: 1.3, rewardMultiplier: 1.5 },

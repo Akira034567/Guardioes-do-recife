@@ -41,15 +41,18 @@ describe("blocking system", () => {
   it("counts elites as two slots and only slows bosses", () => {
     const system = new BlockingSystem();
     const turtle = new FakeGuardian("T", "sea-turtle", 400, 0, "a", 1);
-    expect(turtle.stats.blockCapacity).toBe(3);
+    expect(turtle.stats.blockCapacity).toBe(4);
     const elite = new FakeEnemy("E", "moray", 385);
     const first = new FakeEnemy("A", "swimmer", 380);
     const second = new FakeEnemy("B", "swimmer", 378);
+    // Capacidade 4: a elite come 2 vagas, sobram 2 para comuns — o terceiro comum fica de fora.
+    const third = new FakeEnemy("C", "swimmer", 376);
     const boss = new FakeEnemy("Z", "tidebreaker", 384);
-    system.update([turtle], [elite, first, second, boss], 0, 16, noop);
+    system.update([turtle], [elite, first, second, third, boss], 0, 16, noop);
     expect(elite.blockedById).toBe("T");
     expect(first.blockedById).toBe("T");
-    expect(second.blockedById).toBeNull();
+    expect(second.blockedById).toBe("T");
+    expect(third.blockedById).toBeNull();
     expect(boss.blockedById).toBeNull();
     expect(boss.status.slowFactor(10)).toBeLessThan(1);
   });

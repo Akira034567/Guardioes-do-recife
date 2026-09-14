@@ -20,7 +20,7 @@ describe("chorus", () => {
     ];
     expect(distinctSpeciesInRange(owner, 100, allies)).toBe(2);
     const state = new ChorusState(chorus1);
-    expect(state.efficiency(2)).toBeCloseTo(1.04);
+    expect(state.efficiency(2)).toBeCloseTo(1.06);
     expect(state.efficiency(9)).toBeCloseTo(1 + chorus1.speciesBonus * chorus1.maxSpecies);
   });
 
@@ -34,8 +34,8 @@ describe("chorus", () => {
     expect(state.update(chorus1.cooldownMs, 2)).toBe(true);
     const source = state.asAuraSource({ id: "D", x: 0, y: 0 }, 150, 5, chorus1.cooldownMs + 10)!;
     expect(source.range).toBe(150 * chorus1.radiusMultiplier);
-    expect(source.aura.attackSpeedMultiplier).toBeCloseTo(1 + 0.1 * 1.1);
-    expect(source.aura.abilityCooldownMultiplier).toBeCloseTo(1 - 0.1 * 1.1);
+    expect(source.aura.attackSpeedMultiplier).toBeCloseTo(1 + 0.3 * 1.15);
+    expect(source.aura.abilityCooldownMultiplier).toBeCloseTo(1 - 0.2 * 1.15);
     expect(state.asAuraSource({ id: "D", x: 0, y: 0 }, 150, 5, chorus1.cooldownMs + chorus1.durationMs)).toBeNull();
   });
 
@@ -45,8 +45,8 @@ describe("chorus", () => {
     const events: BehaviorEvent[] = [];
     const source = updateChorus(dolphin, [dolphin, crab], 0, (event) => events.push(event));
     expect(events[0]).toMatchObject({ type: "chorusStart", guardianId: "D" });
-    expect(source?.thematic?.["reef-crab"]).toEqual({ damageMultiplier: 1.1 });
-    expect(updateChorus(dolphin, [dolphin, crab], 6000)).toBeNull();
+    expect(source?.thematic?.["reef-crab"]).toEqual({ damageMultiplier: 1.15 });
+    expect(updateChorus(dolphin, [dolphin, crab], 6500)).toBeNull();
   });
 });
 
@@ -83,7 +83,7 @@ describe("sonar", () => {
     expect(swimmer.status.damageMultiplier(10)).toBe(1);
     const interval = sonar2.echo!.intervalMs;
     updateSonar(dolphin, [swimmer, elite], [dolphin, shrimp, farAlly], { ...hooks, now: interval });
-    expect(swimmer.status.damageMultiplier(interval + 1)).toBeCloseTo(1.12);
+    expect(swimmer.status.damageMultiplier(interval + 1)).toBeCloseTo(1.25);
     expect(elite.status.isPriority(interval + 1)).toBe(true);
     expect(swimmer.status.isPriority(interval + 1)).toBe(false);
     updateSonar(dolphin, [swimmer, elite], [dolphin, shrimp, farAlly], { ...hooks, now: interval * 2 });

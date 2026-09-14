@@ -31,13 +31,13 @@ describe("shark behaviours", () => {
     expect(shark.attackSpeedBonus).toBe(0);
     shark.targetId = "W";
     updateFrenzy(shark, [healthy, wounded], 0);
-    expect(shark.attackSpeedBonus).toBeCloseTo(0.35);
-    expect(shark.stats.cooldownMs).toBeCloseTo(GUARDIANS.shark.cooldownMs / 1.35);
+    expect(shark.attackSpeedBonus).toBeCloseTo(0.4);
+    expect(shark.stats.cooldownMs).toBeCloseTo(GUARDIANS.shark.cooldownMs / 1.4);
     shark.upgrade("a", 2);
     const more = new FakeEnemy("M", "swimmer", 70);
     more.health = 5;
     updateFrenzy(shark, [healthy, wounded, more], 0);
-    expect(shark.attackSpeedBonus).toBeCloseTo(0.35 + 0.12 * 2);
+    expect(shark.attackSpeedBonus).toBeCloseTo(0.4 + 0.12 * 2);
     for (let index = 0; index < 5; index += 1) {
       const extra = new FakeEnemy(`X${index}`, "swimmer", 80 + index);
       extra.health = 1;
@@ -49,7 +49,7 @@ describe("shark behaviours", () => {
       return enemy;
     });
     updateFrenzy(shark, [wounded, ...crowd], 0);
-    expect(shark.attackSpeedBonus).toBeCloseTo(0.6);
+    expect(shark.attackSpeedBonus).toBeCloseTo(0.65);
     expect(targetPolicyFor(shark, 0).mode).toBe("wounded");
   });
 
@@ -61,16 +61,16 @@ describe("shark behaviours", () => {
     updateMark(shark, [swimmer, elite], hooks(0, events));
     expect(shark.runtime.preyId).toBe("E");
     expect(events[0]).toMatchObject({ type: "mark", enemyId: "E" });
-    expect(elite.status.markMultiplier("S", 10)).toBeCloseTo(1.3);
+    expect(elite.status.markMultiplier("S", 10)).toBeCloseTo(1.35);
     expect(elite.status.markMultiplier("OTHER", 10)).toBe(1);
     expect(targetPolicyFor(shark, 10).markedId).toBe("E");
 
     registerSharkHit(shark, elite, 20);
-    expect(elite.status.markMultiplier("S", 20)).toBeCloseTo(1.3);
+    expect(elite.status.markMultiplier("S", 20)).toBeCloseTo(1.35);
     registerSharkHit(shark, elite, 40);
-    expect(elite.status.markMultiplier("S", 40)).toBeCloseTo(1.3 * 1.1);
+    expect(elite.status.markMultiplier("S", 40)).toBeCloseTo(1.35 * 1.1);
     for (let hit = 0; hit < 10; hit += 1) registerSharkHit(shark, elite, 50 + hit);
-    expect(elite.status.markMultiplier("S", 70)).toBeCloseTo(1.3 * 1.5);
+    expect(elite.status.markMultiplier("S", 70)).toBeCloseTo(1.35 * 1.5);
 
     elite.dead = true;
     updateMark(shark, [swimmer, elite], hooks(100, events));

@@ -18,12 +18,14 @@ export const RECIFE_FIVE: LevelDefinition = {
   quote: "O que o mar afundou uma vez, ele volta para levar de novo.",
   backgroundKey: LEVEL_BACKGROUND_KEYS["recife-5"],
   theme: { water: 0x0f5a7d, sand: 0x8aa9a0, path: 0xb8f4ff, rock: 0x5a4630 },
-  startingPearls: ECONOMY.startingPearls + 160,
+  startingPearls: ECONOMY.startingPearls + 180,
   reefHealth: ECONOMY.reefHealth,
   initialWaveDelayMs: 10_000,
   betweenWaveDelayMs: 8_000,
+  /** Rota de 1265px: a pressão vem de grupos SOBREPOSTOS em pouco tempo, nunca de vida extra. */
   enemyScaling: { health: 0.95, speed: 1.05, reward: 1.2 },
-  enemyOverrides: { tidebreaker: { maxHealth: 550 } },
+  /** 1053 de base = 1000 em campo. */
+  enemyOverrides: { tidebreaker: { maxHealth: 1053 } },
   objectives: [
     { id: "completar", kind: "complete" },
     { id: "vidas", kind: "minLivesRemaining", value: 10 },
@@ -105,16 +107,9 @@ export const RECIFE_FIVE: LevelDefinition = {
       name: "Blindagem Pesada",
       groups: [
         { enemyId: "shellback", count: 3, intervalMs: 1300, delayMs: 0 },
-        { enemyId: "minnow", count: 8, intervalMs: 230, delayMs: 3000 },
-        { enemyId: "moray", count: 1, intervalMs: 1000, delayMs: 7000 },
-      ],
-    },
-    {
-      name: "Primeiro Quebra-Marés",
-      groups: [
-        { enemyId: "dartfish", count: 5, intervalMs: 650, delayMs: 0 },
-        { enemyId: "needlefish", count: 3, intervalMs: 650, delayMs: 4000 },
-        { enemyId: "tidebreaker", count: 1, intervalMs: 1000, delayMs: 8000 },
+        { enemyId: "minnow", count: 8, intervalMs: 230, delayMs: 2200 },
+        { enemyId: "ghostJelly", count: 3, intervalMs: 1400, delayMs: 4500 },
+        { enemyId: "moray", count: 1, intervalMs: 1000, delayMs: 6000 },
       ],
     },
     {
@@ -123,6 +118,14 @@ export const RECIFE_FIVE: LevelDefinition = {
         { enemyId: "minnow", count: 14, intervalMs: 210, delayMs: 0 },
         { enemyId: "swimmer", count: 5, intervalMs: 700, delayMs: 2000 },
         { enemyId: "shellback", count: 2, intervalMs: 1500, delayMs: 6000 },
+      ],
+    },
+    {
+      name: "Primeiro Quebra-Marés",
+      groups: [
+        { enemyId: "dartfish", count: 5, intervalMs: 650, delayMs: 0 },
+        { enemyId: "needlefish", count: 3, intervalMs: 650, delayMs: 4000 },
+        { enemyId: "tidebreaker", count: 1, intervalMs: 1000, delayMs: 8000 },
       ],
     },
     {
@@ -137,7 +140,8 @@ export const RECIFE_FIVE: LevelDefinition = {
       name: "O Caçador da Gruta",
       groups: [
         { enemyId: "dartfish", count: 7, intervalMs: 550, delayMs: 0 },
-        { enemyId: "minnow", count: 10, intervalMs: 220, delayMs: 2000 },
+        { enemyId: "minnow", count: 10, intervalMs: 220, delayMs: 1600 },
+        { enemyId: "ghostJelly", count: 2, intervalMs: 1300, delayMs: 3200 },
         { enemyId: "shellback", count: 3, intervalMs: 1400, delayMs: 4500 },
         // Primeira aparição do Tubarão Corrompido: vem sozinho, no fim da onda, para ser visto.
         { enemyId: "corruptedShark", count: 1, intervalMs: 3000, delayMs: 9000 },
@@ -147,10 +151,11 @@ export const RECIFE_FIVE: LevelDefinition = {
       name: "Quebra-Marés do Galeão",
       groups: [
         { enemyId: "moray", count: 2, intervalMs: 2500, delayMs: 0 },
-        { enemyId: "shellback", count: 3, intervalMs: 1300, delayMs: 4000 },
-        { enemyId: "needlefish", count: 5, intervalMs: 550, delayMs: 8000 },
-        { enemyId: "minnow", count: 8, intervalMs: 220, delayMs: 11000 },
-        { enemyId: "tidebreaker", count: 1, intervalMs: 1000, delayMs: 14000 },
+        { enemyId: "shellback", count: 3, intervalMs: 1300, delayMs: 3000 },
+        { enemyId: "needlefish", count: 5, intervalMs: 550, delayMs: 6000 },
+        { enemyId: "minnow", count: 8, intervalMs: 220, delayMs: 8000 },
+        { enemyId: "ghostJelly", count: 2, intervalMs: 1500, delayMs: 9500 },
+        { enemyId: "tidebreaker", count: 1, intervalMs: 1000, delayMs: 11000 },
       ],
     },
   ],

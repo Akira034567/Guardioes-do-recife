@@ -227,6 +227,39 @@ describe("enemy ability components", () => {
     expect(enemy.mods.hidden).toBe(false);
   });
 
+  it("keeps the ghost jellyfish hidden until a blocker grabs it, and then for good", () => {
+    const enemy = new TestEnemy("E1", "ghostJelly", [...resolveEnemy(ENEMIES.ghostJelly).abilities]);
+    const test = harness([enemy]);
+    test.advance(100);
+    expect(enemy.mods.hidden).toBe(true);
+
+    // Dano por área NÃO a expõe: `untilDamaged` é falso de propósito.
+    enemy.hitOnce = true;
+    test.advance(100);
+    expect(enemy.mods.hidden).toBe(true);
+
+    // Encostar num bloqueador da rota expõe — e soltar não a esconde de novo.
+    enemy.blockedById = "puffer-1";
+    test.advance(100);
+    expect(enemy.mods.hidden).toBe(false);
+    enemy.blockedById = null;
+    test.advance(1000);
+    expect(enemy.mods.hidden).toBe(false);
+  });
+
+  it("also opens the ghost jellyfish with the dolphin sonar alone", () => {
+    const enemy = new TestEnemy("E1", "ghostJelly", [...resolveEnemy(ENEMIES.ghostJelly).abilities]);
+    const test = harness([enemy]);
+    test.advance(100);
+    expect(enemy.mods.hidden).toBe(true);
+    enemy.status.reveal(1000, test.now());
+    test.advance(100);
+    expect(enemy.mods.hidden).toBe(false);
+    // Passada a revelação, ela volta a sumir: o sonar é uma janela, o bloqueio é definitivo.
+    test.advance(1200);
+    expect(enemy.mods.hidden).toBe(true);
+  });
+
   it("splits on death exactly once", () => {
     const enemy = new TestEnemy("E1", "shellback", [{ type: "splitOnDeath", enemyId: "minnow", count: 3, spreadPx: 10 }]);
     enemy.setPathDistance(400);

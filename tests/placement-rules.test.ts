@@ -46,6 +46,6 @@ describe("branch statuses for the upgrade panel", () => {
     expect(chosen[1].steps.every((step) => !step.purchased)).toBe(true);
     const done = branchStatuses(shark, { branchId: "b", upgradeLevel: 2 });
     expect(done.map((branch) => branch.state)).toEqual(["locked", "complete"]);
-    expect(done[1].name).toBe("Caçador Alfa");
+    expect(done[1].name).toBe("Investida");
   });
 });

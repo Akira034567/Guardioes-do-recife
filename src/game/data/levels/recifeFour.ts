@@ -17,12 +17,13 @@ export const RECIFE_FOUR: LevelDefinition = {
   quote: "A espiral não tem atalho: ou se guarda o centro, ou se perde a volta inteira.",
   backgroundKey: LEVEL_BACKGROUND_KEYS["recife-4"],
   theme: { water: 0x115f8f, sand: 0x86b6c6, path: 0xb0f2ff, rock: 0x2c4a63 },
-  startingPearls: ECONOMY.startingPearls + 120,
+  startingPearls: ECONOMY.startingPearls + 140,
   reefHealth: ECONOMY.reefHealth,
   initialWaveDelayMs: 10_000,
   betweenWaveDelayMs: 8_000,
   enemyScaling: { health: 0.95, speed: 1.06, reward: 1.1 },
-  enemyOverrides: { tidebreaker: { maxHealth: 550 } },
+  /** 842 de base = 800 em campo. */
+  enemyOverrides: { tidebreaker: { maxHealth: 842 } },
   objectives: [
     { id: "completar", kind: "complete" },
     { id: "intacto", kind: "noLeaks" },
@@ -126,7 +127,7 @@ export const RECIFE_FOUR: LevelDefinition = {
     {
       name: "Nuvem de Peixinhos",
       groups: [
-        { enemyId: "minnow", count: 14, intervalMs: 210, delayMs: 0 },
+        { enemyId: "minnow", count: 18, intervalMs: 200, delayMs: 0 },
         { enemyId: "shellback", count: 2, intervalMs: 1800, delayMs: 2000 },
       ],
     },
@@ -134,7 +135,7 @@ export const RECIFE_FOUR: LevelDefinition = {
       name: "Escolta",
       groups: [
         { enemyId: "shellback", count: 3, intervalMs: 1500, delayMs: 0 },
-        { enemyId: "moray", count: 1, intervalMs: 1000, delayMs: 2500 },
+        { enemyId: "moray", count: 2, intervalMs: 2200, delayMs: 2500 },
         { enemyId: "dartfish", count: 5, intervalMs: 600, delayMs: 4000 },
       ],
     },
@@ -148,8 +149,10 @@ export const RECIFE_FOUR: LevelDefinition = {
     {
       name: "Parede Blindada",
       groups: [
-        { enemyId: "shellback", count: 5, intervalMs: 1300, delayMs: 0 },
+        { enemyId: "shellback", count: 7, intervalMs: 1200, delayMs: 0 },
         { enemyId: "minnow", count: 10, intervalMs: 230, delayMs: 3000 },
+        // Primeiro contato com a camuflagem: duas, no fim de uma onda lenta, para serem NOTADAS.
+        { enemyId: "ghostJelly", count: 2, intervalMs: 1800, delayMs: 6500 },
       ],
     },
     {
@@ -166,6 +169,7 @@ export const RECIFE_FOUR: LevelDefinition = {
         { enemyId: "shellback", count: 4, intervalMs: 1400, delayMs: 0 },
         { enemyId: "moray", count: 1, intervalMs: 1000, delayMs: 4000 },
         { enemyId: "minnow", count: 10, intervalMs: 230, delayMs: 7000 },
+        { enemyId: "ghostJelly", count: 3, intervalMs: 1600, delayMs: 8500 },
         { enemyId: "tidebreaker", count: 1, intervalMs: 1000, delayMs: 10000 },
       ],
     },

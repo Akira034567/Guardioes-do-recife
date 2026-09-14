@@ -96,8 +96,9 @@ describe("level registry", () => {
       expect(lastWave.groups.some((group) => ENEMIES[group.enemyId].isBoss)).toBe(true);
       const cheapestPair = GUARDIANS["pistol-shrimp"].cost + GUARDIANS["reef-crab"].cost;
       expect(level.startingPearls).toBeGreaterThanOrEqual(cheapestPair);
-      // Fases avançadas abrem com mais pérolas, mas nunca com um exército pronto.
-      expect(level.startingPearls).toBeLessThanOrEqual(cheapestPair * 2);
+      // Fases avançadas abrem com mais pérolas — a curva de chefe da V2 (300→1300) cobra isso —
+      // mas nunca com um exército pronto: 425 compra quatro unidades, não um tabuleiro.
+      expect(level.startingPearls).toBeLessThanOrEqual(cheapestPair * 2.5);
       expect(level.reefHealth).toBeGreaterThan(ENEMIES.tidebreaker.reefDamage);
     });
   });
@@ -111,6 +112,8 @@ describe("level registry", () => {
     expect(firstLevelWithEnemy("needlefish")).toBe(2);
     expect(firstLevelWithEnemy("moray")).toBe(2);
     expect(firstLevelWithEnemy("corruptedShark")).toBe(4);
+    // Camuflagem entra na Fase 4 e cresce daí: nunca antes de o jogador ter vocabulário para lidar.
+    expect(firstLevelWithEnemy("ghostJelly")).toBe(3);
     const typesPerLevel = LEVELS.map((level) => new Set(level.waves.flatMap((wave) => wave.groups.map((group) => group.enemyId))).size);
     typesPerLevel.slice(1).forEach((count, index) => expect(count).toBeGreaterThanOrEqual(typesPerLevel[index]));
   });

@@ -17,12 +17,14 @@ export const RECIFE_THREE: LevelDefinition = {
   quote: "Onde as águas se cruzam, a vigilância jamais dorme.",
   backgroundKey: LEVEL_BACKGROUND_KEYS["recife-3"],
   theme: { water: 0x0f5f86, sand: 0x7cb4c4, path: 0xa5f1ff, rock: 0x27495f },
-  startingPearls: ECONOMY.startingPearls + 80,
+  startingPearls: ECONOMY.startingPearls + 50,
   reefHealth: ECONOMY.reefHealth,
   initialWaveDelayMs: 10_000,
   betweenWaveDelayMs: 8_000,
+  /** A rota mais longa da campanha (3169px) é paga com ENXAME, não com vida: cardumes grandes em quase toda onda. */
   enemyScaling: { health: 0.95, speed: 1.03, reward: 1.1 },
-  enemyOverrides: { tidebreaker: { maxHealth: 520 } },
+  /** 684 de base = 650 em campo. */
+  enemyOverrides: { tidebreaker: { maxHealth: 684 } },
   objectives: [
     { id: "completar", kind: "complete" },
     { id: "vidas", kind: "minLivesRemaining", value: 12 },
@@ -136,7 +138,7 @@ export const RECIFE_THREE: LevelDefinition = {
       name: "Agulhas",
       groups: [
         { enemyId: "needlefish", count: 5, intervalMs: 700, delayMs: 0 },
-        { enemyId: "minnow", count: 10, intervalMs: 240, delayMs: 3000 },
+        { enemyId: "minnow", count: 14, intervalMs: 230, delayMs: 3000 },
       ],
     },
     {
@@ -149,7 +151,7 @@ export const RECIFE_THREE: LevelDefinition = {
     {
       name: "A Moreia",
       groups: [
-        { enemyId: "minnow", count: 10, intervalMs: 230, delayMs: 0 },
+        { enemyId: "minnow", count: 16, intervalMs: 220, delayMs: 0 },
         { enemyId: "moray", count: 1, intervalMs: 1000, delayMs: 3500 },
         { enemyId: "dartfish", count: 4, intervalMs: 700, delayMs: 5000 },
       ],
@@ -159,6 +161,7 @@ export const RECIFE_THREE: LevelDefinition = {
       groups: [
         { enemyId: "needlefish", count: 8, intervalMs: 580, delayMs: 0 },
         { enemyId: "shellback", count: 3, intervalMs: 1600, delayMs: 2500 },
+        { enemyId: "minnow", count: 14, intervalMs: 220, delayMs: 4500 },
       ],
     },
     {
@@ -166,6 +169,7 @@ export const RECIFE_THREE: LevelDefinition = {
       groups: [
         { enemyId: "moray", count: 2, intervalMs: 4500, delayMs: 0 },
         { enemyId: "swimmer", count: 6, intervalMs: 750, delayMs: 1500 },
+        { enemyId: "minnow", count: 16, intervalMs: 210, delayMs: 4000 },
         { enemyId: "needlefish", count: 4, intervalMs: 650, delayMs: 7000 },
       ],
     },
@@ -174,6 +178,7 @@ export const RECIFE_THREE: LevelDefinition = {
       groups: [
         { enemyId: "shellback", count: 3, intervalMs: 1500, delayMs: 0 },
         { enemyId: "moray", count: 1, intervalMs: 1000, delayMs: 4000 },
+        { enemyId: "minnow", count: 16, intervalMs: 210, delayMs: 5500 },
         { enemyId: "tidebreaker", count: 1, intervalMs: 1000, delayMs: 8000 },
       ],
     },

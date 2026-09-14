@@ -198,7 +198,11 @@ const stealth: HandlerFor<"stealth"> = {
     enemy.mods.hidden = !(ability.untilDamaged && enemy.hitOnce);
   },
   onTick(ability, enemy, _deltaMs, world) {
-    enemy.mods.hidden = !enemy.status.isRevealed(world.now) && !(ability.untilDamaged && enemy.hitOnce);
+    // Bloqueio expõe DE VEZ: uma vez encostado num bloqueador, ele não volta a sumir.
+    const memory = state(enemy, "stealth", () => ({ exposed: false }));
+    if (ability.revealOnBlock && enemy.blockedById !== null) memory.exposed = true;
+    enemy.mods.hidden =
+      !memory.exposed && !enemy.status.isRevealed(world.now) && !(ability.untilDamaged && enemy.hitOnce);
   },
 };
 
