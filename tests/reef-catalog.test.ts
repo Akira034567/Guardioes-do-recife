@@ -9,6 +9,7 @@ import {
   reefZone,
   slotById,
 } from "../src/game/data/reef/layout";
+import { SCALE_JITTER } from "../src/game/core/reef/planting";
 import { ACHIEVEMENT_IDS } from "../src/game/data/achievements";
 import { ENCOUNTERS } from "../src/game/data/encounters";
 import { LEVEL_IDS } from "../src/game/data/levels";
@@ -123,6 +124,26 @@ describe("reef catalog", () => {
       expect(slot.at.y).toBeGreaterThanOrEqual(0);
       expect(slot.at.y).toBeLessThanOrEqual(100);
       expect(slot.scale).toBeGreaterThan(0);
+    }
+  });
+
+  it("never lets a decoration cover a painted landmark", () => {
+    // Os seis lugares vêm pintados no fundo, com plaquinha e tudo. Uma peça plantada por cima
+    // esconderia o desenho ou o nome — e o jogador perderia o caminho para a tela. A área usada é a
+    // que o lugar realmente OCUPA na arte (`keepOut`), não o alvo de clique, que é bem menor.
+    for (const slot of REEF_SLOTS) {
+      const candidates = DECORATIONS.filter((definition) => definition.slots.includes(slot.kind));
+      expect(candidates.length, `${slot.id} sem peça possível`).toBeGreaterThan(0);
+      const biggest = slot.scale * (1 + SCALE_JITTER);
+      const width = Math.max(...candidates.map((d) => d.footprint.w)) * biggest;
+      const height = Math.max(...candidates.map((d) => d.footprint.h)) * biggest;
+      // A peça é ancorada pela base: cresce para cima a partir do canteiro.
+      const box = { x0: slot.at.x - width / 2, x1: slot.at.x + width / 2, y0: slot.at.y - height, y1: slot.at.y };
+      for (const landmark of REEF_LANDMARKS) {
+        const keep = landmark.keepOut;
+        const overlaps = box.x0 < keep.x1 && box.x1 > keep.x0 && box.y0 < keep.y1 && box.y1 > keep.y0;
+        expect(overlaps, `${slot.id} pode tapar ${landmark.id}`).toBe(false);
+      }
     }
   });
 

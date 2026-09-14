@@ -77,6 +77,47 @@ describe("reef planting", () => {
     }
   });
 
+  it("re-anchors what is already planted when the layout moves", () => {
+    // O save guarda a posição copiada do canteiro no dia do plantio. Sem re-ancorar, mudar o layout
+    // deixaria o Recife de quem já jogou com as peças paradas no lugar antigo — foi assim que uma
+    // decoração acabou plantada em cima de um lugar pintado do fundo.
+    const progress = freshProgress();
+    reconcileReef(progress);
+    const planted = progress.reef.placed[0];
+    const slot = REEF_SLOTS.find((candidate) => candidate.id === planted.slotId)!;
+
+    // Alguém move o canteiro no layout.
+    planted.x = 1;
+    planted.y = 2;
+    reconcileReef(progress);
+
+    expect(progress.reef.placed[0]).toMatchObject({ x: slot.at.x, y: slot.at.y });
+  });
+
+  it("drops a decoration whose slot left the layout", () => {
+    const progress = freshProgress();
+    reconcileReef(progress);
+    const before = progress.reef.placed.length;
+    expect(before).toBeGreaterThan(0);
+    progress.reef.placed[0].slotId = "canteiro-que-nao-existe";
+
+    reconcileReef(progress);
+    // Sem canteiro ela não tem casa; a posse continua, então o jogador não perde nada.
+    expect(progress.reef.placed.some((item) => item.slotId === "canteiro-que-nao-existe")).toBe(false);
+  });
+
+  it("keeps a re-anchored piece inside its slot size band", () => {
+    const progress = freshProgress();
+    reconcileReef(progress);
+    const planted = progress.reef.placed[0];
+    const slot = REEF_SLOTS.find((candidate) => candidate.id === planted.slotId)!;
+    planted.scale = 3.5;
+
+    reconcileReef(progress);
+    // É da faixa do canteiro que sai a garantia de não tapar um lugar pintado.
+    expect(progress.reef.placed[0].scale).toBeLessThanOrEqual(slot.scale * 1.15 + 0.001);
+  });
+
   it("respects a decoration the player deliberately removed", () => {
     const progress = freshProgress();
     reconcileReef(progress);

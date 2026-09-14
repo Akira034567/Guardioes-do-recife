@@ -38,6 +38,15 @@ test("opens the game in the reef, not in the map", async ({ page }) => {
 test("travels from the reef to the map and back", async ({ page }) => {
   const { canvas, pageErrors } = await openHub(page);
 
+  // O menu lateral é o atalho rápido; o lugar no cenário é o caminho principal. Os dois levam lá.
+  // Ele fica recolhido para não tapar o Álbum e as Ameaças, que vêm pintados naquela faixa.
+  await page.getByTestId("hub-menu-toggle").click();
+  await expect(page.getByTestId("hub-menu")).toBeVisible();
+  await page.getByTestId("hub-nav-map").click();
+  await expect(canvas).toHaveAttribute("data-screen", "menu");
+  await page.getByTestId("map-back").click();
+  await expect(canvas).toHaveAttribute("data-screen", "hub");
+
   await enterPlace(page, "map");
   await expect(canvas).toHaveAttribute("data-screen", "menu");
   await expect(canvas).toHaveAttribute("data-overlay", "map");
@@ -113,7 +122,8 @@ test("lights up a place when the keyboard reaches it", async ({ page }) => {
   // O cenário não pode ser o único caminho: os lugares estão na ordem de tabulação.
   await page.getByTestId("hub-spot-map").focus();
   await expect(canvas).toHaveAttribute("data-hub-focus", "map");
-  await expect(page.getByTestId("hub-label")).toContainText("Mapa do Recife");
+  // O nome já está pintado na plaquinha do cenário; o rótulo mostra a dica, sem repetir.
+  await expect(page.getByTestId("hub-label")).toContainText("Explore novas áreas");
 
   await page.keyboard.press("Enter");
   await expect(canvas).toHaveAttribute("data-screen", "menu");

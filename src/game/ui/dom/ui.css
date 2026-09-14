@@ -3463,10 +3463,105 @@
   inset: 0;
 }
 
+.gr-hub__side,
+.gr-hub__menu-toggle,
+.gr-hub__scrim,
 .gr-hub__counters,
 .gr-hub__card,
 .gr-hub__spot {
   pointer-events: auto;
+}
+
+/* O botão que abre o menu. Discreto: o cenário é a interface, ele é só o atalho. */
+.gr-hub__menu-toggle {
+  position: absolute;
+  top: calc(14px * var(--gr-scale));
+  left: calc(14px * var(--gr-scale));
+  width: calc(40px * var(--gr-scale));
+  height: calc(40px * var(--gr-scale));
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border-radius: calc(12px * var(--gr-scale));
+  background: rgba(3, 29, 45, 0.72);
+  border: 1px solid rgba(21, 129, 163, 0.55);
+  color: var(--gr-cyan);
+  cursor: pointer;
+  z-index: 3;
+}
+
+.gr-hub__menu-toggle:hover,
+.gr-hub__menu-toggle:focus-visible {
+  background: rgba(6, 58, 85, 0.9);
+  color: #eafaff;
+}
+
+.gr-hub__menu-toggle .gr-icon,
+.gr-hub__menu-toggle svg {
+  width: calc(22px * var(--gr-scale));
+  height: calc(22px * var(--gr-scale));
+}
+
+/* Clicar fora fecha o menu. */
+.gr-hub__scrim {
+  position: absolute;
+  inset: 0;
+  padding: 0;
+  border: 0;
+  background: rgba(1, 10, 18, 0.45);
+  cursor: default;
+  z-index: 1;
+}
+
+/*
+ * O menu do Recife: a mesma moldura das outras telas, deslizando por cima do cenário. Fica fechado
+ * por padrão porque o fundo pintado tem dois lugares (Álbum e Ameaças) justamente nesta faixa.
+ */
+.gr-hub__side {
+  z-index: 2;
+  animation: gr-hub-slide 160ms ease-out;
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  /* Larga o bastante para o item mais comprido do menu caber inteiro: com `overflow: hidden` e uma
+   * coluna estreita, a borda arredondada dos botões saía cortada na direita. */
+  width: calc(232px * var(--gr-scale));
+  /* O topo abre espaço para o botão que abre o menu não cair em cima da marca. */
+  padding: calc(64px * var(--gr-scale)) calc(14px * var(--gr-scale)) calc(12px * var(--gr-scale));
+  display: flex;
+}
+
+.gr-hub__side::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, rgba(2, 20, 31, 0.97) 82%, rgba(2, 20, 31, 0));
+  pointer-events: none;
+}
+
+@keyframes gr-hub-slide {
+  from {
+    transform: translateX(-12%);
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .gr-hub__side {
+    animation: none;
+  }
+}
+
+.gr-hub__side[hidden],
+.gr-hub__scrim[hidden] {
+  display: none;
+}
+
+.gr-hub__side > * {
+  position: relative;
+  flex: 1;
+  min-height: 0;
 }
 
 /*
@@ -3700,8 +3795,8 @@
 
 .gr-hub__spot-group {
   position: absolute;
-  top: calc(58px * var(--gr-scale));
-  left: calc(18px * var(--gr-scale));
+  top: calc(64px * var(--gr-scale));
+  left: calc(14px * var(--gr-scale));
   display: flex;
   flex-wrap: wrap;
   max-width: 70cqw;

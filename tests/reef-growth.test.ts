@@ -42,8 +42,9 @@ describe("reef growth", () => {
     expect(growth.score).toBe(0);
     expect(growth.vitality).toBe(0);
     expect(growth.activeSlots).toEqual(["coral-a"]);
-    // A primeira visita é calma: três lugares, não seis.
-    expect(growth.activeLandmarks).toEqual(["map", "collection", "settings"]);
+    // Os lugares vêm pintados no fundo: os seis existem desde a primeira visita, senão a arte
+    // mostraria uma porta que não abre.
+    expect(growth.activeLandmarks).toHaveLength(REEF_LANDMARKS.length);
   });
 
   it("never lowers the score when the player does more", () => {

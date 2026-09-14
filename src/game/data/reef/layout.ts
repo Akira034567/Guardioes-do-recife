@@ -19,7 +19,11 @@ export type ReefSlotKind = "coralBed" | "rockField" | "sandBed" | "algaeBank" | 
 
 export type ReefHabitat = "seabed" | "midwater" | "nearCoral" | "wideRange" | "surface";
 
-/** A forma vetorial de um lugar; a arte pintada entra depois por `texture`. */
+/**
+ * Um lugar do Recife. A arte segue a mesma promessa das decorações: hoje é desenhada com formas do
+ * Phaser (`drawLandmarkShape`, na cena), e quando o PNG existir basta preencher `art` — a cena passa
+ * a usar a imagem e nada mais muda.
+ */
 export interface ReefLandmark {
   id: ReefLandmarkId;
   label: string;
@@ -30,6 +34,15 @@ export interface ReefLandmark {
   radius: number;
   /** Só aparece a partir deste estágio: a primeira visita é calma, com três lugares. */
   minStage: number;
+  /** Arte pintada. Ausente = a cena desenha a forma vetorial de reserva. */
+  art?: { key: string; path: string; scale?: number };
+  /**
+   * A área que o lugar OCUPA no fundo pintado (estrutura + plaquinha), em %. É diferente do `radius`,
+   * que é só o alvo de clique: a ostra, o naufrágio e a lápide são bem maiores que o alvo. Decoração
+   * nenhuma pode nascer aqui dentro, senão tapa o desenho ou o nome — `tests/reef-catalog.test.ts`
+   * cobra isso a cada mudança de canteiro.
+   */
+  keepOut: { x0: number; x1: number; y0: number; y1: number };
 }
 
 export interface ReefSlot {
@@ -57,12 +70,12 @@ export interface ReefZone {
 }
 
 export const REEF_LANDMARKS: readonly ReefLandmark[] = [
-  { id: "map", label: "Mapa do Recife", hint: "Explore novas áreas", at: { x: 13, y: 64 }, radius: 9, minStage: 0 },
-  { id: "collection", label: "Álbum do Recife", hint: "Quem já vive aqui", at: { x: 33, y: 46 }, radius: 8, minStage: 0 },
-  { id: "bestiary", label: "Ameaças", hint: "Conheça os invasores", at: { x: 57, y: 76 }, radius: 8, minStage: 1 },
-  { id: "stories", label: "Histórias", hint: "O que o oceano guarda", at: { x: 75, y: 40 }, radius: 8, minStage: 1 },
-  { id: "achievements", label: "Conquistas", hint: "Sua jornada até aqui", at: { x: 89, y: 62 }, radius: 8, minStage: 2 },
-  { id: "settings", label: "Configurações", hint: "Ajuste o jogo do seu jeito", at: { x: 93, y: 15 }, radius: 7, minStage: 0 },
+  { id: "collection", label: "Álbum do Recife", hint: "Quem já vive aqui", at: { x: 16, y: 40 }, radius: 9, minStage: 0, keepOut: { x0: 6, x1: 26, y0: 21, y1: 50 } },
+  { id: "bestiary", label: "Ameaças", hint: "Conheça os invasores", at: { x: 15, y: 70 }, radius: 9, minStage: 0, keepOut: { x0: 0, x1: 25, y0: 51, y1: 83 } },
+  { id: "map", label: "Mapa do Recife", hint: "Explore novas áreas", at: { x: 46, y: 47 }, radius: 9, minStage: 0, keepOut: { x0: 38, x1: 53, y0: 35, y1: 73 } },
+  { id: "stories", label: "Histórias", hint: "O que o oceano guarda", at: { x: 79, y: 43 }, radius: 8, minStage: 0, keepOut: { x0: 71, x1: 92, y0: 19, y1: 50 } },
+  { id: "achievements", label: "Conquistas", hint: "Sua jornada até aqui", at: { x: 68, y: 67 }, radius: 8, minStage: 0, keepOut: { x0: 60, x1: 74, y0: 52, y1: 80 } },
+  { id: "settings", label: "Configurações", hint: "Ajuste o jogo do seu jeito", at: { x: 90, y: 68 }, radius: 8, minStage: 0, keepOut: { x0: 81, x1: 98, y0: 53, y1: 80 } },
 ];
 
 /**
@@ -70,48 +83,48 @@ export const REEF_LANDMARKS: readonly ReefLandmark[] = [
  * jogador vê UM coral novo, não dez de uma vez.
  */
 export const REEF_SLOTS: readonly ReefSlot[] = [
-  { id: "coral-a", kind: "coralBed", at: { x: 28, y: 58 }, scale: 1.0, order: 0 },
-  { id: "coral-b", kind: "coralBed", at: { x: 40, y: 66 }, scale: 1.0, order: 1 },
-  { id: "rock-a", kind: "rockField", at: { x: 18, y: 78 }, scale: 1.25, order: 2 },
-  { id: "sand-a", kind: "sandBed", at: { x: 50, y: 84 }, scale: 1.25, order: 3 },
-  { id: "algae-a", kind: "algaeBank", at: { x: 8, y: 50 }, scale: 1.0, order: 4 },
-  { id: "algae-b", kind: "algaeBank", at: { x: 62, y: 60 }, scale: 1.0, order: 5 },
-  { id: "coral-c", kind: "coralBed", at: { x: 46, y: 52 }, scale: 1.0, order: 6 },
-  { id: "rock-b", kind: "rockField", at: { x: 70, y: 80 }, scale: 1.25, order: 7 },
-  { id: "sand-b", kind: "sandBed", at: { x: 34, y: 88 }, scale: 1.25, order: 8 },
-  { id: "algae-c", kind: "algaeBank", at: { x: 86, y: 72 }, scale: 1.25, order: 9 },
-  { id: "canopy-a", kind: "canopy", at: { x: 24, y: 28 }, scale: 0.7, order: 10 },
-  { id: "front-a", kind: "foreground", at: { x: 12, y: 92 }, scale: 1.4, order: 11 },
-  { id: "coral-d", kind: "coralBed", at: { x: 80, y: 50 }, scale: 1.0, order: 12 },
-  { id: "rock-c", kind: "rockField", at: { x: 52, y: 70 }, scale: 1.0, order: 13 },
-  { id: "sand-c", kind: "sandBed", at: { x: 72, y: 88 }, scale: 1.25, order: 14 },
-  { id: "algae-d", kind: "algaeBank", at: { x: 44, y: 36 }, scale: 0.7, order: 15 },
-  { id: "front-b", kind: "foreground", at: { x: 66, y: 94 }, scale: 1.4, order: 16 },
-  { id: "ruin-a", kind: "ruinYard", at: { x: 82, y: 84 }, scale: 1.25, order: 17 },
-  { id: "canopy-b", kind: "canopy", at: { x: 54, y: 22 }, scale: 0.7, order: 18 },
-  { id: "coral-e", kind: "coralBed", at: { x: 20, y: 42 }, scale: 1.0, order: 19 },
-  { id: "ruin-b", kind: "ruinYard", at: { x: 88, y: 44 }, scale: 1.0, order: 20 },
-  { id: "rock-d", kind: "rockField", at: { x: 38, y: 74 }, scale: 1.25, order: 21 },
-  { id: "canopy-c", kind: "canopy", at: { x: 78, y: 26 }, scale: 0.7, order: 22 },
-  { id: "ruin-c", kind: "ruinYard", at: { x: 60, y: 48 }, scale: 1.0, order: 23 },
-  { id: "sand-d", kind: "sandBed", at: { x: 92, y: 88 }, scale: 1.25, order: 24 },
-  { id: "algae-e", kind: "algaeBank", at: { x: 4, y: 66 }, scale: 1.25, order: 25 },
+  { id: "coral-a", kind: "coralBed", at: { x: 32, y: 90 }, scale: 1.0, order: 0 },
+  { id: "sand-a", kind: "sandBed", at: { x: 46, y: 96 }, scale: 1.0, order: 1 },
+  { id: "rock-a", kind: "rockField", at: { x: 55, y: 95 }, scale: 1.0, order: 2 },
+  { id: "algae-a", kind: "algaeBank", at: { x: 31, y: 97 }, scale: 0.95, order: 3 },
+  { id: "sand-b", kind: "sandBed", at: { x: 67, y: 98 }, scale: 0.95, order: 4 },
+  { id: "coral-b", kind: "coralBed", at: { x: 78, y: 95 }, scale: 1.0, order: 5 },
+  { id: "rock-b", kind: "rockField", at: { x: 88, y: 98 }, scale: 0.95, order: 6 },
+  { id: "algae-b", kind: "algaeBank", at: { x: 50, y: 97 }, scale: 0.9, order: 7 },
+  { id: "sand-c", kind: "sandBed", at: { x: 18, y: 99 }, scale: 0.95, order: 8 },
+  { id: "front-a", kind: "foreground", at: { x: 36, y: 99 }, scale: 1.1, order: 9 },
+  { id: "coral-c", kind: "coralBed", at: { x: 63, y: 98 }, scale: 0.95, order: 10 },
+  { id: "rock-c", kind: "rockField", at: { x: 93, y: 98 }, scale: 0.95, order: 11 },
+  { id: "algae-c", kind: "algaeBank", at: { x: 77, y: 97 }, scale: 0.95, order: 12 },
+  { id: "sand-d", kind: "sandBed", at: { x: 42, y: 98 }, scale: 0.95, order: 13 },
+  { id: "ruin-a", kind: "ruinYard", at: { x: 30, y: 97 }, scale: 0.9, order: 14 },
+  { id: "coral-d", kind: "coralBed", at: { x: 52, y: 92 }, scale: 0.95, order: 15 },
+  { id: "sand-e", kind: "sandBed", at: { x: 11, y: 99 }, scale: 0.9, order: 16 },
+  { id: "front-b", kind: "foreground", at: { x: 71, y: 99 }, scale: 1.1, order: 17 },
+  { id: "rock-d", kind: "rockField", at: { x: 26, y: 98 }, scale: 0.95, order: 18 },
+  { id: "algae-d", kind: "algaeBank", at: { x: 85, y: 98 }, scale: 0.9, order: 19 },
+  { id: "sand-f", kind: "sandBed", at: { x: 31, y: 98 }, scale: 0.9, order: 20 },
+  { id: "ruin-b", kind: "ruinYard", at: { x: 78, y: 99 }, scale: 0.85, order: 21 },
+  { id: "coral-e", kind: "coralBed", at: { x: 47, y: 91 }, scale: 0.95, order: 22 },
+  { id: "front-c", kind: "foreground", at: { x: 5, y: 99 }, scale: 1.1, order: 23 },
+  { id: "canopy-a", kind: "canopy", at: { x: 33, y: 77 }, scale: 0.6, order: 24 },
+  { id: "canopy-b", kind: "canopy", at: { x: 78, y: 90 }, scale: 0.6, order: 25 },
 ];
 
 export const REEF_REST_SPOTS: readonly ReefRestSpot[] = [
-  { id: "turtle-coral", at: { x: 30, y: 52 }, habitat: "nearCoral", radius: 6 },
-  { id: "crab-rock", at: { x: 19, y: 79 }, habitat: "seabed", radius: 5 },
-  { id: "shrimp-coral", at: { x: 41, y: 64 }, habitat: "nearCoral", radius: 4 },
-  { id: "octopus-den", at: { x: 70, y: 82 }, habitat: "seabed", radius: 5 },
-  { id: "stonefish-sand", at: { x: 51, y: 86 }, habitat: "seabed", radius: 4 },
+  { id: "turtle-coral", at: { x: 34, y: 58 }, habitat: "nearCoral", radius: 6 },
+  { id: "crab-rock", at: { x: 30, y: 84 }, habitat: "seabed", radius: 5 },
+  { id: "shrimp-coral", at: { x: 44, y: 64 }, habitat: "nearCoral", radius: 4 },
+  { id: "octopus-den", at: { x: 62, y: 86 }, habitat: "seabed", radius: 5 },
+  { id: "stonefish-sand", at: { x: 50, y: 88 }, habitat: "seabed", radius: 4 },
 ];
 
 export const REEF_ZONES: readonly ReefZone[] = [
-  { habitat: "seabed", bounds: { x: 4, y: 70, w: 92, h: 26 } },
-  { habitat: "nearCoral", bounds: { x: 8, y: 44, w: 78, h: 34 } },
-  { habitat: "midwater", bounds: { x: 6, y: 26, w: 88, h: 48 } },
-  { habitat: "wideRange", bounds: { x: 3, y: 18, w: 94, h: 70 } },
-  { habitat: "surface", bounds: { x: 10, y: 8, w: 80, h: 16 } },
+  { habitat: "seabed", bounds: { x: 6, y: 72, w: 88, h: 22 } },
+  { habitat: "nearCoral", bounds: { x: 20, y: 52, w: 60, h: 30 } },
+  { habitat: "midwater", bounds: { x: 30, y: 24, w: 42, h: 42 } },
+  { habitat: "wideRange", bounds: { x: 22, y: 18, w: 56, h: 64 } },
+  { habitat: "surface", bounds: { x: 20, y: 8, w: 60, h: 14 } },
 ];
 
 export const SLOT_KINDS: readonly ReefSlotKind[] = ["coralBed", "rockField", "sandBed", "algaeBank", "ruinYard", "canopy", "foreground"];
@@ -134,3 +147,8 @@ if (slotIds.size !== REEF_SLOTS.length) throw new Error("Slots do Recife com id 
 const orders = [...REEF_SLOTS.map((slot) => slot.order)].sort((a, b) => a - b);
 if (orders.some((order, index) => order !== index)) throw new Error("A ordem dos slots do Recife tem buraco ou repetição");
 if (new Set(REEF_LANDMARKS.map((landmark) => landmark.id)).size !== 6) throw new Error("O Recife precisa dos seis lugares");
+// Os lugares vêm pintados no fundo: se um sair da tela, o alvo clicável não cobre mais o desenho.
+const offscreen = REEF_LANDMARKS.filter(
+  (landmark) => landmark.at.x - landmark.radius < 0 || landmark.at.x + landmark.radius > 100 || landmark.at.y - landmark.radius < 0 || landmark.at.y + landmark.radius > 100,
+);
+if (offscreen.length > 0) throw new Error(`Lugar do Recife fora da tela: ${offscreen.map((landmark) => landmark.id).join(", ")}`);

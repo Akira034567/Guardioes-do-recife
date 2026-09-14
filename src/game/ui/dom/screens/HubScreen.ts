@@ -5,6 +5,7 @@ import type { GuardianId } from "../../../types";
 import { button, h } from "../h";
 import { ICONS } from "../icons";
 import type { Screen } from "../ScreenHost";
+import { shellSidebar, type ShellNav } from "../shell";
 
 /**
  * A camada de texto do Meu Recife.
@@ -77,7 +78,7 @@ export interface HubScreenHandle {
   overlay: HubOverlay;
 }
 
-export function hubScreen(actions: HubActions): HubScreenHandle {
+export function hubScreen(actions: HubActions, nav: ShellNav): HubScreenHandle {
   const label = h("div", { class: "gr-hub__tag", testId: "hub-label", hidden: "" });
   const card = h("aside", { class: "gr-hub__card", testId: "hub-card", hidden: "" });
   const counters = h("div", { class: "gr-hub__counters" });
@@ -86,7 +87,49 @@ export function hubScreen(actions: HubActions): HubScreenHandle {
   const landmarkSpots = h("div", { class: "gr-hub__places" });
   const guardianSpots = h("div", { class: "gr-hub__spot-group" });
   spots.append(landmarkSpots, guardianSpots);
-  const root = h("div", { class: "gr-hub", testId: "hub-panel" }, counters, spots, label, card);
+  /*
+   * O menu é retrátil, e fechado por padrão. O fundo pintado traz os seis lugares desenhados, dois
+   * deles na faixa da esquerda: uma coluna sempre aberta taparia o Álbum e as Ameaças. Assim o
+   * cenário fica inteiro e o atalho continua a um toque.
+   */
+  const side = h(
+    "div",
+    { class: "gr-hub__side", testId: "hub-menu", hidden: "" },
+    shellSidebar("hub", nav, { navId: (section) => `hub-nav-${section}`, motto: "O Recife é seu. Cuide bem dele." }),
+  );
+  const toggle = h("button", {
+    class: "gr-hub__menu-toggle",
+    testId: "hub-menu-toggle",
+    type: "button",
+    "aria-label": "Abrir o menu do Recife",
+    "aria-expanded": "false",
+    html: ICONS.menu,
+    onClick: () => setMenu(side.hidden),
+  });
+  const scrim = h("button", {
+    class: "gr-hub__scrim",
+    testId: "hub-menu-scrim",
+    type: "button",
+    tabindex: "-1",
+    "aria-label": "Fechar o menu",
+    hidden: "",
+    onClick: () => setMenu(false),
+  });
+
+  function setMenu(open: boolean): void {
+    side.hidden = !open;
+    scrim.hidden = !open;
+    toggle.setAttribute("aria-expanded", String(open));
+    toggle.setAttribute("aria-label", open ? "Fechar o menu do Recife" : "Abrir o menu do Recife");
+    if (open) side.querySelector<HTMLElement>("button")?.focus();
+    else toggle.focus();
+  }
+
+  const root = h("div", { class: "gr-hub", testId: "hub-panel" }, scrim, side, toggle, counters, spots, label, card);
+  // ESC fecha o menu, como em qualquer painel que cobre a tela.
+  root.addEventListener("keydown", (event) => {
+    if (event.key === "Escape" && !side.hidden) setMenu(false);
+  });
 
   const alive = (): boolean => root.isConnected;
 

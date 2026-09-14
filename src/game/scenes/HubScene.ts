@@ -1,4 +1,5 @@
 import Phaser from "phaser";
+import { preloadReefArt, REEF_BACKDROP_KEY } from "../assets/reefArt";
 import { GAME_HEIGHT, GAME_WIDTH, HUB_DEPTH } from "../constants";
 import type { LevelProgressApi } from "../core/LevelProgress";
 import { guardianRank } from "../core/reef/guardianRank";
@@ -21,7 +22,7 @@ import { getProgression } from "../systems/progression";
 import { fadeInScene, prefersReducedMotion, transitionTo } from "../systems/sceneTransition";
 import { getSettings, onSettingsChanged } from "../systems/settings";
 import { getScreenHost } from "../ui/dom/host";
-import { openSection, type SectionRouter } from "../ui/dom/sections";
+import { openSection, sectionNav, type SectionRouter } from "../ui/dom/sections";
 import { hubScreen, type HubOverlay } from "../ui/dom/screens/HubScreen";
 import type { GuardianId } from "../types";
 
@@ -78,17 +79,24 @@ export class HubScene extends Phaser.Scene {
     return getSettings().reducedEffects || prefersReducedMotion();
   }
 
-  create(): void {
+  /**
+   * O Recife decide o que precisa ANTES de carregar: reconcilia o save aqui, na frente do `create`,
+   * e pede só o fundo e as peças que estão de fato plantadas. O boot continua magro.
+   */
+  preload(): void {
     this.progress = createLevelProgress();
     const progression = getProgression();
     // Um save migrado pode ter desbloqueios pendentes; sem isto o Recife mostraria o elenco errado.
     progression.reconcile();
-
     getSaveManager().update((draft) => {
       reconcileReef(draft);
       draft.reef.lastSeenStage = reefGrowth(draft).stage;
     });
+    preloadReefArt(this, progression.progress.reef.placed.map((placed) => placed.defId));
+  }
 
+  create(): void {
+    const progression = getProgression();
     this.growth = reefGrowth(progression.progress);
     this.cameras.main.setBackgroundColor("#02141f");
 
@@ -100,13 +108,16 @@ export class HubScene extends Phaser.Scene {
 
     const host = getScreenHost(this.game);
     host.clear();
-    const { screen, overlay } = hubScreen({
-      onOpenLandmark: (id, viaKeyboard) => this.openLandmark(id, viaKeyboard),
-      onFocusSpot: (id) => this.focusById(id),
-      onSelectGuardian: (id) => this.selectGuardian(id),
-      onOpenAlbum: (id) => this.openAlbum(id),
-      onCloseCard: () => this.selectGuardian(null),
-    });
+    const { screen, overlay } = hubScreen(
+      {
+        onOpenLandmark: (id, viaKeyboard) => this.openLandmark(id, viaKeyboard),
+        onFocusSpot: (id) => this.focusById(id),
+        onSelectGuardian: (id) => this.selectGuardian(id),
+        onOpenAlbum: (id) => this.openAlbum(id),
+        onCloseCard: () => this.selectGuardian(null),
+      },
+      sectionNav(this.router()),
+    );
     this.overlay = overlay;
     host.push(screen);
 
@@ -180,17 +191,36 @@ export class HubScene extends Phaser.Scene {
       const y = (landmark.at.y / 100) * GAME_HEIGHT;
       const container = this.add.container(x, y).setDepth(HUB_DEPTH.landmark);
 
-      const glow = this.add.circle(0, 0, landmark.radius * LANDMARK_FOCUS_SCALE * 0.55, 0x75dff4, 0.09);
-      const structure = this.add.graphics();
-      drawLandmarkShape(structure, landmark);
-      container.add([glow, structure]);
+      const glow = this.add.circle(0, 0, landmark.radius * LANDMARK_FOCUS_SCALE * 0.5, 0x9fe9ff, 0.0);
+      container.add(glow);
+      // Com o fundo pintado o lugar JÁ está desenhado: só o brilho e o alvo entram por cima.
+      const art = this.landmarkArt(landmark);
+      if (art) container.add(art);
       container.setData("glow", glow);
 
-      if (!this.reduced) {
+      if (!this.reduced && !this.textures.exists(REEF_BACKDROP_KEY)) {
+        glow.setFillStyle(0x75dff4, 0.1);
         this.tweens.add({ targets: glow, scale: 1.18, alpha: 0.2, duration: 1600, yoyo: true, repeat: -1, ease: "Sine.InOut" });
       }
       this.landmarkViews.set(landmark.id, container);
     }
+  }
+
+  /**
+   * A arte de um lugar: a imagem pintada quando ela existir, senão a forma vetorial. Mesmo idioma de
+   * degradação graciosa do resto do projeto — arte que falta nunca derruba a tela.
+   */
+  private landmarkArt(landmark: ReefLandmark): Phaser.GameObjects.GameObject | null {
+    if (this.textures.exists(REEF_BACKDROP_KEY) && !landmark.art) return null;
+    if (landmark.art && this.textures.exists(landmark.art.key)) {
+      const image = this.add.image(0, 0, landmark.art.key).setOrigin(0.5);
+      const box = landmark.radius * LANDMARK_FOCUS_SCALE * 1.6;
+      image.setScale(Math.min(box / image.width, box / image.height) * (landmark.art.scale ?? 1));
+      return image;
+    }
+    const graphics = this.add.graphics();
+    drawLandmarkShape(graphics, landmark);
+    return graphics;
   }
 
   private animateBeams(): void {
@@ -279,8 +309,7 @@ export class HubScene extends Phaser.Scene {
     this.setLandmarkGlow(next.landmark.id, true);
     this.overlay.showLabel({
       id: next.landmark.id,
-      text: next.landmark.label,
-      hint: next.landmark.hint,
+      text: next.landmark.hint,
       x: (next.landmark.at.x / 100) * GAME_WIDTH,
       y: (next.landmark.at.y / 100) * GAME_HEIGHT - 50,
       armed: this.armedSpot === next.landmark.id,
@@ -304,7 +333,9 @@ export class HubScene extends Phaser.Scene {
 
   private setLandmarkGlow(id: ReefLandmarkId, on: boolean): void {
     const glow = this.landmarkViews.get(id)?.getData("glow") as Phaser.GameObjects.Arc | undefined;
-    glow?.setFillStyle(0x75dff4, on ? 0.3 : 0.1);
+    if (!glow) return;
+    const resting = this.textures.exists(REEF_BACKDROP_KEY) ? 0 : 0.1;
+    glow.setFillStyle(0x9fe9ff, on ? 0.26 : resting);
   }
 
   /**

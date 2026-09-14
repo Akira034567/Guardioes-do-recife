@@ -1,4 +1,5 @@
 import Phaser from "phaser";
+import { REEF_BACKDROP_KEY } from "../assets/reefArt";
 import { GAME_HEIGHT, GAME_WIDTH, HUB_DEPTH } from "../constants";
 import { mixColor, seededRandom } from "./LevelBackdrop";
 
@@ -22,6 +23,13 @@ export interface HubBackdrop {
   destroy(): void;
 }
 
+/** O fundo pintado, esticado para cobrir a tela sem deformar. */
+function paintedBackdrop(scene: Phaser.Scene): HubBackdrop {
+  const image = scene.add.image(GAME_WIDTH / 2, GAME_HEIGHT / 2, REEF_BACKDROP_KEY).setDepth(HUB_DEPTH.water);
+  image.setScale(Math.max(GAME_WIDTH / image.width, GAME_HEIGHT / image.height));
+  return { beams: [], destroy: () => image.destroy() };
+}
+
 /** Água rasa e apagada no começo; funda e viva no Recife crescido. */
 const WATER_TOP_EMPTY = 0x0a4a68;
 const WATER_TOP_ALIVE = 0x0d6f96;
@@ -30,6 +38,9 @@ const SAND = 0xd9c49a;
 const ROCK = 0x2c4757;
 
 export function drawHubBackdrop(scene: Phaser.Scene, options: HubBackdropOptions): HubBackdrop {
+  // Com a arte pintada, o Recife inteiro (inclusive os seis lugares) vem da imagem. O desenho
+  // procedural abaixo continua como reserva: arte que falta nunca deixa a tela vazia.
+  if (scene.textures.exists(REEF_BACKDROP_KEY)) return paintedBackdrop(scene);
   const random = seededRandom("meu-recife");
   const vitality = Math.max(0, Math.min(1, options.vitality));
   const created: Phaser.GameObjects.GameObject[] = [];
