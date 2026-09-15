@@ -1,26 +1,29 @@
 import type { LevelProgressApi } from "../core/LevelProgress";
-import { SaveManager, type SaveStorage } from "../core/save/SaveManager";
+import { SaveManager } from "../core/save/SaveManager";
 import { ENEMY_ORDER } from "../data/enemies";
 import { GUARDIAN_ORDER } from "../data/guardians";
 import { DECORATION_IDS } from "../data/reef/decorations";
 import { DEFAULT_UNLOCKED_GUARDIANS } from "../data/unlocks";
 import { LEVEL_IDS } from "../data/levels";
 import { DIFFICULTY_IDS } from "../data/difficulty";
+import { browserStorage, getAccounts } from "./accounts";
 
 let manager: SaveManager | null = null;
 
-function browserStorage(): SaveStorage | null {
-  try {
-    return window.localStorage;
-  } catch {
-    return null;
-  }
-}
-
-/** Único `SaveManager` da página; cai para memória quando não há localStorage. */
+/**
+ * Único `SaveManager` da página; cai para memória quando não há localStorage.
+ *
+ * A chave vem da conta ativa: entrar numa conta é abrir OUTRO documento de save, e quem joga sem
+ * conta continua no save do aparelho. Por isso `resetSaveManager()` existe — trocar de conta precisa
+ * derrubar este singleton para o próximo acesso abrir o save certo.
+ */
 export function getSaveManager(): SaveManager {
   if (!manager) {
+    const accounts = getAccounts();
     manager = new SaveManager(browserStorage(), {
+      key: accounts.activeSaveKey(),
+      // O save pré-versionamento é do APARELHO: só o convidado o herda, uma conta nova começa limpa.
+      legacyKey: accounts.active ? null : undefined,
       registry: {
         levelIds: LEVEL_IDS,
         guardianIds: GUARDIAN_ORDER,
@@ -32,6 +35,11 @@ export function getSaveManager(): SaveManager {
     });
   }
   return manager;
+}
+
+/** Descarta o save aberto: a próxima chamada abre o da conta que estiver ativa agora. */
+export function resetSaveManager(): void {
+  manager = null;
 }
 
 /** Progressão de fases (API antiga) por cima do save versionado. */

@@ -65,6 +65,7 @@ export class LevelSelectScene extends Phaser.Scene {
         onOpenMastery: () => this.openSection("mastery"),
         onOpenBestiary: () => this.openSection("bestiary"),
         onOpenStories: () => this.openSection("stories"),
+        onOpenAccount: () => this.openSection("account"),
         onOpenSettings: () => this.openSection("settings"),
         onResetProgress: () => {
           this.progress.reset();
@@ -88,6 +89,11 @@ export class LevelSelectScene extends Phaser.Scene {
       isUnlocked: (levelId) => this.progress.isUnlocked(levelId),
       goHub: () => transitionTo(this, "HubScene"),
       goMap: () => {},
+      // Trocar de conta troca de save: o Recife da conta nova é o lugar certo para reaparecer.
+      reboot: () => {
+        getScreenHost(this.game).clear();
+        this.scene.start("HubScene");
+      },
     };
   }
 

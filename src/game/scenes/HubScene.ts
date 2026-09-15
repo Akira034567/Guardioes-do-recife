@@ -17,6 +17,7 @@ import { HubDecorationView } from "../objects/HubDecorationView";
 import { HubGuardianView } from "../objects/HubGuardianView";
 import { drawHubBackdrop, type HubBackdrop } from "../systems/HubBackdrop";
 import { HubBubbles } from "../systems/HubBubbles";
+import { currentAccount } from "../systems/accounts";
 import { createLevelProgress, getSaveManager } from "../systems/ProgressStore";
 import { getProgression } from "../systems/progression";
 import { fadeInScene, prefersReducedMotion, transitionTo } from "../systems/sceneTransition";
@@ -52,7 +53,11 @@ type FocusTarget = { kind: "landmark"; landmark: ReefLandmark } | { kind: "guard
 export class HubScene extends Phaser.Scene {
   private progress!: LevelProgressApi;
   private growth!: ReefGrowth;
-  private life!: ReefLife;
+  /**
+   * Nulo entre uma montagem e outra: a instância da CENA sobrevive ao `restart()`, então guardar a
+   * vida do Recife aqui sem limpar faria a conta nova nadar com os peixes da conta anterior.
+   */
+  private life: ReefLife | null = null;
   private overlay!: HubOverlay;
   private backdrop: HubBackdrop | null = null;
   private bubbles: HubBubbles | null = null;
@@ -157,7 +162,7 @@ export class HubScene extends Phaser.Scene {
     const inside = pointer.x >= 0 && pointer.x <= GAME_WIDTH && pointer.y >= 0 && pointer.y <= GAME_HEIGHT;
     const world = inside ? { x: (pointer.x / GAME_WIDTH) * 100, y: (pointer.y / GAME_HEIGHT) * 100 } : null;
 
-    const snapshots = this.life.tick(delta, { cover: this.coverForLife(), pointer: reduced ? null : world });
+    const snapshots = this.life?.tick(delta, { cover: this.coverForLife(), pointer: reduced ? null : world }) ?? [];
     for (const snapshot of snapshots) {
       this.guardianViews.get(snapshot.guardianId as GuardianId)?.apply(snapshot, reduced);
     }
@@ -390,6 +395,11 @@ export class HubScene extends Phaser.Scene {
       isUnlocked: (levelId) => this.progress.isUnlocked(levelId),
       goHub: () => {},
       goMap: () => transitionTo(this, "LevelSelectScene"),
+      // A conta mudou: o save é outro, então o Recife inteiro é montado de novo do zero.
+      reboot: () => {
+        getScreenHost(this.game).clear();
+        this.scene.restart();
+      },
       onSectionClosed: () => {
         // Uma seção pode ter desbloqueado alguém (o álbum compra Guardião); o Recife reconfere.
         this.syncGuardians();
@@ -426,10 +436,12 @@ export class HubScene extends Phaser.Scene {
   private publishCounters(): void {
     const progress = getProgression().progress;
     const stars = Object.values(progress.levelStars).reduce((total, record) => total + record.stars, 0);
-    this.overlay.setCounters({ shells: progress.currency.shells, stars, guardians: this.guardianViews.size });
+    const account = currentAccount();
+    this.overlay.setCounters({ shells: progress.currency.shells, stars, guardians: this.guardianViews.size, account: account?.name ?? null });
     const dataset = this.game.canvas.dataset;
     dataset.shells = String(progress.currency.shells);
     dataset.stars = String(stars);
+    dataset.account = account?.name ?? "";
   }
 
   private syncPaused(topId: string | null): void {
@@ -446,6 +458,7 @@ export class HubScene extends Phaser.Scene {
     this.unsubscribeTop = null;
     this.bubbles?.destroy();
     this.bubbles = null;
+    this.life = null;
     this.backdrop?.destroy();
     this.backdrop = null;
     this.guardianViews.clear();

@@ -168,6 +168,7 @@ function fallbackNav(onBack: () => void): ShellNav {
     onOpenBestiary: onBack,
     onOpenStories: onBack,
     onOpenAchievements: onBack,
+    onOpenAccount: onBack,
     onOpenSettings: onBack,
   };
 }

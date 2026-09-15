@@ -52,6 +52,8 @@ export interface HubCounters {
   shells: number;
   stars: number;
   guardians: number;
+  /** Nome da conta em uso; `null` = jogando como convidado, no save deste aparelho. */
+  account: string | null;
 }
 
 export interface HubActions {
@@ -194,6 +196,7 @@ export function hubScreen(actions: HubActions, nav: ShellNav): HubScreenHandle {
         counter(ICONS.shell, String(next.shells), GLOBAL_CURRENCY.name, "hub-shells"),
         counter(ICONS.star, String(next.stars), "Estrelas", "hub-stars"),
         counter(ICONS.fish, String(next.guardians), "Guardiões no Recife", "hub-guardians"),
+        counter(ICONS.account, next.account ?? "Convidado", next.account ? `Conta: ${next.account}` : "Jogando sem conta", "hub-account"),
       );
     },
 

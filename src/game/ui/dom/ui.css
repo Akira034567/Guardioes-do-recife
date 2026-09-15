@@ -3931,3 +3931,141 @@
   color: #ffe9b0;
   font-size: calc(12px * var(--gr-scale));
 }
+
+/* -------------------------------------------------------------- Minha Conta (formulários) */
+
+/*
+ * Os campos da conta são os primeiros formulários de verdade do jogo. Eles usam a mesma moldura dos
+ * cartões de Configurações (`gr-config__card`) e só acrescentam o que faltava: rótulo em cima do
+ * campo, caixa de texto legível de longe e uma linha de recado logo abaixo da ação.
+ */
+.gr-field {
+  display: flex;
+  flex-direction: column;
+  gap: calc(3px * var(--gr-scale));
+  padding: calc(5px * var(--gr-scale)) 0;
+  font-size: calc(12px * var(--gr-scale));
+}
+
+.gr-field--check {
+  flex-direction: row;
+  align-items: center;
+  gap: calc(8px * var(--gr-scale));
+  cursor: pointer;
+}
+
+.gr-field__label {
+  color: #bfe6f6;
+  letter-spacing: calc(0.4px * var(--gr-scale));
+}
+
+.gr-field__input,
+.gr-field__code {
+  width: 100%;
+  box-sizing: border-box;
+  background: rgba(3, 29, 45, 0.9);
+  border: calc(1px * var(--gr-scale)) solid rgba(21, 129, 163, 0.65);
+  border-radius: calc(9px * var(--gr-scale));
+  padding: calc(7px * var(--gr-scale)) calc(10px * var(--gr-scale));
+  color: #f2fbff;
+  font-family: inherit;
+  font-size: calc(13px * var(--gr-scale));
+}
+
+.gr-field__code {
+  /* O código é uma parede de caracteres: monoespaçado e com quebra dentro da palavra. */
+  font-family: "Consolas", "Menlo", monospace;
+  font-size: calc(10px * var(--gr-scale));
+  line-height: 1.4;
+  resize: vertical;
+  word-break: break-all;
+}
+
+.gr-field__input:focus-visible,
+.gr-field__code:focus-visible {
+  outline: calc(2px * var(--gr-scale)) solid var(--gr-cyan);
+  outline-offset: calc(1px * var(--gr-scale));
+}
+
+.gr-field__check {
+  width: calc(16px * var(--gr-scale));
+  height: calc(16px * var(--gr-scale));
+  accent-color: #2aa6c9;
+  flex: none;
+}
+
+.gr-field__group {
+  display: flex;
+  flex-direction: column;
+  gap: calc(2px * var(--gr-scale));
+}
+
+.gr-field__block {
+  display: flex;
+  flex-direction: column;
+  gap: calc(2px * var(--gr-scale));
+}
+
+.gr-field__action {
+  align-self: flex-start;
+  margin-top: calc(4px * var(--gr-scale));
+}
+
+.gr-field__name {
+  text-align: left;
+}
+
+/* Recado do formulário: verde quando deu certo, vermelho quando faltou alguma coisa. */
+.gr-field__status {
+  min-height: calc(13px * var(--gr-scale));
+  font-size: calc(11px * var(--gr-scale));
+  line-height: 1.35;
+  color: #bfe6f6;
+}
+
+.gr-field__status[data-tone="ok"] {
+  color: var(--gr-success);
+}
+
+.gr-field__status[data-tone="warn"] {
+  color: var(--gr-pearl);
+}
+
+.gr-field__status[data-tone="error"] {
+  color: var(--gr-danger);
+}
+
+/* As contas já criadas neste aparelho: um toque preenche o nome no formulário de entrar. */
+.gr-field__chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: calc(5px * var(--gr-scale));
+  padding: calc(4px * var(--gr-scale)) 0;
+}
+
+.gr-field__chip {
+  background: rgba(21, 129, 163, 0.25);
+  border: calc(1px * var(--gr-scale)) solid rgba(21, 129, 163, 0.6);
+  border-radius: calc(999px * var(--gr-scale));
+  padding: calc(4px * var(--gr-scale)) calc(11px * var(--gr-scale));
+  color: #e9fbff;
+  font-family: inherit;
+  font-size: calc(11px * var(--gr-scale));
+  cursor: pointer;
+}
+
+.gr-field__chip:hover,
+.gr-field__chip:focus-visible {
+  background: rgba(117, 223, 244, 0.3);
+}
+
+.gr-field__chip--on {
+  border-color: var(--gr-pearl);
+  color: var(--gr-pearl);
+}
+
+#ui-layer[data-contrast="high"] .gr-field__input,
+#ui-layer[data-contrast="high"] .gr-field__code {
+  background: #01161f;
+  border-color: var(--gr-cyan);
+}

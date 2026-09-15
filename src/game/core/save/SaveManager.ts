@@ -11,7 +11,8 @@ export interface SaveStorage {
 
 export interface SaveManagerOptions {
   key?: string;
-  legacyKey?: string;
+  /** Save pré-versionamento a adotar quando `key` estiver vazia; `null` = não adotar nada. */
+  legacyKey?: string | null;
   now?: () => Date;
   registry: SanitizeRegistry;
 }
@@ -32,7 +33,7 @@ export const SAVE_KEY = "guardioes-do-recife.save";
 export class SaveManager {
   private document: PlayerProgress;
   private readonly key: string;
-  private readonly legacyKey: string;
+  private readonly legacyKey: string | null;
   private readonly now: () => Date;
   private readonly registry: SanitizeRegistry;
   private readonly listeners = new Set<(progress: Readonly<PlayerProgress>) => void>();
@@ -43,7 +44,7 @@ export class SaveManager {
     options: SaveManagerOptions,
   ) {
     this.key = options.key ?? SAVE_KEY;
-    this.legacyKey = options.legacyKey ?? PROGRESS_STORAGE_KEY;
+    this.legacyKey = options.legacyKey === undefined ? PROGRESS_STORAGE_KEY : options.legacyKey;
     this.now = options.now ?? (() => new Date());
     this.registry = options.registry;
     this.status = { source: storage ? "storage" : "memory", migratedFrom: null, corrupted: false };
@@ -95,9 +96,9 @@ export class SaveManager {
       if (version < SAVE_VERSION) this.status.migratedFrom = version;
       return sanitizeProgress(migrated, this.registry, now);
     }
-    const legacy = this.read(this.legacyKey);
-    if (legacy !== null) {
-      const parsed = this.parse(legacy, this.legacyKey);
+    if (this.legacyKey !== null) {
+      const legacy = this.read(this.legacyKey);
+      const parsed = legacy === null ? null : this.parse(legacy, this.legacyKey);
       if (parsed) {
         this.status.migratedFrom = 1;
         const document = sanitizeProgress(migrate({ ...parsed, saveVersion: 1 }, 1, SAVE_VERSION, this.registry), this.registry, now);
