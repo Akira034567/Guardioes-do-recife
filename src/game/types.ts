@@ -231,8 +231,14 @@ export interface TrapEffect {
   cloud?: ToxicCloudEffect;
   stun?: TrapStun;
   knockback?: { distance: number; eliteFactor: number };
-  /** Emboscada II: espera `count` inimigos ou `maxWaitMs` após o primeiro entrar. */
-  waitFor?: { count: number; maxWaitMs: number };
+  /**
+   * Emboscada II: janela curta aberta quando o PRIMEIRO inimigo pisa na armadilha.
+   *
+   * Se a contagem chegar a `detonateAt` dentro da janela, detona na hora — não espera o resto dela.
+   * Se a janela fechar e ninguém mais tiver entrado, detona no primeiro mesmo. Era uma espera longa
+   * (2 inimigos ou 2s) que na prática comia o tempo de armadilha sem nunca juntar o grupo.
+   */
+  waitFor?: { windowMs: number; detonateAt: number };
   /** Quanto mais tempo armado, maior o próximo efeito: `+bonus` a cada `everyMs`, até `max`. */
   charge: { everyMs: number; bonus: number; max: number; applyTo: "damage" | "control" };
 }
@@ -474,7 +480,11 @@ export type EnemyAbility =
   | { type: "phaseChangeAtHp"; threshold: number; statMultipliers?: StatMultipliers; addAbilities?: EnemyAbility[]; announcement?: string }
   | { type: "speedBurst"; intervalMs: number; durationMs: number; multiplier: number }
   /** Quebra-Marés: inverte as correntes reversíveis do mapa em ciclo (um ciclo compartilhado por todos os donos vivos). */
-  | { type: "reverseCurrents"; cycleMs: number; reverseMs: number };
+  /**
+   * Quebra-Marés: em ciclos, a Baleia AMPLIFICA a corrente natural do mapa (nunca inverte, e nunca
+   * toca nas correntes criadas por Guardiões — veja `CurrentZone.amplifiable`).
+   */
+  | { type: "amplifyCurrents"; cycleMs: number; surgeMs: number; strengthMultiplier: number; driftMultiplier: number };
 
 export interface BossPhase {
   id: string;

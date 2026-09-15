@@ -99,8 +99,11 @@ export class GuardianView extends Phaser.GameObjects.Container {
     return artTextureFor(this.guardian.guardianId, this.guardian.progress, kind);
   }
 
-  /** Lê o estado do motor e atualiza o desenho. `enemyPosition` localiza o alvo da investida. */
-  sync(now: number, enemyPosition: (id: string) => Vec2 | null): void {
+  /**
+   * Lê o estado do motor e atualiza o desenho. `enemyPosition` localiza o alvo da investida;
+   * `blockedPosition` diz quem esta unidade está SEGURANDO, para um bloqueador puro virar de frente.
+   */
+  sync(now: number, enemyPosition: (id: string) => Vec2 | null, blockedPosition?: (guardianId: string) => Vec2 | null): void {
     const guardian = this.guardian;
     const state = guardian.state;
     if (state !== this.engineState) {
@@ -124,6 +127,10 @@ export class GuardianView extends Phaser.GameObjects.Container {
         this.aimTarget = { x: target.x, y: target.y };
         if (Math.hypot(target.x - guardian.x, target.y - guardian.y) <= guardian.range) this.dashTarget = { x: target.x, y: target.y };
       }
+    } else if (blockedPosition?.(guardian.id)) {
+      // O Baiacu base tem dano 0, então nunca adquire `targetId` e ficava de costas para quem prendia.
+      // Quem segura olha para o que está segurando; vale para qualquer bloqueador (Baiacu, Tartaruga).
+      this.aimTarget = blockedPosition(guardian.id);
     } else if (state === "idle") {
       // Sem alvo o lado congela no último: girar de volta sozinho no fim da onda é solavanco à toa.
       this.aimTarget = null;

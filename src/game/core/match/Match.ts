@@ -2,7 +2,8 @@ import { ECONOMY, PLACEMENT } from "../../data/balance";
 import { ENEMIES, scaleEnemy } from "../../data/enemies";
 import { applyElite, ELITES, type EliteId } from "../../data/elites";
 import { GUARDIANS } from "../../data/guardians";
-import type { EnemyId, GuardianDefinition, LevelDefinition, PlayerId, TeamId } from "../../types";
+import { goldenAwardWaveIndex, goldenBoostFor } from "../../data/goldenFish";
+import type { EnemyId, GuardianDefinition, GuardianId, LevelDefinition, PlayerId, TeamId } from "../../types";
 import { resolveAura, type AuraSource } from "../Auras";
 import { BlockingSystem } from "../Blocking";
 import { BossEncounter, type BossEncounterEvent } from "../BossEncounter";
@@ -65,6 +66,11 @@ export interface MatchOptions {
    * `individual` dá um caixa por jogador; cada um paga o que coloca e recebe a própria parte.
    */
   economyMode?: "shared" | "individual";
+  /**
+   * Maestria permanente por espécie, vinda do save (V3). O motor não conhece Conchas nem tela de
+   * menu: recebe os níveis prontos, como já recebe a fase e a dificuldade resolvidas.
+   */
+  masteryLevels?: Partial<Record<GuardianId, number>>;
 }
 
 /** Chave do caixa único no modo compartilhado. */
@@ -117,6 +123,11 @@ export class Match {
   readonly interactables: InteractableSystem;
   private readonly players: PlayerConfig[];
   private readonly controller: MatchController | null;
+  private readonly masteryLevels: Partial<Record<GuardianId, number>>;
+  /** Peixinho Dourado: já foi concedido nesta partida? */
+  private goldenAwarded = false;
+  /** Instância coroada; `null` enquanto o jogador não escolhe. */
+  private goldenGuardianId: string | null = null;
   readonly currents: CurrentSystem;
   private reefValue: number;
   private statusValue: MatchStatus = "running";
@@ -136,6 +147,7 @@ export class Match {
     this.players = options.players ?? [{ id: DEFAULT_PLAYER_ID, teamId: "t1" }];
     this.interactables = new InteractableSystem(level.interactables ?? []);
     this.controller = options.controller ?? null;
+    this.masteryLevels = options.masteryLevels ?? {};
     const paths = resolveLevelPaths(level);
     this.routes = new Map(paths.map((path) => [path.id, new RoutePath(path.waypoints)]));
     this.route = this.routes.get(paths[0].id) as RoutePath;
@@ -194,8 +206,8 @@ export class Match {
     return this.currents.flowFields;
   }
 
-  get currentReversed(): boolean {
-    return this.currents.reversed;
+  get currentAmplified(): boolean {
+    return this.currents.amplified;
   }
 
   get playerIds(): readonly PlayerId[] {
@@ -397,7 +409,7 @@ export class Match {
         strength: definition.current.speedFactor,
         projectileDrift: 0,
         affects: ["enemy"],
-        reversible: false,
+        amplifiable: false,
         expiresAt: this.nowMs + definition.current.durationMs,
         respectsSlowResistance: true,
         visual: { kind: "ring", color: 0x8df3ff },
@@ -431,6 +443,16 @@ export class Match {
 
   // ---------------------------------------------------------------- comandos
 
+  /** Peixinho Dourado concedido (e ainda não usado). */
+  get goldenFishAvailable(): boolean {
+    return this.goldenAwarded && this.goldenGuardianId === null;
+  }
+
+  /** Unidade coroada nesta partida; `null` enquanto ninguém foi escolhido. */
+  get crownedGuardianId(): string | null {
+    return this.goldenGuardianId;
+  }
+
   execute(command: MatchCommand): CommandResult {
     if (this.statusValue !== "running") return { ok: false, reason: "gameOver", message: "A partida terminou." };
     switch (command.type) {
@@ -442,6 +464,8 @@ export class Match {
         return this.sellGuardian(command);
       case "startNextWave":
         return this.startNextWave();
+      case "crownGuardian":
+        return this.crownGuardian(command);
       case "interact":
         return this.interact(command);
       case "debug.damageEnemy":
@@ -504,7 +528,14 @@ export class Match {
     }
 
     this.spend(definition.cost, "Place", playerId);
-    const guardian = new MatchGuardian(`G${++this.guardianSerial}`, definition, placement, playerId, this.nowMs);
+    const guardian = new MatchGuardian(
+      `G${++this.guardianSerial}`,
+      definition,
+      placement,
+      playerId,
+      this.nowMs,
+      this.masteryLevels[definition.id] ?? 0,
+    );
     this.guardianList.push(guardian);
     if (placement.platformId) this.platformOccupants.set(placement.platformId, guardian.id);
     if (placement.routeDistance !== null) this.routeUnits.push({ x: placement.x, y: placement.y, guardianId: guardian.id });
@@ -592,6 +623,43 @@ export class Match {
     }
   }
 
+  /**
+   * Concede o Peixinho Dourado por volta de 60% da fase. É RECOMPENSA GARANTIDA, não sorteio: a mesma
+   * fase entrega na mesma onda, sempre. Nunca na última, para dar tempo de usar a coroa.
+   */
+  private maybeAwardGoldenFish(waveIndex: number): void {
+    if (this.goldenAwarded) return;
+    if (waveIndex < goldenAwardWaveIndex(this.level.waves.length)) return;
+    this.goldenAwarded = true;
+    this.emit({ type: "goldenFishAwarded", now: this.nowMs, waveIndex });
+  }
+
+  /**
+   * Coroa uma unidade. Um por partida e sem volta — é a decisão que o Peixinho existe para provocar.
+   *
+   * 🔶 A amplificação em si ainda não tem números (ver `data/goldenFish.ts`): o que já funciona é o
+   * fluxo inteiro — concessão, escolha, marca na unidade e evento para a apresentação coroar.
+   */
+  private crownGuardian(command: { instanceId: string; playerId?: PlayerId }): CommandResult {
+    if (!this.goldenAwarded) return { ok: false, reason: "goldenUnavailable", message: "O Peixinho Dourado ainda não apareceu." };
+    if (this.goldenGuardianId !== null) return { ok: false, reason: "goldenSpent", message: "O Peixinho Dourado já escolheu um Guardião." };
+    const guardian = this.guardianList.find((candidate) => candidate.id === command.instanceId);
+    if (!guardian) return { ok: false, reason: "notFound", message: "Guardião não encontrado." };
+    const playerId = command.playerId ?? DEFAULT_PLAYER_ID;
+    if (guardian.ownerId !== playerId) return { ok: false, reason: "notOwner", message: "Este Guardião não é seu." };
+    guardian.crown();
+    this.goldenGuardianId = guardian.id;
+    this.emit({
+      type: "goldenFishCrowned",
+      now: this.nowMs,
+      id: guardian.id,
+      guardianId: guardian.guardianId,
+      branchId: guardian.branchId,
+      summary: goldenBoostFor(guardian.guardianId, guardian.branchId).summary,
+    });
+    return { ok: true, instanceId: guardian.id };
+  }
+
   private startNextWave(): CommandResult {
     if (this.scheduler.state !== "countdown") return { ok: false, reason: "notInCountdown", message: "A onda já está em curso." };
     const remainingMs = this.scheduler.countdownMs;
@@ -633,6 +701,7 @@ export class Match {
         this.stats.wavesCompleted += 1;
         const bonus = this.earn(event.reward, "WaveReward", DEFAULT_PLAYER_ID);
         this.emit({ type: "waveCompleted", now: this.nowMs, waveIndex: event.waveIndex, bonus });
+        this.maybeAwardGoldenFish(event.waveIndex);
       } else if (event.type === "victory") {
         const bonus = this.earn(this.level.levelClearBonus ?? ECONOMY.levelClearBonus, "LevelReward", DEFAULT_PLAYER_ID);
         this.statusValue = "victory";
@@ -773,9 +842,9 @@ export class Match {
   }
 
   private onAbilityEvent(event: EnemyAbilityEvent): void {
-    if (event.type !== "currentsReversed") return;
+    if (event.type !== "currentsAmplified") return;
     const boss = this.enemy(event.enemyId);
-    this.emit({ type: "currentsReversed", now: this.nowMs, reversed: event.reversed, bossName: boss?.definition.name ?? null });
+    this.emit({ type: "currentsAmplified", now: this.nowMs, amplified: event.amplified, bossName: boss?.definition.name ?? null });
   }
 
   private leak(enemy: MatchEnemy): void {

@@ -21,9 +21,9 @@ export const RECIFE_FOUR: LevelDefinition = {
   reefHealth: ECONOMY.reefHealth,
   initialWaveDelayMs: 10_000,
   betweenWaveDelayMs: 8_000,
-  enemyScaling: { health: 0.95, speed: 1.06, reward: 1.1 },
-  /** 842 de base = 800 em campo. */
-  enemyOverrides: { tidebreaker: { maxHealth: 842 } },
+  enemyScaling: { health: 0.96, speed: 1.06, reward: 1.15 },
+  /** 990 de base = 950 em campo (curva V3 dos chefes: 300/470/700/950/1250/1601). */
+  enemyOverrides: { tidebreaker: { maxHealth: 990 } },
   objectives: [
     { id: "completar", kind: "complete" },
     { id: "intacto", kind: "noLeaks" },
@@ -120,23 +120,23 @@ export const RECIFE_FOUR: LevelDefinition = {
     {
       name: "Patrulha",
       groups: [
-        { enemyId: "swimmer", count: 7, intervalMs: 720, delayMs: 0 },
-        { enemyId: "needlefish", count: 4, intervalMs: 700, delayMs: 3500 },
+        { enemyId: "swimmer", count: 5, intervalMs: 760, delayMs: 0 },
+        { enemyId: "needlefish", count: 2, intervalMs: 700, delayMs: 3500 },
       ],
     },
     {
       name: "Nuvem de Peixinhos",
       groups: [
-        { enemyId: "minnow", count: 18, intervalMs: 200, delayMs: 0 },
-        { enemyId: "shellback", count: 2, intervalMs: 1800, delayMs: 2000 },
+        { enemyId: "minnow", count: 12, intervalMs: 230, delayMs: 0 },
+        { enemyId: "shellback", count: 1, intervalMs: 1800, delayMs: 2500 },
       ],
     },
     {
       name: "Escolta",
       groups: [
-        { enemyId: "shellback", count: 3, intervalMs: 1500, delayMs: 0 },
-        { enemyId: "moray", count: 2, intervalMs: 2200, delayMs: 2500 },
-        { enemyId: "dartfish", count: 5, intervalMs: 600, delayMs: 4000 },
+        { enemyId: "shellback", count: 2, intervalMs: 1600, delayMs: 0 },
+        { enemyId: "moray", count: 1, intervalMs: 2200, delayMs: 3000 },
+        { enemyId: "dartfish", count: 4, intervalMs: 650, delayMs: 4500 },
       ],
     },
     {
@@ -147,12 +147,25 @@ export const RECIFE_FOUR: LevelDefinition = {
       ],
     },
     {
+      name: "Espiral Cheia",
+      groups: [
+        { enemyId: "swimmer", count: 9, intervalMs: 700, delayMs: 0 },
+        { enemyId: "minnow", count: 14, intervalMs: 220, delayMs: 3000 },
+      ],
+    },
+    {
       name: "Parede Blindada",
       groups: [
         { enemyId: "shellback", count: 7, intervalMs: 1200, delayMs: 0 },
         { enemyId: "minnow", count: 10, intervalMs: 230, delayMs: 3000 },
-        // Primeiro contato com a camuflagem: duas, no fim de uma onda lenta, para serem NOTADAS.
         { enemyId: "ghostJelly", count: 2, intervalMs: 1800, delayMs: 6500 },
+      ],
+    },
+    {
+      name: "Sombras no Coral",
+      groups: [
+        { enemyId: "ghostJelly", count: 4, intervalMs: 1500, delayMs: 0 },
+        { enemyId: "dartfish", count: 7, intervalMs: 600, delayMs: 2500 },
       ],
     },
     {
@@ -164,13 +177,60 @@ export const RECIFE_FOUR: LevelDefinition = {
       ],
     },
     {
+      name: "Contra-Maré",
+      groups: [
+        { enemyId: "needlefish", count: 10, intervalMs: 500, delayMs: 0 },
+        { enemyId: "minnow", count: 16, intervalMs: 210, delayMs: 3000 },
+      ],
+    },
+    {
+      name: "Casco e Sombra",
+      groups: [
+        { enemyId: "shellback", count: 6, intervalMs: 1300, delayMs: 0 },
+        { enemyId: "ghostJelly", count: 3, intervalMs: 1500, delayMs: 3000 },
+        { enemyId: "swimmer", count: 6, intervalMs: 700, delayMs: 5500 },
+      ],
+    },
+    {
+      name: "Enxame",
+      groups: [
+        { enemyId: "minnow", count: 22, intervalMs: 190, delayMs: 0 },
+        { enemyId: "dartfish", count: 8, intervalMs: 550, delayMs: 3000 },
+      ],
+    },
+    {
+      name: "Três Moreias",
+      groups: [
+        { enemyId: "moray", count: 3, intervalMs: 2600, delayMs: 0 },
+        { enemyId: "needlefish", count: 6, intervalMs: 550, delayMs: 2000 },
+        { enemyId: "shellback", count: 3, intervalMs: 1400, delayMs: 6000 },
+      ],
+    },
+    {
+      name: "Arrastão",
+      groups: [
+        { enemyId: "swimmer", count: 12, intervalMs: 650, delayMs: 0 },
+        { enemyId: "dartfish", count: 10, intervalMs: 550, delayMs: 2500 },
+        { enemyId: "minnow", count: 14, intervalMs: 210, delayMs: 5500 },
+      ],
+    },
+    {
+      name: "Coral Fechado",
+      groups: [
+        { enemyId: "shellback", count: 8, intervalMs: 1200, delayMs: 0 },
+        { enemyId: "ghostJelly", count: 4, intervalMs: 1400, delayMs: 3500 },
+        { enemyId: "moray", count: 1, intervalMs: 1000, delayMs: 7000 },
+      ],
+    },
+    {
       name: "Quebra-Marés da Espiral",
       groups: [
         { enemyId: "shellback", count: 4, intervalMs: 1400, delayMs: 0 },
-        { enemyId: "moray", count: 1, intervalMs: 1000, delayMs: 4000 },
-        { enemyId: "minnow", count: 10, intervalMs: 230, delayMs: 7000 },
-        { enemyId: "ghostJelly", count: 3, intervalMs: 1600, delayMs: 8500 },
-        { enemyId: "tidebreaker", count: 1, intervalMs: 1000, delayMs: 10000 },
+        { enemyId: "moray", count: 2, intervalMs: 2000, delayMs: 3500 },
+        { enemyId: "minnow", count: 12, intervalMs: 230, delayMs: 6000 },
+        { enemyId: "ghostJelly", count: 3, intervalMs: 1600, delayMs: 8000 },
+        { enemyId: "needlefish", count: 5, intervalMs: 600, delayMs: 9500 },
+        { enemyId: "tidebreaker", count: 1, intervalMs: 1000, delayMs: 11000 },
       ],
     },
   ],

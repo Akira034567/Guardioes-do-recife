@@ -34,24 +34,32 @@ describe("trap core", () => {
     expect(trapChargeMultipliers(ambush2, 0.15)).toEqual({ damage: 1, control: expect.closeTo(1.15, 6) });
   });
 
-  it("waits for two enemies or the maximum wait before Fúria Abissal fires", () => {
-    const trap = new TrapCore(ambush2, 0);
-    trap.update(ambush2.armMs, 0);
+  it("opens a short window on first contact: detonates early on a crowd, alone when nobody follows", () => {
+    // V3: a espera longa (2 inimigos OU 2s) virou uma janela curta. O primeiro contato abre 500ms;
+    // se chegar o segundo dentro dela, detona na hora; se não chegar, detona no primeiro mesmo.
+    expect(ambush2.waitFor).toEqual({ windowMs: 500, detonateAt: 2 });
+    const { windowMs, detonateAt } = ambush2.waitFor!;
+
+    // Chegou companhia dentro da janela: dispara sem esperar o resto dela.
+    const crowd = new TrapCore(ambush2, 0);
+    crowd.update(ambush2.armMs, 0);
     const start = ambush2.armMs + 100;
-    // V2: a Fúria virou punição de alvo único — espera 2, não 3, e o dano é que subiu.
-    expect(ambush2.waitFor?.count).toBe(2);
-    expect(trap.update(start, 1)).toEqual([]);
-    expect(trap.update(start + 1000, 2)[0]).toMatchObject({ type: "trigger" });
-    const patient = new TrapCore(ambush2, 0);
-    patient.update(ambush2.armMs, 0);
-    expect(patient.update(start, 1)).toEqual([]);
-    expect(patient.update(start + ambush2.waitFor!.maxWaitMs - 1, 1)).toEqual([]);
-    expect(patient.update(start + ambush2.waitFor!.maxWaitMs, 1)[0]).toMatchObject({ type: "trigger" });
+    expect(crowd.update(start, 1)).toEqual([]);
+    expect(crowd.update(start + 200, detonateAt)[0]).toMatchObject({ type: "trigger" });
+
+    // Ninguém veio: segura até o fim da janela e detona no primeiro.
+    const alone = new TrapCore(ambush2, 0);
+    alone.update(ambush2.armMs, 0);
+    expect(alone.update(start, 1)).toEqual([]);
+    expect(alone.update(start + windowMs - 1, 1)).toEqual([]);
+    expect(alone.update(start + windowMs, 1)[0]).toMatchObject({ type: "trigger" });
+
+    // O alvo escapou antes de a janela fechar: a espera reinicia no próximo que pisar.
     const reset = new TrapCore(ambush2, 0);
     reset.update(ambush2.armMs, 0);
     reset.update(start, 1);
-    reset.update(start + 500, 0);
-    expect(reset.update(start + ambush2.waitFor!.maxWaitMs + 100, 1)).toEqual([]);
+    reset.update(start + 200, 0);
+    expect(reset.update(start + windowMs + 100, 1)).toEqual([]);
   });
 
   it("applies the rearm multiplier to the cooldown and keeps the phase across upgrades", () => {

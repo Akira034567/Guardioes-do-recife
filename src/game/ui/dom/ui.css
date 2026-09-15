@@ -3808,3 +3808,126 @@
     right: calc(18px * var(--gr-scale));
   }
 }
+
+/* ==========================================================================
+   Maestria do Recife — progressão permanente por Guardião (V3).
+   Reaproveita a moldura do álbum; o que é próprio daqui são os nós e o bloco
+   que separa a maestria do Peixinho Dourado.
+   ========================================================================== */
+
+.gr-album--mastery .gr-album__list {
+  display: flex;
+  flex-direction: column;
+  gap: calc(6px * var(--gr-scale));
+  overflow-y: auto;
+  min-height: 0;
+}
+
+.gr-album--mastery .gr-album__item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: calc(8px * var(--gr-scale));
+  font: inherit;
+  font-size: calc(13px * var(--gr-scale));
+  color: var(--gr-shell);
+  background: rgba(3, 30, 47, 0.72);
+  border: calc(1px * var(--gr-scale)) solid rgba(21, 129, 163, 0.45);
+  border-radius: calc(10px * var(--gr-scale));
+  padding: calc(9px * var(--gr-scale)) calc(11px * var(--gr-scale));
+  cursor: pointer;
+  text-align: left;
+}
+
+.gr-album--mastery .gr-album__item--on {
+  border-color: var(--gr-cyan);
+  background: rgba(8, 56, 82, 0.9);
+}
+
+/* Guardião ainda bloqueado continua visível: o jogador precisa ver o que existe adiante. */
+.gr-album--mastery .gr-album__item--locked {
+  opacity: 0.55;
+}
+
+.gr-album--mastery .gr-album__item-meta {
+  font-size: calc(11px * var(--gr-scale));
+  opacity: 0.8;
+}
+
+.gr-album--mastery .gr-album__detail {
+  display: flex;
+  flex-direction: column;
+  gap: calc(8px * var(--gr-scale));
+  overflow-y: auto;
+  min-height: 0;
+  padding-right: calc(4px * var(--gr-scale));
+}
+
+.gr-mastery__node {
+  display: grid;
+  grid-template-columns: calc(30px * var(--gr-scale)) minmax(0, 1fr) auto;
+  align-items: start;
+  gap: calc(10px * var(--gr-scale));
+  background: rgba(3, 30, 47, 0.68);
+  border: calc(1px * var(--gr-scale)) solid rgba(21, 129, 163, 0.38);
+  border-radius: calc(12px * var(--gr-scale));
+  padding: calc(10px * var(--gr-scale)) calc(12px * var(--gr-scale));
+  color: var(--gr-shell);
+  font-size: calc(12px * var(--gr-scale));
+}
+
+.gr-mastery__node--on {
+  border-color: rgba(95, 224, 180, 0.7);
+  background: rgba(8, 56, 62, 0.82);
+}
+
+/* O nó 5 é outro tipo de coisa: borda própria para não parecer o quinto de uma fila. */
+.gr-mastery__node--capstone {
+  border-color: rgba(192, 139, 255, 0.6);
+  background: rgba(34, 22, 62, 0.75);
+}
+
+.gr-mastery__node-level {
+  display: grid;
+  place-items: center;
+  width: calc(28px * var(--gr-scale));
+  height: calc(28px * var(--gr-scale));
+  border-radius: 50%;
+  background: rgba(21, 129, 163, 0.35);
+  font-weight: bold;
+}
+
+.gr-mastery__node-body {
+  display: flex;
+  flex-direction: column;
+  gap: calc(3px * var(--gr-scale));
+  min-width: 0;
+}
+
+.gr-mastery__node-note {
+  color: #ffd76a;
+  font-size: calc(11px * var(--gr-scale));
+}
+
+.gr-mastery__node-cost,
+.gr-mastery__node-tag {
+  white-space: nowrap;
+  font-size: calc(11px * var(--gr-scale));
+  font-weight: bold;
+}
+
+.gr-mastery__node-tag {
+  color: #5fe0b4;
+}
+
+/* O bloco dourado fecha a tela dizendo o que a maestria NÃO é. */
+.gr-mastery__golden {
+  display: flex;
+  flex-direction: column;
+  gap: calc(4px * var(--gr-scale));
+  border: calc(1px * var(--gr-scale)) dashed rgba(255, 215, 106, 0.55);
+  border-radius: calc(12px * var(--gr-scale));
+  padding: calc(10px * var(--gr-scale)) calc(12px * var(--gr-scale));
+  color: #ffe9b0;
+  font-size: calc(12px * var(--gr-scale));
+}

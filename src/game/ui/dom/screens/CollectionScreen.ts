@@ -164,6 +164,7 @@ function fallbackNav(onBack: () => void): ShellNav {
     onGoHub: onBack,
     onGoMap: onBack,
     onOpenCollection: () => {},
+    onOpenMastery: onBack,
     onOpenBestiary: onBack,
     onOpenStories: onBack,
     onOpenAchievements: onBack,

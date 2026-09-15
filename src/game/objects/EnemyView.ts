@@ -74,9 +74,21 @@ export class EnemyView extends Phaser.GameObjects.Container {
     return this.enemy.id;
   }
 
+  /**
+   * Inimigos ficam ATRÁS dos Guardiões (30 < 40), o que escondia quem estava preso dentro do Baiacu
+   * ou da Tartaruga. Enquanto está bloqueado, o inimigo sobe para a frente do bloqueador e volta ao
+   * normal assim que é solto — é o único momento em que a leitura pede essa troca.
+   */
+  private refreshDepth(): void {
+    const held = this.enemy.blockedById !== null && !this.enemy.dead;
+    const depth = (held ? DEPTH.guardians + 1 : DEPTH.enemies) + (this.enemy.definition.isBoss ? 2 : 0);
+    if (this.depth !== depth) this.setDepth(depth);
+  }
+
   sync(now: number, deltaMs = 0): void {
     const enemy = this.enemy;
     this.setPosition(enemy.x, enemy.y);
+    this.refreshDepth();
     if (this.sprite) this.animate(now, enemy.heading, deltaMs);
     else this.bodyGraphic.setRotation(spriteTilt(enemy.heading));
     if (enemy.health !== this.lastHealth) {

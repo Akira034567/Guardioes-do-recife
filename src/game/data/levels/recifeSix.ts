@@ -21,9 +21,9 @@ export const RECIFE_SIX: LevelDefinition = {
   reefHealth: ECONOMY.reefHealth,
   initialWaveDelayMs: 10_000,
   betweenWaveDelayMs: 8_000,
-  enemyScaling: { health: 1, speed: 1.05, reward: 1.2 },
-  /** 1300 de base = 1300 em campo (a fase não escala vida). */
-  enemyOverrides: { tidebreaker: { maxHealth: 1300 } },
+  enemyScaling: { health: 1.08, speed: 1.05, reward: 1.25 },
+  /** 1482 de base = 1601 em campo (curva V3 dos chefes: 300/470/700/950/1250/1601). */
+  enemyOverrides: { tidebreaker: { maxHealth: 1482 } },
   objectives: [
     { id: "completar", kind: "complete" },
     { id: "vidas", kind: "minLivesRemaining", value: 8 },
@@ -100,48 +100,40 @@ export const RECIFE_SIX: LevelDefinition = {
     {
       name: "Maré de Abertura",
       groups: [
-        { enemyId: "swimmer", count: 5, intervalMs: 750, delayMs: 0 },
-        { enemyId: "minnow", count: 6, intervalMs: 260, delayMs: 3000 },
+        { enemyId: "swimmer", count: 4, intervalMs: 780, delayMs: 0 },
+        { enemyId: "minnow", count: 6, intervalMs: 280, delayMs: 3000 },
         { enemyId: "dartfish", count: 2, intervalMs: 650, delayMs: 6500 },
       ],
     },
     {
       name: "Agulhas do Casco",
       groups: [
-        { enemyId: "needlefish", count: 5, intervalMs: 600, delayMs: 0 },
-        { enemyId: "shellback", count: 2, intervalMs: 1600, delayMs: 3000 },
+        { enemyId: "needlefish", count: 4, intervalMs: 640, delayMs: 0 },
+        { enemyId: "shellback", count: 2, intervalMs: 1700, delayMs: 3000 },
       ],
     },
     {
       name: "Moreia do Porão",
       groups: [
         { enemyId: "moray", count: 1, intervalMs: 1000, delayMs: 0 },
-        { enemyId: "minnow", count: 8, intervalMs: 240, delayMs: 2000 },
+        { enemyId: "minnow", count: 8, intervalMs: 250, delayMs: 2000 },
         { enemyId: "dartfish", count: 3, intervalMs: 650, delayMs: 6000 },
       ],
     },
     {
       name: "Blindagem",
       groups: [
-        { enemyId: "shellback", count: 4, intervalMs: 1200, delayMs: 0 },
-        { enemyId: "needlefish", count: 4, intervalMs: 600, delayMs: 3000 },
-        { enemyId: "ghostJelly", count: 3, intervalMs: 1400, delayMs: 5000 },
-      ],
-    },
-    {
-      name: "Primeiro Quebra-Marés",
-      groups: [
-        { enemyId: "swimmer", count: 6, intervalMs: 600, delayMs: 0 },
-        { enemyId: "tidebreaker", count: 1, intervalMs: 1000, delayMs: 5000 },
-        { enemyId: "minnow", count: 8, intervalMs: 240, delayMs: 9000 },
+        { enemyId: "shellback", count: 4, intervalMs: 1300, delayMs: 0 },
+        { enemyId: "needlefish", count: 4, intervalMs: 620, delayMs: 3000 },
+        { enemyId: "ghostJelly", count: 2, intervalMs: 1400, delayMs: 5000 },
       ],
     },
     {
       name: "Cardume do Naufrágio",
       groups: [
-        { enemyId: "minnow", count: 12, intervalMs: 220, delayMs: 0 },
-        { enemyId: "dartfish", count: 5, intervalMs: 550, delayMs: 2000 },
-        { enemyId: "ghostJelly", count: 3, intervalMs: 1200, delayMs: 4000 },
+        { enemyId: "minnow", count: 16, intervalMs: 210, delayMs: 0 },
+        { enemyId: "dartfish", count: 6, intervalMs: 550, delayMs: 2000 },
+        { enemyId: "ghostJelly", count: 2, intervalMs: 1200, delayMs: 4000 },
         { enemyId: "shellback", count: 3, intervalMs: 1400, delayMs: 6000 },
       ],
     },
@@ -149,28 +141,106 @@ export const RECIFE_SIX: LevelDefinition = {
       name: "Moreias Gêmeas",
       groups: [
         { enemyId: "moray", count: 2, intervalMs: 4000, delayMs: 0 },
-        { enemyId: "needlefish", count: 6, intervalMs: 500, delayMs: 2000 },
+        { enemyId: "needlefish", count: 7, intervalMs: 500, delayMs: 2000 },
         { enemyId: "shellback", count: 3, intervalMs: 1300, delayMs: 7000 },
+      ],
+    },
+    {
+      name: "Água Turva",
+      groups: [
+        { enemyId: "ghostJelly", count: 2, intervalMs: 1200, delayMs: 0 },
+        { enemyId: "swimmer", count: 8, intervalMs: 700, delayMs: 3000 },
       ],
     },
     {
       name: "Tempestade",
       groups: [
-        { enemyId: "dartfish", count: 8, intervalMs: 450, delayMs: 0 },
-        { enemyId: "minnow", count: 10, intervalMs: 230, delayMs: 2000 },
+        { enemyId: "dartfish", count: 10, intervalMs: 450, delayMs: 0 },
+        { enemyId: "minnow", count: 12, intervalMs: 230, delayMs: 2000 },
         { enemyId: "shellback", count: 4, intervalMs: 1200, delayMs: 4000 },
-        { enemyId: "corruptedShark", count: 2, intervalMs: 5000, delayMs: 9000 },
+        { enemyId: "corruptedShark", count: 1, intervalMs: 5000, delayMs: 9000 },
+      ],
+    },
+    {
+      name: "Primeiro Quebra-Marés",
+      groups: [
+        { enemyId: "swimmer", count: 7, intervalMs: 600, delayMs: 0 },
+        { enemyId: "tidebreaker", count: 1, intervalMs: 1000, delayMs: 5000 },
+        { enemyId: "minnow", count: 8, intervalMs: 240, delayMs: 9000 },
+      ],
+    },
+    {
+      name: "Muralha do Coração",
+      groups: [
+        { enemyId: "shellback", count: 9, intervalMs: 1100, delayMs: 0 },
+        { enemyId: "moray", count: 2, intervalMs: 2400, delayMs: 4000 },
+      ],
+    },
+    {
+      name: "Correnteza Invertida",
+      groups: [
+        { enemyId: "needlefish", count: 12, intervalMs: 450, delayMs: 0 },
+        { enemyId: "minnow", count: 16, intervalMs: 200, delayMs: 3000 },
+      ],
+    },
+    {
+      name: "Três Caçadores",
+      groups: [
+        { enemyId: "corruptedShark", count: 3, intervalMs: 4500, delayMs: 0 },
+        { enemyId: "swimmer", count: 8, intervalMs: 700, delayMs: 2500 },
+      ],
+    },
+    {
+      name: "Enxame Profundo",
+      groups: [
+        { enemyId: "minnow", count: 24, intervalMs: 180, delayMs: 0 },
+        { enemyId: "dartfish", count: 10, intervalMs: 500, delayMs: 3000 },
+        { enemyId: "ghostJelly", count: 2, intervalMs: 1200, delayMs: 6000 },
+      ],
+    },
+    {
+      name: "Quatro Moreias",
+      groups: [
+        { enemyId: "moray", count: 4, intervalMs: 2400, delayMs: 0 },
+        { enemyId: "shellback", count: 5, intervalMs: 1200, delayMs: 3000 },
+        { enemyId: "needlefish", count: 6, intervalMs: 550, delayMs: 7000 },
+      ],
+    },
+    {
+      name: "Segundo Quebra-Marés",
+      groups: [
+        { enemyId: "tidebreaker", count: 1, intervalMs: 1000, delayMs: 0 },
+        { enemyId: "ghostJelly", count: 2, intervalMs: 1200, delayMs: 4000 },
+        { enemyId: "dartfish", count: 8, intervalMs: 500, delayMs: 7000 },
+      ],
+    },
+    {
+      name: "Arrastão Final",
+      groups: [
+        { enemyId: "shellback", count: 10, intervalMs: 1100, delayMs: 0 },
+        { enemyId: "corruptedShark", count: 2, intervalMs: 5000, delayMs: 4000 },
+        { enemyId: "minnow", count: 14, intervalMs: 200, delayMs: 8000 },
+      ],
+    },
+    {
+      name: "Maré Negra",
+      groups: [
+        { enemyId: "moray", count: 3, intervalMs: 2400, delayMs: 0 },
+        { enemyId: "needlefish", count: 10, intervalMs: 480, delayMs: 2500 },
+        { enemyId: "ghostJelly", count: 2, intervalMs: 1200, delayMs: 5000 },
+        { enemyId: "swimmer", count: 10, intervalMs: 650, delayMs: 7500 },
       ],
     },
     {
       name: "Coração do Recife",
       groups: [
         { enemyId: "moray", count: 2, intervalMs: 2500, delayMs: 0 },
-        { enemyId: "shellback", count: 4, intervalMs: 1200, delayMs: 4000 },
-        { enemyId: "ghostJelly", count: 3, intervalMs: 1200, delayMs: 6500 },
-        { enemyId: "needlefish", count: 6, intervalMs: 500, delayMs: 8000 },
-        { enemyId: "tidebreaker", count: 2, intervalMs: 8000, delayMs: 11000 },
-        { enemyId: "minnow", count: 8, intervalMs: 230, delayMs: 14000 },
+        { enemyId: "shellback", count: 5, intervalMs: 1200, delayMs: 4000 },
+        { enemyId: "ghostJelly", count: 2, intervalMs: 1200, delayMs: 6500 },
+        { enemyId: "needlefish", count: 7, intervalMs: 500, delayMs: 8000 },
+        { enemyId: "corruptedShark", count: 2, intervalMs: 5000, delayMs: 10000 },
+        { enemyId: "tidebreaker", count: 2, intervalMs: 8000, delayMs: 12500 },
+        { enemyId: "minnow", count: 10, intervalMs: 230, delayMs: 15000 },
       ],
     },
   ],

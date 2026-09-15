@@ -17,7 +17,11 @@ export type MatchEvent =
   | (Timed & { type: "bossStarted"; id: string; enemyId: EnemyId; name: string; title: string; phaseCount: number })
   | (Timed & { type: "bossPhaseChanged"; id: string; phaseIndex: number; phaseCount: number; announcement: string | null })
   | (Timed & { type: "bossDefeated"; id: string; enemyId: EnemyId; name: string; x: number; y: number })
-  | (Timed & { type: "currentsReversed"; reversed: boolean; bossName: string | null })
+  | (Timed & { type: "currentsAmplified"; amplified: boolean; bossName: string | null })
+  /** O Recife entregou o Peixinho Dourado: o jogador já pode escolher quem coroar. */
+  | (Timed & { type: "goldenFishAwarded"; waveIndex: number })
+  /** Uma unidade foi coroada. `summary` é o que a coroa amplifica naquele ramo. */
+  | (Timed & { type: "goldenFishCrowned"; id: string; guardianId: GuardianId; branchId: BranchId | null; summary: string })
   // pontos fracos de chefe (item 11)
   | (Timed & { type: "weakPointSpawned"; id: string; parentId: string; index: number; name: string; x: number; y: number; maxHealth: number })
   | (Timed & {

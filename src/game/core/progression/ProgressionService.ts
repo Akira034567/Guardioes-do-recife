@@ -10,6 +10,8 @@ import { highestUnlockedDifficulty } from "./difficultyUnlocks";
 import type { DifficultyId } from "../../data/difficulty";
 import { computeLevelRewards, encounterRewards, type RewardBreakdown } from "./rewards";
 import { mergeLevelRecord, type LevelMerge } from "./stars";
+import { masteryLevelOf } from "./mastery";
+import { MASTERY_ORDER, masteryNextCost } from "../../data/mastery";
 import { purchaseUnlock, reconcileUnlocks, unlockStatus, type PurchaseResult, type UnlockStatus } from "./unlocks";
 
 export interface ObjectiveOutcome {
@@ -183,6 +185,37 @@ export class ProgressionService {
    * partida. Antes só `applyMatchResult` gravava, então sair da preparação perdia tanto a escolha
    * quanto a ordem das vagas.
    */
+  /** Nível de maestria já comprado para um Guardião (0 a 5). */
+  masteryLevel(guardianId: GuardianId): number {
+    return masteryLevelOf(this.save.progress.mastery, guardianId);
+  }
+
+  /** Níveis de todos os Guardiões, prontos para entrar numa partida. */
+  masteryLevels(): Partial<Record<GuardianId, number>> {
+    const levels: Partial<Record<GuardianId, number>> = {};
+    for (const guardianId of MASTERY_ORDER) {
+      const level = this.masteryLevel(guardianId);
+      if (level > 0) levels[guardianId] = level;
+    }
+    return levels;
+  }
+
+  /**
+   * Compra o próximo nó de maestria. Devolve o motivo da recusa em vez de lançar: a tela precisa
+   * saber a diferença entre "sem Conchas" e "árvore completa" para escrever a mensagem certa.
+   */
+  buyMastery(guardianId: GuardianId): { ok: true; level: number; spent: number } | { ok: false; reason: "maxed" | "insufficientShells" } {
+    const level = this.masteryLevel(guardianId);
+    const cost = masteryNextCost(level);
+    if (cost === null) return { ok: false, reason: "maxed" };
+    if (this.save.progress.currency.shells < cost) return { ok: false, reason: "insufficientShells" };
+    this.save.update((draft) => {
+      draft.currency.shells -= cost;
+      draft.mastery[guardianId] = level + 1;
+    });
+    return { ok: true, level: level + 1, spent: cost };
+  }
+
   rememberLoadout(loadout: readonly GuardianId[]): void {
     this.save.update((draft) => {
       draft.lastLoadout = [...loadout];

@@ -18,6 +18,7 @@ import {
   type UpgradeProgress,
 } from "../UpgradeTree";
 import type { MatchEnemy } from "./MatchEnemy";
+import { NEUTRAL_MASTERY, resolveMastery, type MasteryBonus } from "../progression/mastery";
 
 export interface GuardianPlacement {
   x: number;
@@ -46,6 +47,13 @@ export class MatchGuardian {
   private cachedStats: GuardianStats | null = null;
   private statusAttackSpeed = 1;
   private statusDamage = 1;
+  /** Nós de maestria comprados para ESTA espécie, vindos do save. 0 = nenhum. */
+  private masteryLevel = 0;
+  /**
+   * Peixinho Dourado: uma unidade por partida recebe a coroa. Aqui só o fato de estar coroada —
+   * a amplificação em si ainda não tem números (ver `data/goldenFish.ts`).
+   */
+  private crowned = false;
 
   constructor(
     readonly id: string,
@@ -53,7 +61,9 @@ export class MatchGuardian {
     placement: GuardianPlacement,
     readonly ownerId: PlayerId,
     now: number,
+    masteryLevel = 0,
   ) {
+    this.masteryLevel = masteryLevel;
     this.x = placement.x;
     this.y = placement.y;
     this.routeDistance = placement.routeDistance;
@@ -66,17 +76,39 @@ export class MatchGuardian {
     return this.definition.id;
   }
 
+  /** Bônus permanente desta unidade. O nó 5 só acende com um ramo no nível 2. */
+  get mastery(): MasteryBonus {
+    return this.masteryLevel > 0 ? resolveMastery(this.guardianId, this.masteryLevel, this.progress) : NEUTRAL_MASTERY;
+  }
+
+  get isCrowned(): boolean {
+    return this.crowned;
+  }
+
+  /** Coroa esta unidade (Peixinho Dourado). Irreversível dentro da partida. */
+  crown(): void {
+    if (this.crowned) return;
+    this.crowned = true;
+    this.invalidate();
+  }
+
   get progress(): UpgradeProgress {
     return { branchId: this.branchId, upgradeLevel: this.upgradeLevel };
   }
 
   get stats(): GuardianStats {
     if (!this.cachedStats) {
-      this.cachedStats = resolveGuardianStats(this.definition, this.progress, this.aura, {
-        attackSpeedBonus: this.runtime.attackSpeedBonus,
-        attackSpeedMultiplier: this.statusAttackSpeed,
-        damageMultiplier: this.statusDamage,
-      });
+      this.cachedStats = resolveGuardianStats(
+        this.definition,
+        this.progress,
+        this.aura,
+        {
+          attackSpeedBonus: this.runtime.attackSpeedBonus,
+          attackSpeedMultiplier: this.statusAttackSpeed,
+          damageMultiplier: this.statusDamage,
+        },
+        this.mastery,
+      );
     }
     return this.cachedStats;
   }

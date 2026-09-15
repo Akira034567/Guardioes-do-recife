@@ -32,14 +32,15 @@ describe("balance sheet", () => {
 
   it("uses the agreed enemy rewards, health and leak damage", () => {
     const expected: Record<EnemyId, { maxHealth: number; reward: number; reefDamage: number }> = {
-      minnow: { maxHealth: 18, reward: 2, reefDamage: 1 },
-      swimmer: { maxHealth: 55, reward: 5, reefDamage: 1 },
-      dartfish: { maxHealth: 35, reward: 6, reefDamage: 1 },
-      needlefish: { maxHealth: 45, reward: 7, reefDamage: 2 },
-      ghostJelly: { maxHealth: 60, reward: 9, reefDamage: 1 },
-      shellback: { maxHealth: 130, reward: 10, reefDamage: 2 },
-      moray: { maxHealth: 250, reward: 18, reefDamage: 4 },
-      corruptedShark: { maxHealth: 320, reward: 26, reefDamage: 5 },
+      // V3: todo comum custa 2–3 golpes relevantes, menos o Peixinho, que segue descartável.
+      minnow: { maxHealth: 24, reward: 2, reefDamage: 1 },
+      swimmer: { maxHealth: 90, reward: 6, reefDamage: 1 },
+      dartfish: { maxHealth: 60, reward: 7, reefDamage: 1 },
+      needlefish: { maxHealth: 78, reward: 9, reefDamage: 2 },
+      ghostJelly: { maxHealth: 100, reward: 11, reefDamage: 1 },
+      shellback: { maxHealth: 210, reward: 13, reefDamage: 2 },
+      moray: { maxHealth: 390, reward: 22, reefDamage: 4 },
+      corruptedShark: { maxHealth: 500, reward: 32, reefDamage: 5 },
       tidebreaker: { maxHealth: 550, reward: 60, reefDamage: 10 },
     };
     (Object.keys(expected) as EnemyId[]).forEach((id) => {
@@ -70,10 +71,10 @@ describe("balance sheet", () => {
 
   it("scales enemies per level without touching the reference sheet", () => {
     const scaled = scaleEnemy(ENEMIES.swimmer, { health: 1.3, speed: 1.05, reward: 1 });
-    expect(scaled.maxHealth).toBe(72);
+    expect(scaled.maxHealth).toBe(117);
     expect(scaled.speed).toBe(61);
-    expect(scaled.reward).toBe(5);
-    expect(ENEMIES.swimmer.maxHealth).toBe(55);
+    expect(scaled.reward).toBe(6);
+    expect(ENEMIES.swimmer.maxHealth).toBe(90);
     const softened = scaleEnemy(ENEMIES.tidebreaker, { health: 0.75, speed: 1, reward: 1.2 }, { maxHealth: 400 });
     expect(softened).toMatchObject({ maxHealth: 300, reward: 72, armor: 7, reefDamage: 10, isBoss: true });
   });
@@ -90,6 +91,9 @@ describe("balance sheet", () => {
     expect(GUARDIANS.jellyfish.branches[0].upgrades[0].chainDamages).toEqual([14, 11, 9]);
     expect(GUARDIANS.jellyfish.branches[1].upgrades[0]).toMatchObject({ slowFactor: 0.45, slowDurationMs: 2200 });
     expect(GUARDIANS.jellyfish.branches[1].upgrades[1].stun).toEqual({ durationMs: 900, immunityMs: 3000 });
+    // V3: os utilitários ganharam dano moderado sem deixarem de ser utilitários.
+    expect(GUARDIANS.jellyfish.branches[1].upgrades.map((upgrade) => upgrade.damage)).toEqual([18, 18]);
+    expect(GUARDIANS["ink-octopus"].branches[0].upgrades[0].damage).toBe(17);
     // Baiacu: ramo A segura mais, ramo B pulsa.
     expect(GUARDIANS.pufferfish.contactDamagePerSecond).toBe(11);
     expect(GUARDIANS.pufferfish.branches[0].upgrades.map((upgrade) => upgrade.blockCapacity)).toEqual([3, 5]);
@@ -99,9 +103,10 @@ describe("balance sheet", () => {
     expect(GUARDIANS["reef-crab"]).toMatchObject({ damage: 34, cooldownMs: 1250, range: 78 });
     expect(GUARDIANS["reef-crab"].branches[0].upgrades.map((upgrade) => upgrade.damage)).toEqual([40, 58]);
     expect(GUARDIANS["reef-crab"].branches[0].upgrades.every((upgrade) => upgrade.armorPiercing)).toBe(true);
-    expect(GUARDIANS["reef-crab"].branches[1].upgrades[1].spin).toMatchObject({ everyAttacks: 3, damage: 56 });
+    // V3: o giro saiu de 3 para 4 ataques — 37,3 de dano médio por ataque viraram 35,0.
+    expect(GUARDIANS["reef-crab"].branches[1].upgrades[1].spin).toMatchObject({ everyAttacks: 4, damage: 56 });
     // Polvo: debuffer. Ramo B não causa dano nenhum, só buffa.
-    expect(GUARDIANS["ink-octopus"]).toMatchObject({ damage: 12, cooldownMs: 1500 });
+    expect(GUARDIANS["ink-octopus"]).toMatchObject({ damage: 14, cooldownMs: 1500 });
     expect(GUARDIANS["ink-octopus"].vulnerability?.multiplier).toBe(1.12);
     expect(GUARDIANS["ink-octopus"].branches[0].upgrades[1].inkCloud?.vulnerabilityMultiplier).toBe(1.3);
     expect(GUARDIANS["ink-octopus"].branches[1].upgrades.map((upgrade) => upgrade.aura?.attackSpeedMultiplier)).toEqual([1.18, 1.25]);
@@ -111,15 +116,17 @@ describe("balance sheet", () => {
     expect(GUARDIANS.shark.branches[1].upgrades.map((upgrade) => upgrade.damage)).toEqual([46, 58]);
     expect(GUARDIANS.shark.branches[1].upgrades.every((upgrade) => upgrade.rangeMultiplier === 1.25)).toBe(true);
     // Tartaruga: controle em área, dano irrelevante de propósito.
-    expect(GUARDIANS["sea-turtle"]).toMatchObject({ damage: 8, cooldownMs: 1500, slowFactor: 0.75 });
+    expect(GUARDIANS["sea-turtle"]).toMatchObject({ damage: 11, cooldownMs: 1500, slowFactor: 0.75 });
     expect(GUARDIANS["sea-turtle"].branches[0].upgrades.map((upgrade) => upgrade.blockCapacity)).toEqual([4, 6]);
     expect(GUARDIANS["sea-turtle"].branches[1].upgrades.map((upgrade) => upgrade.flowField?.speedFactor)).toEqual([0.62, 0.55]);
     expect(GUARDIANS["sea-turtle"].branches[1].upgrades[1].pushWave?.distance).toBe(170);
     // Peixe-Pedra: a armadilha cobra caro no instante em que ativa.
     expect(GUARDIANS.stonefish.trap).toMatchObject({ damage: 40, armMs: 2600, cooldownMs: 5000, charge: { everyMs: 2000, bonus: 0.06, max: 0.36 } });
     expect(GUARDIANS.stonefish.branches[1].upgrades.map((upgrade) => upgrade.trap?.damage)).toEqual([58, 96]);
+    // V3: a espera longa (2 inimigos ou 2s) virou janela curta com detonação antecipada.
+    expect(GUARDIANS.stonefish.branches[1].upgrades[1].trap?.waitFor).toEqual({ windowMs: 500, detonateAt: 2 });
     // Golfinho: suporte puro; base com 10% de vulnerabilidade.
-    expect(GUARDIANS.dolphin).toMatchObject({ damage: 9, cooldownMs: 1400 });
+    expect(GUARDIANS.dolphin).toMatchObject({ damage: 11, cooldownMs: 1400 });
     expect(GUARDIANS.dolphin.sonar?.vulnerability.multiplier).toBe(1.1);
     expect(GUARDIANS.dolphin.branches[0].upgrades.map((upgrade) => upgrade.chorus?.aura.attackSpeedMultiplier)).toEqual([1.3, 1.38]);
     expect(GUARDIANS.dolphin.branches[1].upgrades[1].sonar?.echo?.waves).toBe(3);

@@ -22,9 +22,9 @@ export const RECIFE_THREE: LevelDefinition = {
   initialWaveDelayMs: 10_000,
   betweenWaveDelayMs: 8_000,
   /** A rota mais longa da campanha (3169px) é paga com ENXAME, não com vida: cardumes grandes em quase toda onda. */
-  enemyScaling: { health: 0.95, speed: 1.03, reward: 1.1 },
-  /** 684 de base = 650 em campo. */
-  enemyOverrides: { tidebreaker: { maxHealth: 684 } },
+  enemyScaling: { health: 0.94, speed: 1.03, reward: 1.15 },
+  /** 745 de base = 700 em campo (curva V3 dos chefes: 300/470/700/950/1250/1601). */
+  enemyOverrides: { tidebreaker: { maxHealth: 745 } },
   objectives: [
     { id: "completar", kind: "complete" },
     { id: "vidas", kind: "minLivesRemaining", value: 12 },
@@ -149,6 +149,13 @@ export const RECIFE_THREE: LevelDefinition = {
       ],
     },
     {
+      name: "Redemoinho",
+      groups: [
+        { enemyId: "dartfish", count: 8, intervalMs: 650, delayMs: 0 },
+        { enemyId: "minnow", count: 12, intervalMs: 230, delayMs: 2600 },
+      ],
+    },
+    {
       name: "A Moreia",
       groups: [
         { enemyId: "minnow", count: 16, intervalMs: 220, delayMs: 0 },
@@ -165,6 +172,20 @@ export const RECIFE_THREE: LevelDefinition = {
       ],
     },
     {
+      name: "Correnteza Dupla",
+      groups: [
+        { enemyId: "swimmer", count: 10, intervalMs: 700, delayMs: 0 },
+        { enemyId: "needlefish", count: 6, intervalMs: 600, delayMs: 3000 },
+      ],
+    },
+    {
+      name: "Casco Fechado",
+      groups: [
+        { enemyId: "shellback", count: 6, intervalMs: 1400, delayMs: 0 },
+        { enemyId: "minnow", count: 12, intervalMs: 230, delayMs: 3000 },
+      ],
+    },
+    {
       name: "Duas Moreias",
       groups: [
         { enemyId: "moray", count: 2, intervalMs: 4500, delayMs: 0 },
@@ -174,12 +195,29 @@ export const RECIFE_THREE: LevelDefinition = {
       ],
     },
     {
+      name: "Vórtice",
+      groups: [
+        { enemyId: "dartfish", count: 10, intervalMs: 600, delayMs: 0 },
+        { enemyId: "needlefish", count: 7, intervalMs: 580, delayMs: 2500 },
+        { enemyId: "minnow", count: 14, intervalMs: 210, delayMs: 5000 },
+      ],
+    },
+    {
+      name: "Muralha Viva",
+      groups: [
+        { enemyId: "shellback", count: 7, intervalMs: 1300, delayMs: 0 },
+        { enemyId: "moray", count: 1, intervalMs: 1000, delayMs: 3500 },
+        { enemyId: "swimmer", count: 8, intervalMs: 700, delayMs: 5500 },
+      ],
+    },
+    {
       name: "Quebra-Marés dos Redemoinhos",
       groups: [
-        { enemyId: "shellback", count: 3, intervalMs: 1500, delayMs: 0 },
+        { enemyId: "shellback", count: 4, intervalMs: 1500, delayMs: 0 },
         { enemyId: "moray", count: 1, intervalMs: 1000, delayMs: 4000 },
         { enemyId: "minnow", count: 16, intervalMs: 210, delayMs: 5500 },
-        { enemyId: "tidebreaker", count: 1, intervalMs: 1000, delayMs: 8000 },
+        { enemyId: "needlefish", count: 5, intervalMs: 600, delayMs: 7000 },
+        { enemyId: "tidebreaker", count: 1, intervalMs: 1000, delayMs: 9000 },
       ],
     },
   ],

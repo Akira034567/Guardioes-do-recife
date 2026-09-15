@@ -8,6 +8,7 @@ import { LEVELS } from "../../data/levels";
 import { achievementsScreen } from "./screens/AchievementsScreen";
 import { bestiaryScreen } from "./screens/BestiaryScreen";
 import { collectionScreen } from "./screens/CollectionScreen";
+import { masteryScreen } from "./screens/MasteryScreen";
 import { settingsScreen } from "./screens/SettingsScreen";
 import { storyIndexScreen } from "./screens/StoryScreen";
 import type { ShellNav, ShellSection } from "./shell";
@@ -42,6 +43,7 @@ export function sectionNav(router: SectionRouter): ShellNav {
     onGoHub: () => openSection("hub", router),
     onGoMap: () => openSection("map", router),
     onOpenCollection: () => openSection("collection", router),
+    onOpenMastery: () => openSection("mastery", router),
     onOpenBestiary: () => openSection("bestiary", router),
     onOpenStories: () => openSection("stories", router),
     onOpenAchievements: () => openSection("achievements", router),
@@ -58,6 +60,7 @@ const SHELLS = new WeakMap<Phaser.Game, AppShellHandle>();
 /** O fundo de cada seção: cada uma empresta a arte de uma fase diferente, como antes. */
 const BACKDROPS: Record<ShellView, number> = {
   collection: 0,
+  mastery: 2,
   bestiary: 3,
   stories: 2,
   achievements: 5,
@@ -69,7 +72,9 @@ function contentFor(section: ShellView, router: SectionRouter, options: SectionO
   const screen =
     section === "collection"
       ? collectionScreen(progression, back, nav, { focus: options.collectionFocus }, true)
-      : section === "bestiary"
+      : section === "mastery"
+        ? masteryScreen(progression, back, nav, true)
+        : section === "bestiary"
         ? bestiaryScreen(progression, back, nav, true)
         : section === "stories"
           ? storyIndexScreen(back, nav, (levelId) => router.isUnlocked(levelId), true)
@@ -95,6 +100,7 @@ function contentFor(section: ShellView, router: SectionRouter, options: SectionO
  */
 const NAV_PREFIX: Record<ShellView, string> = {
   collection: "album",
+  mastery: "mastery",
   bestiary: "bestiary",
   stories: "stories",
   achievements: "achievements",
@@ -103,6 +109,7 @@ const NAV_PREFIX: Record<ShellView, string> = {
 
 const BACK_ID: Record<ShellView, string> = {
   collection: "collection-back",
+  mastery: "mastery-back",
   bestiary: "bestiary-back",
   stories: "story-index-back",
   achievements: "achievements-back",

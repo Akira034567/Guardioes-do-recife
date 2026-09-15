@@ -132,6 +132,7 @@ function fallbackNav(onBack: () => void): ShellNav {
     onGoHub: onBack,
     onGoMap: onBack,
     onOpenCollection: onBack,
+    onOpenMastery: onBack,
     onOpenBestiary: () => {},
     onOpenStories: onBack,
     onOpenAchievements: onBack,
@@ -352,7 +353,7 @@ function abilityLabel(type: string): string {
     splitOnDeath: "Se divide ao morrer",
     phaseChangeAtHp: "Muda de fase conforme perde vida",
     speedBurst: "Dispara em arrancadas",
-    reverseCurrents: "Inverte a correnteza do Recife",
+    amplifyCurrents: "Amplifica a correnteza natural do Recife",
   };
   return labels[type] ?? type;
 }

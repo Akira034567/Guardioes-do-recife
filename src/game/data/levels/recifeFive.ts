@@ -23,9 +23,9 @@ export const RECIFE_FIVE: LevelDefinition = {
   initialWaveDelayMs: 10_000,
   betweenWaveDelayMs: 8_000,
   /** Rota de 1265px: a pressão vem de grupos SOBREPOSTOS em pouco tempo, nunca de vida extra. */
-  enemyScaling: { health: 0.95, speed: 1.05, reward: 1.2 },
-  /** 1053 de base = 1000 em campo. */
-  enemyOverrides: { tidebreaker: { maxHealth: 1053 } },
+  enemyScaling: { health: 1.02, speed: 1.05, reward: 1.2 },
+  /** 1276 de base = 1250 em campo (curva V3 dos chefes: 300/470/700/950/1250/1601). */
+  enemyOverrides: { tidebreaker: { maxHealth: 1276 } },
   objectives: [
     { id: "completar", kind: "complete" },
     { id: "vidas", kind: "minLivesRemaining", value: 10 },
@@ -90,72 +90,132 @@ export const RECIFE_FIVE: LevelDefinition = {
     {
       name: "Prelúdio",
       groups: [
-        { enemyId: "swimmer", count: 5, intervalMs: 800, delayMs: 0 },
-        { enemyId: "minnow", count: 6, intervalMs: 260, delayMs: 3500 },
+        { enemyId: "swimmer", count: 4, intervalMs: 820, delayMs: 0 },
+        { enemyId: "minnow", count: 6, intervalMs: 280, delayMs: 3500 },
         { enemyId: "dartfish", count: 2, intervalMs: 700, delayMs: 7000 },
       ],
     },
     {
-      name: "Agulhas e Moreia",
+      name: "Agulhas do Casco",
       groups: [
-        { enemyId: "needlefish", count: 4, intervalMs: 650, delayMs: 0 },
-        { enemyId: "shellback", count: 2, intervalMs: 1600, delayMs: 3000 },
-        { enemyId: "moray", count: 1, intervalMs: 1000, delayMs: 6000 },
+        { enemyId: "needlefish", count: 4, intervalMs: 700, delayMs: 0 },
+        { enemyId: "shellback", count: 2, intervalMs: 1700, delayMs: 3000 },
       ],
     },
     {
       name: "Blindagem Pesada",
       groups: [
-        { enemyId: "shellback", count: 3, intervalMs: 1300, delayMs: 0 },
-        { enemyId: "minnow", count: 8, intervalMs: 230, delayMs: 2200 },
-        { enemyId: "ghostJelly", count: 3, intervalMs: 1400, delayMs: 4500 },
-        { enemyId: "moray", count: 1, intervalMs: 1000, delayMs: 6000 },
+        { enemyId: "shellback", count: 3, intervalMs: 1400, delayMs: 0 },
+        { enemyId: "minnow", count: 8, intervalMs: 240, delayMs: 2500 },
+        { enemyId: "ghostJelly", count: 1, intervalMs: 1500, delayMs: 5000 },
       ],
     },
     {
       name: "Cardume Infinito",
       groups: [
         { enemyId: "minnow", count: 14, intervalMs: 210, delayMs: 0 },
-        { enemyId: "swimmer", count: 5, intervalMs: 700, delayMs: 2000 },
+        { enemyId: "swimmer", count: 5, intervalMs: 720, delayMs: 2200 },
         { enemyId: "shellback", count: 2, intervalMs: 1500, delayMs: 6000 },
       ],
     },
     {
-      name: "Primeiro Quebra-Marés",
+      name: "Agulhas e Moreia",
       groups: [
-        { enemyId: "dartfish", count: 5, intervalMs: 650, delayMs: 0 },
-        { enemyId: "needlefish", count: 3, intervalMs: 650, delayMs: 4000 },
-        { enemyId: "tidebreaker", count: 1, intervalMs: 1000, delayMs: 8000 },
+        { enemyId: "needlefish", count: 5, intervalMs: 650, delayMs: 0 },
+        { enemyId: "shellback", count: 2, intervalMs: 1600, delayMs: 3000 },
+        { enemyId: "moray", count: 1, intervalMs: 1000, delayMs: 6000 },
+      ],
+    },
+    {
+      name: "Vala do Naufrágio",
+      groups: [
+        { enemyId: "dartfish", count: 9, intervalMs: 550, delayMs: 0 },
+        { enemyId: "needlefish", count: 6, intervalMs: 550, delayMs: 2500 },
+      ],
+    },
+    {
+      name: "Respiro da Maré",
+      groups: [
+        { enemyId: "swimmer", count: 8, intervalMs: 700, delayMs: 0 },
+        { enemyId: "minnow", count: 12, intervalMs: 220, delayMs: 2500 },
       ],
     },
     {
       name: "Três Moreias",
       groups: [
-        { enemyId: "moray", count: 2, intervalMs: 4000, delayMs: 0 },
-        { enemyId: "needlefish", count: 5, intervalMs: 600, delayMs: 1500 },
+        { enemyId: "moray", count: 3, intervalMs: 2800, delayMs: 0 },
+        { enemyId: "needlefish", count: 6, intervalMs: 600, delayMs: 1500 },
         { enemyId: "shellback", count: 3, intervalMs: 1400, delayMs: 6000 },
+      ],
+    },
+    {
+      name: "Primeiro Quebra-Marés",
+      groups: [
+        { enemyId: "dartfish", count: 6, intervalMs: 650, delayMs: 0 },
+        { enemyId: "needlefish", count: 4, intervalMs: 650, delayMs: 4000 },
+        { enemyId: "tidebreaker", count: 1, intervalMs: 1000, delayMs: 8000 },
+      ],
+    },
+    {
+      name: "Casco de Ferro",
+      groups: [
+        { enemyId: "shellback", count: 8, intervalMs: 1200, delayMs: 0 },
+        { enemyId: "minnow", count: 14, intervalMs: 210, delayMs: 3000 },
+      ],
+    },
+    {
+      name: "Sombras do Galeão",
+      groups: [
+        { enemyId: "ghostJelly", count: 1, intervalMs: 1300, delayMs: 0 },
+        { enemyId: "dartfish", count: 8, intervalMs: 550, delayMs: 2500 },
+        { enemyId: "swimmer", count: 6, intervalMs: 700, delayMs: 5500 },
       ],
     },
     {
       name: "O Caçador da Gruta",
       groups: [
-        { enemyId: "dartfish", count: 7, intervalMs: 550, delayMs: 0 },
-        { enemyId: "minnow", count: 10, intervalMs: 220, delayMs: 1600 },
+        { enemyId: "dartfish", count: 8, intervalMs: 550, delayMs: 0 },
+        { enemyId: "minnow", count: 12, intervalMs: 220, delayMs: 1600 },
         { enemyId: "ghostJelly", count: 2, intervalMs: 1300, delayMs: 3200 },
         { enemyId: "shellback", count: 3, intervalMs: 1400, delayMs: 4500 },
-        // Primeira aparição do Tubarão Corrompido: vem sozinho, no fim da onda, para ser visto.
         { enemyId: "corruptedShark", count: 1, intervalMs: 3000, delayMs: 9000 },
+      ],
+    },
+    {
+      name: "Correnteza Cega",
+      groups: [
+        { enemyId: "needlefish", count: 10, intervalMs: 500, delayMs: 0 },
+        { enemyId: "ghostJelly", count: 2, intervalMs: 1300, delayMs: 2500 },
+        { enemyId: "minnow", count: 14, intervalMs: 210, delayMs: 5000 },
+      ],
+    },
+    {
+      name: "Dois Caçadores",
+      groups: [
+        { enemyId: "corruptedShark", count: 2, intervalMs: 5000, delayMs: 0 },
+        { enemyId: "swimmer", count: 8, intervalMs: 700, delayMs: 2000 },
+        { enemyId: "shellback", count: 4, intervalMs: 1300, delayMs: 5000 },
+      ],
+    },
+    {
+      name: "Maré Negra",
+      groups: [
+        { enemyId: "minnow", count: 20, intervalMs: 190, delayMs: 0 },
+        { enemyId: "dartfish", count: 10, intervalMs: 500, delayMs: 2500 },
+        { enemyId: "ghostJelly", count: 2, intervalMs: 1300, delayMs: 5000 },
+        { enemyId: "moray", count: 2, intervalMs: 2400, delayMs: 7500 },
       ],
     },
     {
       name: "Quebra-Marés do Galeão",
       groups: [
         { enemyId: "moray", count: 2, intervalMs: 2500, delayMs: 0 },
-        { enemyId: "shellback", count: 3, intervalMs: 1300, delayMs: 3000 },
-        { enemyId: "needlefish", count: 5, intervalMs: 550, delayMs: 6000 },
-        { enemyId: "minnow", count: 8, intervalMs: 220, delayMs: 8000 },
+        { enemyId: "shellback", count: 4, intervalMs: 1300, delayMs: 3000 },
+        { enemyId: "needlefish", count: 6, intervalMs: 550, delayMs: 6000 },
+        { enemyId: "minnow", count: 10, intervalMs: 220, delayMs: 8000 },
         { enemyId: "ghostJelly", count: 2, intervalMs: 1500, delayMs: 9500 },
-        { enemyId: "tidebreaker", count: 1, intervalMs: 1000, delayMs: 11000 },
+        { enemyId: "corruptedShark", count: 1, intervalMs: 3000, delayMs: 11000 },
+        { enemyId: "tidebreaker", count: 1, intervalMs: 1000, delayMs: 13000 },
       ],
     },
   ],

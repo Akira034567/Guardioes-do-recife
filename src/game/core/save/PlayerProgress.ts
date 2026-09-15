@@ -1,8 +1,10 @@
+import { MASTERY_MAX_LEVEL } from "../../data/mastery";
+
 /**
  * Progressão permanente do jogador (item 37). Nunca mistura com o estado de uma partida: o motor
  * (`core/match`) não conhece este documento, e este documento só recebe resultados no fim da partida.
  */
-export const SAVE_VERSION = 4;
+export const SAVE_VERSION = 5;
 
 export type Stars = 0 | 1 | 2 | 3;
 
@@ -108,6 +110,12 @@ export interface PlayerProgress {
   guardianStats: Record<string, GuardianCareer>;
   lastLoadout: string[];
   lastDifficulty: string;
+  /**
+   * Maestria permanente por Guardião: quantos nós (0 a 5) já foram comprados com Conchas. Só o nível
+   * é gravado — o que cada nó faz vive em `data/mastery.ts`, então rebalancear a árvore não invalida
+   * nenhum save. Guardião ausente = nível 0.
+   */
+  mastery: Record<string, number>;
   challenges: { completed: string[]; progress: Record<string, number>; lastSeenRotation: string | null };
   /** Segredos achados nos mapas e Encontros concluídos (desbloqueio narrativo dos Guardiões). */
   discoveredSecrets: string[];
@@ -163,6 +171,7 @@ export function createDefaultProgress(registry: SanitizeRegistry, now: Date): Pl
     guardianStats: {},
     lastLoadout: [],
     lastDifficulty: "normal",
+    mastery: {},
     challenges: { completed: [], progress: {}, lastSeenRotation: null },
     discoveredSecrets: [],
     completedEncounters: [],
@@ -290,6 +299,16 @@ export function sanitizeProgress(raw: unknown, registry: SanitizeRegistry, now: 
   // Invariante que se conserta sozinha: o que está plantado sempre pertence ao jogador.
   const reefOwned = new Set([...stringList(rawReef.owned, registry.decorationIds), ...reefPlaced.map((item) => item.defId)]);
 
+  // Maestria: só Guardiões do registro, nível inteiro entre 0 e o teto da árvore.
+  const mastery: Record<string, number> = {};
+  if (isRecord(raw.mastery)) {
+    for (const [guardianId, level] of Object.entries(raw.mastery)) {
+      if (!registry.guardianIds.includes(guardianId)) continue;
+      const clean = Math.floor(finite(level, 0, 0, MASTERY_MAX_LEVEL));
+      if (clean > 0) mastery[guardianId] = clean;
+    }
+  }
+
   const currency = isRecord(raw.currency) ? raw.currency : {};
   const settings = isRecord(raw.settings) ? raw.settings : {};
   const tutorial = isRecord(raw.tutorial) ? raw.tutorial : {};
@@ -331,6 +350,7 @@ export function sanitizeProgress(raw: unknown, registry: SanitizeRegistry, now: 
     guardianStats,
     lastLoadout: stringList(raw.lastLoadout, registry.guardianIds),
     lastDifficulty: text(raw.lastDifficulty, base.lastDifficulty),
+    mastery,
     challenges: {
       completed: stringList(challenges.completed),
       progress: isRecord(challenges.progress)

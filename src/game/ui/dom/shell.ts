@@ -6,7 +6,7 @@ import { BRAND_WAVE, ICONS } from "./icons";
  * o álbum desenham a mesma coluna da esquerda, só mudando qual item está aceso — assim o jogador nunca
  * perde a referência ao trocar de seção.
  */
-export type ShellSection = "hub" | "map" | "collection" | "bestiary" | "stories" | "achievements" | "settings";
+export type ShellSection = "hub" | "map" | "collection" | "mastery" | "bestiary" | "stories" | "achievements" | "settings";
 
 export interface ShellNav {
   /** Volta para o Meu Recife, a tela inicial e a casa do jogador. */
@@ -14,6 +14,8 @@ export interface ShellNav {
   /** Abre o mapa das fases. */
   onGoMap(): void;
   onOpenCollection(): void;
+  /** Abre a Maestria do Recife (progressão permanente por Guardião). */
+  onOpenMastery(): void;
   onOpenBestiary(): void;
   onOpenStories(): void;
   onOpenAchievements(): void;
@@ -39,6 +41,7 @@ const ITEMS: ReadonlyArray<{ section: ShellSection; icon: string; label: string;
   { section: "hub", icon: ICONS.coral, label: "Meu Recife", open: (nav) => nav.onGoHub() },
   { section: "map", icon: ICONS.compass, label: "Mapa do Recife", open: (nav) => nav.onGoMap() },
   { section: "collection", icon: ICONS.fish, label: "Álbum do Recife", open: (nav) => nav.onOpenCollection() },
+  { section: "mastery", icon: ICONS.star, label: "Maestria", open: (nav) => nav.onOpenMastery() },
   { section: "bestiary", icon: ICONS.spiky, label: "Ameaças", open: (nav) => nav.onOpenBestiary() },
   { section: "stories", icon: ICONS.book, label: "História", open: (nav) => nav.onOpenStories() },
   { section: "achievements", icon: ICONS.trophy, label: "Conquistas", open: (nav) => nav.onOpenAchievements() },
@@ -50,6 +53,7 @@ export const MAP_NAV_IDS: Record<ShellSection, string> = {
   hub: "map-hub",
   map: "map-here",
   collection: "map-collection",
+  mastery: "map-mastery",
   bestiary: "map-bestiary",
   stories: "map-stories",
   achievements: "map-achievements",

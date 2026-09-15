@@ -147,10 +147,10 @@ export class MatchEffects {
         audio.setMusicMood("calm");
         this.host.showMessage(`${event.name} caiu! A corrente se estabilizou.`, 2400);
         return;
-      case "currentsReversed":
-        if (event.reversed) {
+      case "currentsAmplified":
+        if (event.amplified) {
           audio.play("warning");
-          this.host.showMessage(`${event.bossName ?? "O chefe"} inverteu a corrente!`, 2200);
+          this.host.showMessage(`${event.bossName ?? "O chefe"} engrossou a corrente!`, 2200);
         } else {
           this.host.showMessage("A corrente voltou ao fluxo normal.", 1300);
         }

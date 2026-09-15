@@ -3,6 +3,20 @@ import { MIN_FLOW_MULTIPLIER, type FlowField } from "./FlowField";
 import { normalize, shapeContainsPoint, type Shape2D } from "./Geometry";
 
 export type CurrentOrigin = "map" | "guardian" | "ability" | "interactable";
+
+/** Fatores de amplificação aplicados às correntes naturais do mapa (1 = sem amplificação). */
+export interface CurrentAmplification {
+  /** Multiplica `strength` da zona direcional. */
+  strength: number;
+  /** Multiplica a deriva dos projéteis. */
+  drift: number;
+}
+
+/**
+ * Teto de `strength` depois da amplificação. Acima de 1 a componente contrária (`1 - strength`) ficaria
+ * negativa e os inimigos andariam de ré — que é justamente o efeito que saiu de cena.
+ */
+export const MAX_DIRECTIONAL_STRENGTH = 0.9;
 export type CurrentAffects = "enemy" | "projectile" | "guardian";
 
 /**
@@ -20,8 +34,13 @@ export interface CurrentZone {
   strength: number;
   projectileDrift: number;
   affects: ReadonlyArray<CurrentAffects>;
-  /** Pode ser invertida por um chefe ou evento (só zonas de mapa hoje). */
-  reversible: boolean;
+  /**
+   * Pode ser AMPLIFICADA por um chefe ou evento. Só as correntes naturais do mapa: uma zona criada
+   * por Guardião (a Tartaruga) nunca é amplificável, senão a Baleia acabaria reforçando o controle
+   * do próprio jogador. É esta flag — e não o `origin` — que o cálculo consulta, para que uma zona
+   * de evento futura possa optar por entrar ou não.
+   */
+  amplifiable: boolean;
   /** Corrente temporária: some quando o tempo passa. */
   expiresAt: number | null;
   /** Zonas contrárias respeitam a resistência a lentidão do inimigo (FlowField); as de mapa não. */
@@ -39,7 +58,7 @@ export function zoneFromLevel(definition: CurrentZoneDefinition): CurrentZone {
     strength: definition.speedModifier,
     projectileDrift: definition.projectileDrift,
     affects: ["enemy", "projectile"],
-    reversible: true,
+    amplifiable: true,
     expiresAt: null,
     respectsSlowResistance: false,
     visual: { kind: "motes" },
@@ -56,7 +75,7 @@ export function zoneFromFlowField(field: FlowField): CurrentZone {
     strength: field.speedFactor,
     projectileDrift: 0,
     affects: ["enemy"],
-    reversible: false,
+    amplifiable: false,
     expiresAt: null,
     respectsSlowResistance: field.mode !== "boost",
     visual: { kind: "ring" },
@@ -85,7 +104,7 @@ export class CurrentSystem {
   private readonly mapZones: CurrentZone[] = [];
   private readonly ownerZones = new Map<string, CurrentZone[]>();
   private readonly temporary: CurrentZone[] = [];
-  private readonly reversalSources = new Set<string>();
+  private readonly amplifiers = new Map<string, CurrentAmplification>();
 
   static fromLevel(currents: readonly CurrentZoneDefinition[]): CurrentSystem {
     const system = new CurrentSystem();
@@ -93,14 +112,28 @@ export class CurrentSystem {
     return system;
   }
 
-  get reversed(): boolean {
-    return this.reversalSources.size > 0;
+  get amplified(): boolean {
+    return this.amplifiers.size > 0;
   }
 
-  /** Inverte (ou restaura) as zonas reversíveis; várias fontes podem pedir inversão ao mesmo tempo. */
-  setReversed(sourceId: string, on: boolean): void {
-    if (on) this.reversalSources.add(sourceId);
-    else this.reversalSources.delete(sourceId);
+  /**
+   * Amplificação em vigor: com várias fontes vale a MAIOR de cada fator, nunca o produto — duas
+   * Baleias vivas engrossam a maré uma vez só.
+   */
+  get amplification(): CurrentAmplification {
+    let strength = 1;
+    let drift = 1;
+    for (const value of this.amplifiers.values()) {
+      strength = Math.max(strength, value.strength);
+      drift = Math.max(drift, value.drift);
+    }
+    return { strength, drift };
+  }
+
+  /** Liga/desliga a amplificação de uma fonte (`null` = desliga). Só afeta zonas `amplifiable`. */
+  setAmplified(sourceId: string, amplification: CurrentAmplification | null): void {
+    if (!amplification || (amplification.strength <= 1 && amplification.drift <= 1)) this.amplifiers.delete(sourceId);
+    else this.amplifiers.set(sourceId, amplification);
   }
 
   /** Substitui as zonas de um dono (Tartaruga a cada frame; venda → lista vazia). */
@@ -143,10 +176,12 @@ export class CurrentSystem {
     const zone = this.directionalZones().find((candidate) => candidate.affects.includes("enemy") && shapeContainsPoint(candidate.shape, point));
     if (zone && zone.direction) {
       const current = normalize(zone.direction);
-      const sign = this.reversed && zone.reversible ? -1 : 1;
       const movement = normalize(tangent);
-      const dot = (current.x * sign) * movement.x + (current.y * sign) * movement.y;
-      directional = dot >= 0 ? 1 + zone.strength : 1 - zone.strength;
+      const dot = current.x * movement.x + current.y * movement.y;
+      // A Baleia engrossa a corrente natural: a favor empurra mais, contra segura mais. O teto existe
+      // para `1 - strength` nunca chegar a zero, o que pararia (ou faria andar de ré) quem nada contra.
+      const strength = Math.min(MAX_DIRECTIONAL_STRENGTH, zone.strength * (zone.amplifiable ? this.amplification.strength : 1));
+      directional = dot >= 0 ? 1 + strength : 1 - strength;
     }
     let slowest = 1;
     let fastest = 1;
@@ -167,8 +202,8 @@ export class CurrentSystem {
     const zone = this.directionalZones().find((candidate) => candidate.affects.includes("projectile") && shapeContainsPoint(candidate.shape, point));
     if (!zone || !zone.direction || zone.projectileDrift === 0) return { x: 0, y: 0 };
     const current = normalize(zone.direction);
-    const sign = this.reversed && zone.reversible ? -1 : 1;
-    return { x: current.x * sign * zone.projectileDrift * deltaSeconds, y: current.y * sign * zone.projectileDrift * deltaSeconds };
+    const drift = zone.projectileDrift * (zone.amplifiable ? this.amplification.drift : 1);
+    return { x: current.x * drift * deltaSeconds, y: current.y * drift * deltaSeconds };
   }
 
   private directionalZones(): CurrentZone[] {

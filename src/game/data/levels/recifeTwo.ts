@@ -21,9 +21,9 @@ export const RECIFE_TWO: LevelDefinition = {
   reefHealth: ECONOMY.reefHealth,
   initialWaveDelayMs: 10_000,
   betweenWaveDelayMs: 8_000,
-  enemyScaling: { health: 0.9, speed: 1.03, reward: 1.15 },
-  /** 528 de base = 475 em campo. */
-  enemyOverrides: { tidebreaker: { maxHealth: 528 } },
+  enemyScaling: { health: 0.84, speed: 1.03, reward: 1.15 },
+  /** 560 de base = 470 em campo (curva V3 dos chefes: 300/470/700/950/1250/1601). */
+  enemyOverrides: { tidebreaker: { maxHealth: 560 } },
   objectives: [
     { id: "completar", kind: "complete" },
     { id: "intacto", kind: "noLeaks" },
@@ -113,7 +113,7 @@ export const RECIFE_TWO: LevelDefinition = {
     {
       name: "Cardume",
       groups: [
-        { enemyId: "minnow", count: 10, intervalMs: 250, delayMs: 0 },
+        { enemyId: "minnow", count: 12, intervalMs: 250, delayMs: 0 },
         { enemyId: "swimmer", count: 4, intervalMs: 850, delayMs: 3000 },
       ],
     },
@@ -125,27 +125,58 @@ export const RECIFE_TWO: LevelDefinition = {
       ],
     },
     {
+      name: "Corrida nas Algas",
+      groups: [
+        { enemyId: "dartfish", count: 7, intervalMs: 700, delayMs: 0 },
+        { enemyId: "minnow", count: 10, intervalMs: 240, delayMs: 2800 },
+      ],
+    },
+    {
       name: "Enxurrada",
       groups: [
-        { enemyId: "minnow", count: 10, intervalMs: 240, delayMs: 0 },
+        { enemyId: "minnow", count: 14, intervalMs: 240, delayMs: 0 },
         { enemyId: "dartfish", count: 5, intervalMs: 700, delayMs: 2600 },
-        { enemyId: "shellback", count: 3, intervalMs: 1900, delayMs: 5000 },
+        { enemyId: "shellback", count: 2, intervalMs: 1900, delayMs: 5000 },
+      ],
+    },
+    {
+      name: "Parede de Cascos",
+      groups: [
+        { enemyId: "shellback", count: 5, intervalMs: 1500, delayMs: 0 },
+        { enemyId: "swimmer", count: 6, intervalMs: 780, delayMs: 2000 },
       ],
     },
     {
       name: "Maré Cheia",
       groups: [
-        { enemyId: "swimmer", count: 8, intervalMs: 720, delayMs: 0 },
-        { enemyId: "minnow", count: 10, intervalMs: 230, delayMs: 3000 },
+        { enemyId: "swimmer", count: 9, intervalMs: 720, delayMs: 0 },
+        { enemyId: "minnow", count: 12, intervalMs: 230, delayMs: 3000 },
         { enemyId: "dartfish", count: 5, intervalMs: 650, delayMs: 6500 },
+      ],
+    },
+    {
+      name: "Cascos e Cardume",
+      groups: [
+        { enemyId: "shellback", count: 4, intervalMs: 1500, delayMs: 0 },
+        { enemyId: "minnow", count: 16, intervalMs: 220, delayMs: 2500 },
+        { enemyId: "dartfish", count: 4, intervalMs: 650, delayMs: 6000 },
+      ],
+    },
+    {
+      name: "Ressaca",
+      groups: [
+        { enemyId: "swimmer", count: 10, intervalMs: 680, delayMs: 0 },
+        { enemyId: "dartfish", count: 8, intervalMs: 620, delayMs: 2500 },
+        { enemyId: "minnow", count: 14, intervalMs: 220, delayMs: 5500 },
       ],
     },
     {
       name: "Quebra-Marés Blindado",
       groups: [
-        { enemyId: "shellback", count: 3, intervalMs: 1500, delayMs: 0 },
-        { enemyId: "minnow", count: 10, intervalMs: 250, delayMs: 3000 },
-        { enemyId: "tidebreaker", count: 1, intervalMs: 1000, delayMs: 7000 },
+        { enemyId: "shellback", count: 4, intervalMs: 1500, delayMs: 0 },
+        { enemyId: "minnow", count: 12, intervalMs: 250, delayMs: 3000 },
+        { enemyId: "swimmer", count: 5, intervalMs: 800, delayMs: 5000 },
+        { enemyId: "tidebreaker", count: 1, intervalMs: 1000, delayMs: 8000 },
       ],
     },
   ],

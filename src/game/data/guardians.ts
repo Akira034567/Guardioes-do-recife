@@ -575,7 +575,7 @@ export const GUARDIANS: Record<GuardianId, GuardianDefinition> = {
           },
           {
             name: "Fúria Abissal",
-            description: `Espera ${stonefish.ambush.level2.waitFor.count} inimigos (ou ${seconds(stonefish.ambush.level2.waitFor.maxWaitMs)}) e explode: ${stonefish.ambush.level2.damage} de dano, ${seconds(stonefish.ambush.level2.stun.durationMs)} de stun e empurra ${stonefish.ambush.level2.knockback.distance}px para trás na rota. Chefes: só stun reduzido.`,
+            description: `Ao primeiro contato abre uma janela de ${seconds(stonefish.ambush.level2.waitFor.windowMs)}: se ${stonefish.ambush.level2.waitFor.detonateAt} inimigos entrarem, explode na hora; senão explode no primeiro mesmo. ${stonefish.ambush.level2.damage} de dano, ${seconds(stonefish.ambush.level2.stun.durationMs)} de stun e empurra ${stonefish.ambush.level2.knockback.distance}px para trás na rota. Chefes: só stun reduzido.`,
             cost: stonefish.upgradeCosts[1],
             trap: {
               ...stonefish.trap,

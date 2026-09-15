@@ -16,6 +16,7 @@ import type {
   VulnerabilityEffect,
 } from "../types";
 import { NEUTRAL_AURA } from "./Auras";
+import { NEUTRAL_MASTERY, type MasteryBonus } from "./progression/mastery";
 import { RADIAL, type TargetingShape } from "./TargetingShape";
 import { appliedUpgrades, resolveLast, resolveProduct, type UpgradeProgress } from "./UpgradeTree";
 
@@ -87,36 +88,50 @@ export function resolveGuardianStats(
   progress: UpgradeProgress,
   aura: ResolvedAura = NEUTRAL_AURA,
   modifiers: StatModifiers = {},
+  /**
+   * Maestria permanente desta unidade (V3). Entra aqui, e não na aura, porque aura é "vale a melhor
+   * fonte" e maestria sempre soma: são dois canais diferentes de propósito.
+   */
+  mastery: MasteryBonus = NEUTRAL_MASTERY,
 ): GuardianStats {
   const applied = appliedUpgrades(definition, progress);
   const baseDamage = resolveLast(applied, "damage") ?? definition.damage;
-  const damage = baseDamage > 0 ? baseDamage * aura.damageMultiplier * (modifiers.damageMultiplier ?? 1) : 0;
+  const damage = baseDamage > 0 ? baseDamage * aura.damageMultiplier * mastery.damageMultiplier * (modifiers.damageMultiplier ?? 1) : 0;
   const blocks = definition.placementMode === "route" && Boolean(resolveLast(applied, "blocks") ?? definition.blocks);
-  const attackSpeed = aura.attackSpeedMultiplier * (1 + Math.max(0, modifiers.attackSpeedBonus ?? 0)) * Math.max(0.05, modifiers.attackSpeedMultiplier ?? 1);
+  const attackSpeed =
+    aura.attackSpeedMultiplier *
+    mastery.attackSpeedMultiplier *
+    (1 + Math.max(0, modifiers.attackSpeedBonus ?? 0)) *
+    Math.max(0.05, modifiers.attackSpeedMultiplier ?? 1);
   const vulnerability = resolveLast(applied, "vulnerability") ?? definition.vulnerability ?? null;
   const trap = resolveLast(applied, "trap") ?? definition.trap ?? null;
   return {
-    range: definition.range * resolveProduct(applied, "rangeMultiplier") * aura.rangeMultiplier,
+    range: definition.range * resolveProduct(applied, "rangeMultiplier") * aura.rangeMultiplier * mastery.rangeMultiplier,
     damage,
     canAttack: damage > 0,
     cooldownMs: (resolveLast(applied, "cooldownMs") ?? definition.cooldownMs) / attackSpeed,
     projectileSpeed:
-      (definition.projectileSpeed ?? 400) * resolveProduct(applied, "projectileSpeedMultiplier") * aura.projectileSpeedMultiplier,
+      (definition.projectileSpeed ?? 400) *
+      resolveProduct(applied, "projectileSpeedMultiplier") *
+      aura.projectileSpeedMultiplier *
+      mastery.projectileSpeedMultiplier,
     predictiveAim: applied.some((upgrade) => upgrade.predictiveAim),
     pierceDamages: resolveLast(applied, "pierceDamages") ?? [damage],
     straightRicochet: applied.some((upgrade) => upgrade.straightRicochet),
     splash: resolveLast(applied, "splash") ?? null,
     chainDamages: resolveLast(applied, "chainDamages") ?? [damage],
     slowFactor: resolveLast(applied, "slowFactor") ?? definition.slowFactor ?? null,
-    slowDurationMs: (resolveLast(applied, "slowDurationMs") ?? definition.slowDurationMs ?? 0) * aura.debuffDurationMultiplier,
+    slowDurationMs: (resolveLast(applied, "slowDurationMs") ?? definition.slowDurationMs ?? 0) * aura.debuffDurationMultiplier * mastery.debuffDurationMultiplier,
     stun: resolveLast(applied, "stun") ?? null,
     electricField: resolveLast(applied, "electricField") ?? null,
     blocks,
     blockCapacity: blocks ? (resolveLast(applied, "blockCapacity") ?? definition.blockCapacity ?? 1) : 0,
-    contactDamagePerSecond: resolveLast(applied, "contactDamagePerSecond") ?? definition.contactDamagePerSecond ?? 0,
+    contactDamagePerSecond: (resolveLast(applied, "contactDamagePerSecond") ?? definition.contactDamagePerSecond ?? 0) * mastery.contactDamageMultiplier,
     bossHold: resolveLast(applied, "bossHold") ?? null,
     armorPiercing: applied.some((upgrade) => upgrade.armorPiercing),
-    vulnerability: vulnerability ? { ...vulnerability, durationMs: vulnerability.durationMs * aura.debuffDurationMultiplier } : null,
+    vulnerability: vulnerability
+      ? { ...vulnerability, durationMs: vulnerability.durationMs * aura.debuffDurationMultiplier * mastery.debuffDurationMultiplier }
+      : null,
     areaAttack: applied.some((upgrade) => upgrade.areaAttack),
     spin: resolveLast(applied, "spin") ?? null,
     inkCloud: resolveLast(applied, "inkCloud") ?? null,
@@ -130,14 +145,23 @@ export function resolveGuardianStats(
     mark: resolveLast(applied, "mark") ?? null,
     blockHold: blocks ? (resolveLast(applied, "blockHold") ?? null) : null,
     flowField: resolveLast(applied, "flowField") ?? null,
-    pushWave: resolveLast(applied, "pushWave") ?? null,
-    trap,
+    pushWave: (() => {
+      const wave = resolveLast(applied, "pushWave") ?? null;
+      return wave ? { ...wave, distance: wave.distance * mastery.pushDistanceMultiplier } : null;
+    })(),
+    trap: trap
+      ? {
+          ...trap,
+          armMs: trap.armMs * mastery.trapArmMultiplier,
+          charge: { ...trap.charge, max: trap.charge.max + mastery.chargeMaxBonus },
+        }
+      : null,
     sonar: resolveLast(applied, "sonar") ?? definition.sonar ?? null,
     chorus: resolveLast(applied, "chorus") ?? null,
-    abilityCooldownMultiplier: aura.abilityCooldownMultiplier,
-    controlDurationMultiplier: aura.controlDurationMultiplier,
-    debuffDurationMultiplier: aura.debuffDurationMultiplier,
-    rearmMultiplier: aura.rearmMultiplier,
+    abilityCooldownMultiplier: aura.abilityCooldownMultiplier * mastery.abilityCooldownMultiplier,
+    controlDurationMultiplier: aura.controlDurationMultiplier * mastery.controlDurationMultiplier,
+    debuffDurationMultiplier: aura.debuffDurationMultiplier * mastery.debuffDurationMultiplier,
+    rearmMultiplier: aura.rearmMultiplier * mastery.rearmMultiplier,
     dashSpeedMultiplier: aura.dashSpeedMultiplier,
   };
 }

@@ -39,7 +39,7 @@ describe("elite modifiers", () => {
     expect(elite.unblockable).toBe(true);
     expect(controlTier(elite)).toBe("boss");
     expect(elite.tags).toEqual(expect.arrayContaining(["BOSS", "ELITE"]));
-    expect(elite.abilities.some((ability) => ability.type === "reverseCurrents")).toBe(true);
+    expect(elite.abilities.some((ability) => ability.type === "amplifyCurrents")).toBe(true);
   });
 
   it("adds resistances on top of the base ones, clamped to 1", () => {

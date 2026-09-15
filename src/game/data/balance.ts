@@ -92,9 +92,9 @@ export const GUARDIAN_BALANCE = {
       },
     },
     control: {
-      level1: { damage: 14, slowFactor: 0.45, slowDurationMs: 2200 },
+      level1: { damage: 18, slowFactor: 0.45, slowDurationMs: 2200 },
       /** Stun curto com imunidade interna: 900ms a cada 3s no mesmo alvo, e nunca encadeia. */
-      level2: { damage: 14, stun: { durationMs: 900, immunityMs: 3000 } },
+      level2: { damage: 18, stun: { durationMs: 900, immunityMs: 3000 } },
     },
   },
   /** Baiacu — bloqueio. Ramo A segura mais gente; ramo B troca a contenção por pulsos de área. */
@@ -133,7 +133,7 @@ export const GUARDIAN_BALANCE = {
     },
     sweep: {
       level1: { damage: 28 },
-      level2: { damage: 28, spin: { everyAttacks: 3, damage: 56, radiusMultiplier: 1.7 } },
+      level2: { damage: 28, spin: { everyAttacks: 4, damage: 56, radiusMultiplier: 1.7 } },
     },
   },
   /** Polvo-Tinteiro — debuffer. Ramo A vulnerabilidade e lentidão em área; ramo B a melhor aura permanente. */
@@ -141,11 +141,11 @@ export const GUARDIAN_BALANCE = {
     cost: 105,
     upgradeCosts: [90, 155] as const,
     range: 155,
-    damage: 12,
+    damage: 14,
     cooldownMs: 1500,
     vulnerability: { multiplier: 1.12, durationMs: 3000 },
     ink: {
-      level1: { damage: 15, vulnerability: { multiplier: 1.2, durationMs: 3000, radius: 55 } },
+      level1: { damage: 17, vulnerability: { multiplier: 1.2, durationMs: 3000, radius: 55 } },
       level2: {
         radius: 90,
         durationMs: 4000,
@@ -183,12 +183,12 @@ export const GUARDIAN_BALANCE = {
       },
     },
   },
-  /** Tartaruga-Marinha — controle em área. Dano quase nulo; o valor é a zona e o bloqueio temporário. */
+  /** Tartaruga-Marinha — controle em área. O dano é acessório; o valor é a zona e o bloqueio temporário. */
   "sea-turtle": {
     cost: 85,
     upgradeCosts: [75, 130] as const,
     range: 100,
-    damage: 8,
+    damage: 11,
     cooldownMs: 1500,
     /** Batida base: slow leve no alvo. */
     slowFactor: 0.75,
@@ -250,7 +250,7 @@ export const GUARDIAN_BALANCE = {
         damage: 96,
         stun: { durationMs: 1600, eliteFactor: 0.6, bossFactor: 0.25 },
         knockback: { distance: 90, eliteFactor: 0.5 },
-        waitFor: { count: 2, maxWaitMs: 2000 },
+        waitFor: { windowMs: 500, detonateAt: 2 },
         charge: { everyMs: 2000, bonus: 0.06, max: 0.36, applyTo: "control" as const },
       },
     },
@@ -260,7 +260,7 @@ export const GUARDIAN_BALANCE = {
     cost: 110,
     upgradeCosts: [95, 160] as const,
     range: 155,
-    damage: 9,
+    damage: 11,
     cooldownMs: 1400,
     /** Base: 10% de vulnerabilidade, como combinado. */
     sonar: { cooldownMs: 5500, radiusMultiplier: 1, revealMs: 5000, vulnerability: { multiplier: 1.1, durationMs: 4500 } },
@@ -335,29 +335,57 @@ export const PLACEMENT = {
 } as const;
 
 /**
- * Valores de referência da fase 1; cada fase aplica `enemyScaling` por cima.
+ * Valores de referência; cada fase aplica `enemyScaling` por cima.
  *
- * V2: a VIDA não subiu (decisão explícita). O que mudou foi a ARMADURA, reescrita para a curva
- * percentual — os números antigos (4, 3, 2) valiam quase nada nela. Redução efetiva:
+ * V2 mexeu só na ARMADURA, reescrita para a curva percentual. Redução efetiva:
  * 9 → 36%, 7 → 30%, 6 → 27%, 5 → 24%, 2 → 11%.
+ *
+ * ---------------------------------------------------------------------------
+ * V3 (fases longas): agora a VIDA subiu, com dois princípios.
+ *
+ * 1. Um comum tem que custar 2–3 golpes relevantes, não um. O Peixe Invasor a 55 morria para um
+ *    único Giro de Carapaça (56) em qualquer fase; a 90 ele exige 2 giros ou 3 pinçadas.
+ * 2. O Peixinho é a exceção e continua descartável: subiu de 18 para 24 só o bastante para não
+ *    evaporar no dano de raspão dos suportes, e segue morrendo a qualquer AoE de verdade.
+ *
+ * A subida do fim de campanha NÃO está aqui: está em `enemyScaling.health` de cada fase, que saiu
+ * de uma reta quase plana (0,75 → 1,00) para uma rampa real (0,75 → 1,50). É o que concentra a
+ * densidade nas fases médias e finais sem endurecer a fase 1.
+ *
+ * As recompensas subiram junto (o mesmo inimigo vale mais pérolas), senão a economia não paga uma
+ * partida de 18 ondas.
  */
 export const ENEMY_BALANCE = {
-  minnow: { maxHealth: 18, speed: 72, reward: 2, armor: 0, reefDamage: 1 },
-  swimmer: { maxHealth: 55, speed: 58, reward: 5, armor: 0, reefDamage: 1 },
-  dartfish: { maxHealth: 35, speed: 92, reward: 6, armor: 0, reefDamage: 1 },
-  needlefish: { maxHealth: 45, speed: 118, reward: 7, armor: 0, reefDamage: 2 },
+  /**
+   * Cardume: a única unidade que NÃO acompanhou a subida da V3. Continua morrendo a um AoE grande
+   * (34+) e a um tiro cheio do Camarão, mas já não cai para dano de raspão de suporte (11–18).
+   */
+  minnow: { maxHealth: 24, speed: 72, reward: 2, armor: 0, reefDamage: 1 },
+  swimmer: { maxHealth: 90, speed: 58, reward: 6, armor: 0, reefDamage: 1 },
+  dartfish: { maxHealth: 60, speed: 92, reward: 7, armor: 0, reefDamage: 1 },
+  needlefish: { maxHealth: 78, speed: 118, reward: 9, armor: 0, reefDamage: 2 },
   /** Camuflado: só aparece se um bloqueador o segurar ou o sonar do Golfinho o revelar. */
-  ghostJelly: { maxHealth: 60, speed: 70, reward: 9, armor: 2, reefDamage: 1 },
-  shellback: { maxHealth: 130, speed: 40, reward: 10, armor: 9, reefDamage: 2 },
-  moray: { maxHealth: 250, speed: 52, reward: 18, armor: 5, reefDamage: 4 },
-  corruptedShark: { maxHealth: 320, speed: 74, reward: 26, armor: 6, reefDamage: 5 },
+  ghostJelly: { maxHealth: 100, speed: 70, reward: 11, armor: 2, reefDamage: 1 },
+  shellback: { maxHealth: 210, speed: 40, reward: 13, armor: 9, reefDamage: 2 },
+  moray: { maxHealth: 390, speed: 52, reward: 22, armor: 5, reefDamage: 4 },
+  corruptedShark: { maxHealth: 500, speed: 74, reward: 32, armor: 6, reefDamage: 5 },
   tidebreaker: { maxHealth: 550, speed: 29, reward: 60, armor: 7, reefDamage: 10 },
 } as const;
 
-/** Regras do chefe: ciclo de inversão da corrente. */
+/**
+ * Regras do chefe: ciclo de AMPLIFICAÇÃO da corrente natural do mapa.
+ *
+ * A Baleia não inverte mais o fluxo: ela engrossa o que o mapa já tem. Quem nada a favor acelera
+ * mais, quem nada contra sofre mais, e a deriva dos projéteis aumenta. As correntes criadas por
+ * Guardiões (a Tartaruga) ficam intocadas — só zonas `origin: "map"` são amplificáveis.
+ *
+ * 🔶 `strengthMultiplier` e `driftMultiplier` são números novos desta rodada: placeholders a calibrar.
+ */
 export const BOSS_CURRENT = {
   cycleMs: 6500,
-  reverseMs: 3000,
+  surgeMs: 3000,
+  strengthMultiplier: 2.2,
+  driftMultiplier: 1.8,
 } as const;
 
 /**

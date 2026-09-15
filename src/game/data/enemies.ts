@@ -148,8 +148,16 @@ export const ENEMIES: Record<EnemyId, EnemyDefinition> = {
     // A Baleia precisa parecer um CHEFE à primeira vista: a 172px de comprimento ela ultrapassa a
     // faixa de areia da rota (118px), que é o efeito pretendido. 🔶 placeholder (item 10).
     art: { kind: "sprite", folder: "baleia-mare-negra", frames: 1, frameMs: 400, scale: 0.27, shapeFallback: "boss" },
-    description: "O chefe das primeiras marés: inverte a corrente do recife em ciclos e não pode ser bloqueado.",
-    abilities: [{ type: "reverseCurrents", cycleMs: BOSS_CURRENT.cycleMs, reverseMs: BOSS_CURRENT.reverseMs }],
+    description: "O chefe das primeiras marés: engrossa a corrente natural do recife em ciclos e não pode ser bloqueado.",
+    abilities: [
+      {
+        type: "amplifyCurrents",
+        cycleMs: BOSS_CURRENT.cycleMs,
+        surgeMs: BOSS_CURRENT.surgeMs,
+        strengthMultiplier: BOSS_CURRENT.strengthMultiplier,
+        driftMultiplier: BOSS_CURRENT.driftMultiplier,
+      },
+    ],
   },
 };
 

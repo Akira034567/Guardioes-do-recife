@@ -20,9 +20,9 @@ export const RECIFE_ONE: LevelDefinition = {
   initialWaveDelayMs: 10_000,
   betweenWaveDelayMs: 8_000,
   /** Fase de aprendizado: inimigos com 75% da vida de referência e 20% mais pérolas por abate. */
-  enemyScaling: { health: 0.75, speed: 1, reward: 1.2 },
-  /** Primeiro chefe: 400 de base = 300 de vida em campo (V2: a curva de chefes é 300/475/650/800/1000/1300). */
-  enemyOverrides: { tidebreaker: { maxHealth: 400 } },
+  enemyScaling: { health: 0.64, speed: 1.0, reward: 1.2 },
+  /** 441 de base = 300 em campo (curva V3 dos chefes: 300/470/700/950/1250/1601). */
+  enemyOverrides: { tidebreaker: { maxHealth: 469 } },
   objectives: [
     { id: "completar", kind: "complete" },
     { id: "vidas", kind: "minLivesRemaining", value: 15 },
@@ -74,34 +74,50 @@ export const RECIFE_ONE: LevelDefinition = {
   waves: [
     {
       name: "Batedores",
-      groups: [{ enemyId: "swimmer", count: 4, intervalMs: 1000, delayMs: 0 }],
+      groups: [
+        { enemyId: "swimmer", count: 4, intervalMs: 1000, delayMs: 0 },
+      ],
     },
     {
       name: "Correria",
       groups: [
         { enemyId: "swimmer", count: 4, intervalMs: 900, delayMs: 0 },
-        { enemyId: "dartfish", count: 3, intervalMs: 1000, delayMs: 3000 },
+        { enemyId: "dartfish", count: 2, intervalMs: 1000, delayMs: 3000 },
       ],
     },
     {
       name: "Maré Dupla",
       groups: [
-        { enemyId: "swimmer", count: 6, intervalMs: 850, delayMs: 0 },
-        { enemyId: "dartfish", count: 4, intervalMs: 900, delayMs: 3500 },
+        { enemyId: "swimmer", count: 5, intervalMs: 850, delayMs: 0 },
+        { enemyId: "dartfish", count: 3, intervalMs: 900, delayMs: 3500 },
       ],
     },
     {
       name: "Pressão",
       groups: [
         { enemyId: "dartfish", count: 5, intervalMs: 800, delayMs: 0 },
-        { enemyId: "swimmer", count: 6, intervalMs: 900, delayMs: 3000 },
+        { enemyId: "swimmer", count: 5, intervalMs: 900, delayMs: 3000 },
+      ],
+    },
+    {
+      name: "Contracorrente",
+      groups: [
+        { enemyId: "swimmer", count: 6, intervalMs: 800, delayMs: 0 },
+        { enemyId: "dartfish", count: 5, intervalMs: 780, delayMs: 3500 },
+      ],
+    },
+    {
+      name: "Enxurrada",
+      groups: [
+        { enemyId: "dartfish", count: 7, intervalMs: 700, delayMs: 0 },
+        { enemyId: "swimmer", count: 6, intervalMs: 800, delayMs: 3000 },
       ],
     },
     {
       name: "Quebra-Marés",
       groups: [
-        { enemyId: "swimmer", count: 5, intervalMs: 900, delayMs: 0 },
-        { enemyId: "dartfish", count: 3, intervalMs: 800, delayMs: 3500 },
+        { enemyId: "swimmer", count: 6, intervalMs: 850, delayMs: 0 },
+        { enemyId: "dartfish", count: 4, intervalMs: 750, delayMs: 3500 },
         { enemyId: "tidebreaker", count: 1, intervalMs: 1000, delayMs: 8000 },
       ],
     },

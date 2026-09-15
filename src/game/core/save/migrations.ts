@@ -61,10 +61,21 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
+/**
+ * v4 → v5: nasce a maestria permanente por Guardião (V3).
+ *
+ * Ninguém herda nós: a moeda já gasta em outras coisas não vira maestria retroativa, e o jogador
+ * começa a árvore do zero com as Conchas que tiver em caixa. `sanitizeProgress` completa o resto.
+ */
+function fromV4(document: Record<string, unknown>): Record<string, unknown> {
+  return { ...document, saveVersion: 5, mastery: {}, migratedFrom: 4 };
+}
+
 export const MIGRATIONS: Record<number, Migration> = {
   1: fromV1,
   2: fromV2,
   3: fromV3,
+  4: fromV4,
 };
 
 /** Aplica as migrações em cadeia a partir de `fromVersion` até a versão alvo. */

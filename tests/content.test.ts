@@ -9,8 +9,9 @@ import { RECIFE_ONE } from "../src/game/data/levels";
 import type { GuardianId } from "../src/game/types";
 
 describe("Recife 1 content contracts", () => {
-  it("keeps five waves and four platforms", () => {
-    expect(RECIFE_ONE.waves).toHaveLength(5);
+  it("keeps seven waves and four platforms", () => {
+    // V3: a fase 1 saiu de 5 para 7 ondas (a curva da campanha é 7/10/12/15/16/18).
+    expect(RECIFE_ONE.waves).toHaveLength(7);
     expect(RECIFE_ONE.placements).toHaveLength(4);
     expect("routePlacements" in RECIFE_ONE).toBe(false);
   });
@@ -113,7 +114,7 @@ describe("Recife 1 content contracts", () => {
     expect(stonefish.branches[0].upgrades[0].trap?.poison).toMatchObject({ durationMs: 5000, tickMs: 1000 });
     expect(stonefish.branches[0].upgrades[1].trap?.cloud).toBeDefined();
     expect(stonefish.branches[1].upgrades[0].trap?.stun?.durationMs).toBe(1100);
-    expect(stonefish.branches[1].upgrades[1].trap).toMatchObject({ stun: { durationMs: 1600 }, waitFor: { count: 2 } });
+    expect(stonefish.branches[1].upgrades[1].trap).toMatchObject({ stun: { durationMs: 1600 }, waitFor: { windowMs: 500, detonateAt: 2 } });
     expect(stonefish.branches[1].upgrades.every((upgrade) => upgrade.trap?.charge.applyTo === "control")).toBe(true);
     expect(stonefish.branches[0].upgrades.every((upgrade) => upgrade.trap?.charge.applyTo === "damage")).toBe(true);
 

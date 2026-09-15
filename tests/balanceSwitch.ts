@@ -11,6 +11,6 @@
  *
  * Para voltar ao balanceamento, troque esta linha para `true`.
  */
-export const BALANCE_SUITES_ON = false;
+export const BALANCE_SUITES_ON = true;
 
 export const BALANCE_SWITCH_HINT = "Testes de balanceamento desligados: ligue BALANCE_SUITES_ON em tests/balanceSwitch.ts.";

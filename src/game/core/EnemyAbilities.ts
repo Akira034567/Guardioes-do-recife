@@ -35,7 +35,7 @@ export interface AbilityGuardian extends Vec2 {
 }
 
 export type EnemyAbilityEvent =
-  | { type: "currentsReversed"; enemyId: string; reversed: boolean }
+  | { type: "currentsAmplified"; enemyId: string; amplified: boolean }
   | { type: "enraged"; enemyId: string }
   | { type: "split"; enemyId: string; spawned: number }
   | { type: "phaseChanged"; enemyId: string; announcement?: string }
@@ -82,56 +82,61 @@ const state = <T>(enemy: AbilityEnemy, key: string, initial: () => T): T => {
 
 const isAlive = (enemy: AbilityEnemy): boolean => !enemy.dead && !enemy.reachedGoal;
 
-interface ReverseState {
+interface SurgeState {
   cycleMs: number;
-  reverseRemainingMs: number;
-  reversed: boolean;
+  surgeRemainingMs: number;
+  amplified: boolean;
 }
 
-const REVERSE_SOURCE = "reverseCurrents";
+const SURGE_SOURCE = "amplifyCurrents";
 
 /**
- * Inversão das correntes do mapa enquanto um chefe está vivo. Ciclo único compartilhado por todos os
- * donos vivos; a morte de um dono desfaz a inversão sem zerar o ciclo (comportamento original).
+ * Maré grossa do Quebra-Marés: em ciclos, a Baleia AMPLIFICA as correntes naturais do mapa enquanto
+ * está viva. Nada de inversão — quem nada a favor acelera mais e quem nada contra sofre mais, então a
+ * leitura da rota continua valendo. As correntes criadas por Guardiões não entram nisso (a zona de
+ * mapa é `amplifiable`, a da Tartaruga não).
+ *
+ * Ciclo único compartilhado por todos os donos vivos; a morte de um dono acalma a maré sem zerar o
+ * ciclo, como a versão anterior fazia.
  */
-const reverseCurrents: HandlerFor<"reverseCurrents"> = {
+const amplifyCurrents: HandlerFor<"amplifyCurrents"> = {
   scope: "world",
   onWorldTick(ability, owners, deltaMs, shared, world) {
-    const current = (shared.get(REVERSE_SOURCE) as ReverseState | undefined) ?? { cycleMs: 0, reverseRemainingMs: 0, reversed: false };
-    shared.set(REVERSE_SOURCE, current);
+    const current = (shared.get(SURGE_SOURCE) as SurgeState | undefined) ?? { cycleMs: 0, surgeRemainingMs: 0, amplified: false };
+    shared.set(SURGE_SOURCE, current);
     const alive = owners.filter(isAlive);
     if (!ability || alive.length === 0) {
       current.cycleMs = 0;
-      current.reverseRemainingMs = 0;
-      if (current.reversed) {
-        current.reversed = false;
-        world.currents.setReversed(REVERSE_SOURCE, false);
+      current.surgeRemainingMs = 0;
+      if (current.amplified) {
+        current.amplified = false;
+        world.currents.setAmplified(SURGE_SOURCE, null);
       }
       return;
     }
-    if (current.reversed) {
-      current.reverseRemainingMs -= deltaMs;
-      if (current.reverseRemainingMs <= 0) {
-        current.reversed = false;
+    if (current.amplified) {
+      current.surgeRemainingMs -= deltaMs;
+      if (current.surgeRemainingMs <= 0) {
+        current.amplified = false;
         current.cycleMs = 0;
-        world.currents.setReversed(REVERSE_SOURCE, false);
-        world.emit({ type: "currentsReversed", enemyId: alive[0].id, reversed: false });
+        world.currents.setAmplified(SURGE_SOURCE, null);
+        world.emit({ type: "currentsAmplified", enemyId: alive[0].id, amplified: false });
       }
       return;
     }
     current.cycleMs += deltaMs;
     if (current.cycleMs >= ability.cycleMs) {
-      current.reversed = true;
-      current.reverseRemainingMs = ability.reverseMs;
-      world.currents.setReversed(REVERSE_SOURCE, true);
-      world.emit({ type: "currentsReversed", enemyId: alive[0].id, reversed: true });
+      current.amplified = true;
+      current.surgeRemainingMs = ability.surgeMs;
+      world.currents.setAmplified(SURGE_SOURCE, { strength: ability.strengthMultiplier, drift: ability.driftMultiplier });
+      world.emit({ type: "currentsAmplified", enemyId: alive[0].id, amplified: true });
     }
   },
   onDeath(_ability, _enemy, shared, world) {
-    const current = shared.get(REVERSE_SOURCE) as ReverseState | undefined;
+    const current = shared.get(SURGE_SOURCE) as SurgeState | undefined;
     if (!current) return;
-    current.reversed = false;
-    world.currents.setReversed(REVERSE_SOURCE, false);
+    current.amplified = false;
+    world.currents.setAmplified(SURGE_SOURCE, null);
   },
 };
 
@@ -271,7 +276,7 @@ export const ENEMY_ABILITY_HANDLERS: { [K in EnemyAbility["type"]]: HandlerFor<K
   splitOnDeath,
   phaseChangeAtHp,
   speedBurst,
-  reverseCurrents,
+  amplifyCurrents,
 };
 
 function handlerFor(ability: EnemyAbility): Handler<EnemyAbility> {

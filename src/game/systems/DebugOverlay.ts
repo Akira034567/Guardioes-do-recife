@@ -140,13 +140,13 @@ export class DebugOverlay {
     });
   }
 
-  private drawCurrents(currents: readonly CurrentZoneDefinition[], reversed: boolean): void {
+  private drawCurrents(currents: readonly CurrentZoneDefinition[], amplified: boolean): void {
     currents.forEach((current) => {
-      this.graphics.lineStyle(2, reversed ? 0xff8b5f : 0x5ce7ff, 0.95);
-      this.graphics.fillStyle(reversed ? 0xff654a : 0x36cfea, 0.12);
+      this.graphics.lineStyle(2, amplified ? 0xffc65f : 0x5ce7ff, 0.95);
+      this.graphics.fillStyle(amplified ? 0xffb03a : 0x36cfea, 0.12);
       this.graphics.fillRect(current.x, current.y, current.width, current.height);
       this.graphics.strokeRect(current.x, current.y, current.width, current.height);
-      const direction = normalizedDirection(current, reversed);
+      const direction = normalizedDirection(current);
       for (let row = 0; row < 3; row += 1) {
         for (let column = 0; column < 4; column += 1) {
           this.drawArrow(
@@ -154,11 +154,11 @@ export class DebugOverlay {
             current.y + 30 + row * 45,
             direction.x,
             direction.y,
-            reversed ? 0xff8b5f : 0x5ce7ff,
+            amplified ? 0xffc65f : 0x5ce7ff,
           );
         }
       }
-      this.addLabel(current.x + current.width / 2, current.y - 12, `${reversed ? "REVERSA" : "FLUXO"} · ±${current.speedModifier * 100}% · deriva ${current.projectileDrift}`, reversed ? 0xffad93 : 0x8ff2ff);
+      this.addLabel(current.x + current.width / 2, current.y - 12, `${amplified ? "MARÉ GROSSA" : "FLUXO"} · ±${current.speedModifier * 100}% · deriva ${current.projectileDrift}`, amplified ? 0xffd9a0 : 0x8ff2ff);
     });
   }
 

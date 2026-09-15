@@ -1,5 +1,7 @@
 import Phaser from "phaser";
 import { preloadEnemyArt } from "../assets/enemyArt";
+import { preloadGoldenArt } from "../assets/goldenArt";
+import { GoldenCrownView } from "../objects/GoldenCrownView";
 import { GUARDIAN_ART, hasGuardianArt, preloadGuardianUpgradeArt } from "../assets/guardianArt";
 import { preloadLevelBackground } from "../assets/levelBackgrounds";
 import { DEPTH, GAME_HEIGHT, GAME_WIDTH, HUD_BOTTOM, HUD_TOP } from "../constants";
@@ -9,12 +11,13 @@ import { MatchClock, type MatchSpeed } from "../core/match/MatchClock";
 import type { CommandResult, MatchCommand } from "../core/match/MatchCommands";
 import type { MatchEvent } from "../core/match/MatchEvents";
 import { PLACEMENT_HINTS, validatePlacement } from "../core/PlacementRules";
-import { ECONOMY, PLACEMENT } from "../data/balance";
+import { BOSS_CURRENT, ECONOMY, PLACEMENT } from "../data/balance";
 import { difficultyOf, resolveLevelForDifficulty, type DifficultyDefinition } from "../data/difficulty";
 import type { MatchResult } from "../core/progression/MatchResult";
 import type { MatchOutcome } from "../core/progression/ProgressionService";
 import { launchConfigFromUrl, type MatchLaunchConfig } from "../match/MatchLaunchConfig";
 import { getProgression } from "../systems/progression";
+import { getSettings } from "../systems/settings";
 import { getScreenHost } from "../ui/dom/host";
 import { defeatScreen, unlockRevealScreen, victoryScreen } from "../ui/dom/screens/ResultScreens";
 import { pauseScreen } from "../ui/dom/screens/PauseScreen";
@@ -115,6 +118,9 @@ export class GameScene extends Phaser.Scene {
   private loadout: GuardianId[] = [];
   private selectedGuardianId: GuardianId | null = null;
   private selectedPlacedGuardianId: string | null = null;
+  /** Peixinho Dourado concedido e à espera de escolha: o próximo clique numa unidade coroa. */
+  private goldenPending = false;
+  private crownView: GoldenCrownView | null = null;
   /** Arraste em curso: o jogador apertou uma carta e ainda não soltou. Ver `handleWorldPointerUp`. */
   private dragPlacing = false;
   private unlockedNextLevelId: string | null = null;
@@ -157,6 +163,8 @@ export class GameScene extends Phaser.Scene {
     preloadGuardianUpgradeArt(this, this.launch.loadout);
     // Mesma ideia para os inimigos: só as espécies que aparecem nas ondas desta fase.
     preloadEnemyArt(this, [...new Set(this.level.waves.flatMap((wave) => wave.groups.map((group) => group.enemyId)))]);
+    // Peixinho Dourado: toda fase concede um, então a arte vem sempre.
+    preloadGoldenArt(this);
   }
 
   create(): void {
@@ -215,7 +223,11 @@ export class GameScene extends Phaser.Scene {
     this.loadout = [...this.launch.loadout];
     const debugFromQuery = this.launch.debug.enabled;
     this.debugAllowed = isDebugAllowed(new URLSearchParams(window.location.search));
-    this.match = new Match(this.resolvedLevel, { startWaveIndex: this.launch.debug.startWave });
+    this.match = new Match(this.resolvedLevel, {
+      startWaveIndex: this.launch.debug.startWave,
+      // Maestria é progressão permanente: entra resolvida, o motor não conhece o save.
+      masteryLevels: getProgression().masteryLevels(),
+    });
     this.match.setListener((event) => this.pendingEvents.push(event));
     this.tutorial = this.launch.tutorial ? new TutorialDirector(getSaveManager().progress.tutorial) : null;
     this.tutorialSaved = "";
@@ -411,6 +423,19 @@ export class GameScene extends Phaser.Scene {
         this.showMessage(`${GUARDIANS[event.guardianId].name} veio ajudar!`, 2600);
         break;
       }
+      case "goldenFishAwarded":
+        this.goldenPending = true;
+        this.showMessage("O Peixinho Dourado chegou! Toque em um Guardião para coroá-lo.", 4200);
+        break;
+      case "goldenFishCrowned": {
+        const guardian = this.match.guardian(event.id);
+        if (guardian) {
+          this.crownView?.destroy();
+          this.crownView = new GoldenCrownView(this, guardian.x, guardian.y, getSettings().reducedEffects);
+        }
+        this.showMessage(`${GUARDIANS[event.guardianId].name} foi coroado! ${event.summary}`, 3600);
+        break;
+      }
       case "guardianPlaced": {
         const guardian = this.match.guardian(event.id);
         if (guardian) this.guardianViews.set(event.id, new GuardianView(this, guardian, () => this.selectPlacedGuardian(event.id)));
@@ -483,9 +508,25 @@ export class GameScene extends Phaser.Scene {
       const enemy = this.match.enemy(id);
       return enemy ? { x: enemy.x, y: enemy.y } : null;
     };
+    // Quem cada bloqueador está segurando: o primeiro preso serve para decidir o lado do sprite.
+    const blocked = new Map<string, Vec2>();
+    for (const enemy of this.match.enemies) {
+      if (!enemy.blockedById || enemy.dead || blocked.has(enemy.blockedById)) continue;
+      blocked.set(enemy.blockedById, { x: enemy.x, y: enemy.y });
+    }
+    const blockedPosition = (guardianId: string): Vec2 | null => blocked.get(guardianId) ?? null;
     for (const view of this.enemyViews.values()) view.sync(now, deltaMs);
     for (const view of this.weakPointViews.values()) view.sync(deltaMs);
-    for (const view of this.guardianViews.values()) view.sync(now, enemyPosition);
+    for (const view of this.guardianViews.values()) view.sync(now, enemyPosition, blockedPosition);
+    if (this.crownView) {
+      const crowned = this.match.crownedGuardianId ? this.match.guardian(this.match.crownedGuardianId) : null;
+      if (crowned) this.crownView.sync(crowned.x, crowned.y, deltaMs);
+      else {
+        // A unidade coroada foi vendida: a coroa some com ela, e o Peixinho não volta.
+        this.crownView.destroy();
+        this.crownView = null;
+      }
+    }
     for (const view of this.projectileViews.values()) view.sync();
     for (const view of this.fieldViews.values()) view.sync(now);
     for (const view of this.cloudViews.values()) view.sync(now);
@@ -656,6 +697,16 @@ export class GameScene extends Phaser.Scene {
   private selectPlacedGuardian(instanceId: string): void {
     const guardian = this.match.guardian(instanceId);
     if (!guardian) return;
+    // Com o Peixinho em mãos, o clique numa unidade COROA em vez de selecionar: é a única decisão
+    // pendente naquele momento, e ela é definitiva.
+    if (this.goldenPending) {
+      const crowned = this.match.execute({ type: "crownGuardian", instanceId });
+      if (crowned.ok) {
+        this.goldenPending = false;
+        return;
+      }
+      this.showMessage(crowned.ok ? "" : crowned.message, 1600);
+    }
     this.selectedPlacedGuardianId = instanceId;
     this.selectedGuardianId = null;
     const branch = guardian.branch ? ` · ${guardian.branch.name}` : "";
@@ -1233,7 +1284,7 @@ export class GameScene extends Phaser.Scene {
       this.match.enemies,
       this.match.projectiles,
       this.resolvedLevel.currents,
-      this.match.currentReversed,
+      this.match.currentAmplified,
       this.selectedPlacedGuardianId,
       {
         waterBounds: {
@@ -1376,19 +1427,21 @@ export class GameScene extends Phaser.Scene {
   }
 
   private updateCurrentMotes(deltaMs: number): void {
-    const reversed = this.match.currentReversed;
-    const sign = reversed ? -1 : 1;
+    // A maré grossa da Baleia não muda o SENTIDO das partículas: acelera o que já corria, que é
+    // exatamente o que o jogador sente na rota.
+    const amplified = this.match.currentAmplified;
+    const rush = amplified ? BOSS_CURRENT.strengthMultiplier : 1;
     this.currentMotes.forEach(({ mote, zoneIndex }, index) => {
       const zone = this.level.currents[zoneIndex];
       const length = Math.hypot(zone.direction.x, zone.direction.y) || 1;
-      const speed = 22 + (index % 4) * 8;
-      mote.x += sign * (zone.direction.x / length) * speed * (deltaMs / 1000);
-      mote.y += sign * (zone.direction.y / length) * speed * (deltaMs / 1000);
+      const speed = (22 + (index % 4) * 8) * rush;
+      mote.x += (zone.direction.x / length) * speed * (deltaMs / 1000);
+      mote.y += (zone.direction.y / length) * speed * (deltaMs / 1000);
       if (mote.x > zone.x + zone.width) mote.x = zone.x;
       if (mote.x < zone.x) mote.x = zone.x + zone.width;
       if (mote.y > zone.y + zone.height) mote.y = zone.y;
       if (mote.y < zone.y) mote.y = zone.y + zone.height;
-      mote.setFillStyle(reversed ? 0xffa080 : 0xa4f5ff, 0.36);
+      mote.setFillStyle(amplified ? 0xffd27a : 0xa4f5ff, amplified ? 0.5 : 0.36);
     });
   }
 }

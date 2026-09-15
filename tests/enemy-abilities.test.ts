@@ -111,42 +111,49 @@ function harness(enemies: TestEnemy[], guardians: TestGuardian[] = []): Harness 
   };
 }
 
-describe("reverseCurrents (Quebra-Marés)", () => {
+describe("amplifyCurrents (Quebra-Marés)", () => {
   it("is declared in data with the balance numbers", () => {
     expect(resolveEnemy(ENEMIES.tidebreaker).abilities).toEqual([
-      { type: "reverseCurrents", cycleMs: BOSS_CURRENT.cycleMs, reverseMs: BOSS_CURRENT.reverseMs },
+      {
+        type: "amplifyCurrents",
+        cycleMs: BOSS_CURRENT.cycleMs,
+        surgeMs: BOSS_CURRENT.surgeMs,
+        strengthMultiplier: BOSS_CURRENT.strengthMultiplier,
+        driftMultiplier: BOSS_CURRENT.driftMultiplier,
+      },
     ]);
   });
 
-  it("follows the original cycle: normal, reversed for reverseMs, then normal again", () => {
+  it("follows the cycle: calm, amplified for surgeMs, then calm again", () => {
     const boss = new TestEnemy("E1", "tidebreaker");
     const test = harness([boss]);
     test.advance(BOSS_CURRENT.cycleMs - 100);
-    expect(test.currents.reversed).toBe(false);
+    expect(test.currents.amplified).toBe(false);
     test.advance(200);
-    expect(test.currents.reversed).toBe(true);
-    test.advance(BOSS_CURRENT.reverseMs - 200);
-    expect(test.currents.reversed).toBe(true);
+    expect(test.currents.amplified).toBe(true);
+    expect(test.currents.amplification).toEqual({ strength: BOSS_CURRENT.strengthMultiplier, drift: BOSS_CURRENT.driftMultiplier });
+    test.advance(BOSS_CURRENT.surgeMs - 200);
+    expect(test.currents.amplified).toBe(true);
     test.advance(300);
-    expect(test.currents.reversed).toBe(false);
-    expect(test.events.filter((event) => event.type === "currentsReversed")).toHaveLength(2);
+    expect(test.currents.amplified).toBe(false);
+    expect(test.events.filter((event) => event.type === "currentsAmplified")).toHaveLength(2);
     // O ciclo recomeça do zero depois de voltar ao normal.
     test.advance(BOSS_CURRENT.cycleMs - 500);
-    expect(test.currents.reversed).toBe(false);
+    expect(test.currents.amplified).toBe(false);
     test.advance(600);
-    expect(test.currents.reversed).toBe(true);
+    expect(test.currents.amplified).toBe(true);
   });
 
-  it("resets when no boss is alive and restores the current the moment one dies", () => {
+  it("resets when no boss is alive and calms the current the moment one dies", () => {
     const boss = new TestEnemy("E1", "tidebreaker");
     const test = harness([boss]);
     test.advance(BOSS_CURRENT.cycleMs + 100);
-    expect(test.currents.reversed).toBe(true);
+    expect(test.currents.amplified).toBe(true);
     boss.dead = true;
     test.system.died(boss, test.world());
-    expect(test.currents.reversed, "a corrente se estabiliza assim que o chefe cai").toBe(false);
+    expect(test.currents.amplified, "a corrente se acalma assim que o chefe cai").toBe(false);
     test.advance(BOSS_CURRENT.cycleMs + 100);
-    expect(test.currents.reversed).toBe(false);
+    expect(test.currents.amplified).toBe(false);
   });
 
   it("shares a single cycle between two bosses alive at once", () => {
@@ -154,8 +161,8 @@ describe("reverseCurrents (Quebra-Marés)", () => {
     const second = new TestEnemy("E2", "tidebreaker");
     const test = harness([first, second]);
     test.advance(BOSS_CURRENT.cycleMs + 100);
-    expect(test.currents.reversed).toBe(true);
-    expect(test.events.filter((event) => event.type === "currentsReversed"), "um único evento para os dois chefes").toHaveLength(1);
+    expect(test.currents.amplified).toBe(true);
+    expect(test.events.filter((event) => event.type === "currentsAmplified"), "um único evento para os dois chefes").toHaveLength(1);
   });
 });
 

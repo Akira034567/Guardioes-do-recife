@@ -62,6 +62,7 @@ export class LevelSelectScene extends Phaser.Scene {
         onPlayChallenge: (challenge) => this.openChallenge(challenge),
         onOpenAchievements: () => this.openSection("achievements"),
         onOpenCollection: () => this.openSection("collection"),
+        onOpenMastery: () => this.openSection("mastery"),
         onOpenBestiary: () => this.openSection("bestiary"),
         onOpenStories: () => this.openSection("stories"),
         onOpenSettings: () => this.openSection("settings"),

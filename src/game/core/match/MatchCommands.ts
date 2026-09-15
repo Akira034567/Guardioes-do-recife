@@ -10,6 +10,8 @@ export type MatchCommand =
   | { type: "upgradeGuardian"; instanceId: string; branchId: BranchId; playerId?: PlayerId }
   | { type: "sellGuardian"; instanceId: string; playerId?: PlayerId }
   | { type: "startNextWave"; playerId?: PlayerId }
+  /** Peixinho Dourado: coroa UMA unidade em campo. Um por partida, escolha definitiva (V3). */
+  | { type: "crownGuardian"; instanceId: string; playerId?: PlayerId }
   /** Toque em um elemento do mapa (rede, gruta, pedra que pisca) — item 28. */
   | { type: "interact"; interactableId: string; playerId?: PlayerId }
   // Ferramentas de desenvolvimento (item 40). Toda partida que usar uma delas fica marcada
@@ -34,6 +36,8 @@ export type RejectionReason =
   | "branchLocked"
   | "noOption"
   | "notInCountdown"
+  | "goldenUnavailable"
+  | "goldenSpent"
   | "interactableLocked"
   | "interactableBusy"
   | "interactableDone"
