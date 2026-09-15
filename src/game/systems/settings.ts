@@ -21,9 +21,18 @@ export function updateSettings(patch: Partial<PlayerSettings>): PlayerSettings {
   getSaveManager().update((draft) => {
     draft.settings = { ...draft.settings, ...patch };
   });
+  notifySettingsChanged();
+  return getSettings();
+}
+
+/**
+ * Reavisa os ouvintes com as configurações vigentes, sem mudar nada. É o que a troca de conta usa:
+ * o save passou a ser outro, então escala de interface, contraste e volume podem ter mudado de valor
+ * sem ninguém ter mexido num controle.
+ */
+export function notifySettingsChanged(): void {
   const settings = getSettings();
   listeners.forEach((listener) => listener(settings));
-  return settings;
 }
 
 /** Ouve mudanças de configuração; devolve a função que cancela a inscrição. */

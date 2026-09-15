@@ -160,6 +160,13 @@ export const ICONS = {
   ),
 
   /** Triângulo cheio: entrar na fase. */
+  /** Um mergulhador de perfil: a conta é a pessoa que joga, não mais um bicho do Recife. */
+  account: svg(
+    `<circle cx="12" cy="8" r="3.6" fill="currentColor"/>` +
+      `<path d="M4.8 20c0-3.8 3.2-6.2 7.2-6.2s7.2 2.4 7.2 6.2z" fill="currentColor" opacity="0.85"/>` +
+      `<path d="M3 21.4c1.8-1.2 3.2-1.2 5 0 1.8 1.2 3.2 1.2 5 0 1.8-1.2 3.2-1.2 5 0" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" opacity="0.6"/>`,
+  ),
+
   play: svg(`<path d="M7.6 4.6 19 12 7.6 19.4z" fill="currentColor"/>`),
 
   chevronLeft: svg(`<path d="M15 4.5 7.5 12 15 19.5" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>`),

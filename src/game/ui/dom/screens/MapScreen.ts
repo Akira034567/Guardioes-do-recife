@@ -33,6 +33,7 @@ export interface MapActions {
   onOpenMastery(): void;
   onOpenBestiary(): void;
   onOpenStories(): void;
+  onOpenAccount(): void;
   onOpenSettings(): void;
   onResetProgress(): void;
 }
@@ -124,6 +125,7 @@ function sidebar(host: ScreenHost, actions: MapActions): HTMLElement {
       onOpenBestiary: actions.onOpenBestiary,
       onOpenStories: actions.onOpenStories,
       onOpenAchievements: actions.onOpenAchievements,
+      onOpenAccount: actions.onOpenAccount,
       onOpenSettings: actions.onOpenSettings,
     },
     {

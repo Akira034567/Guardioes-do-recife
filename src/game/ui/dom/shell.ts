@@ -6,7 +6,7 @@ import { BRAND_WAVE, ICONS } from "./icons";
  * o álbum desenham a mesma coluna da esquerda, só mudando qual item está aceso — assim o jogador nunca
  * perde a referência ao trocar de seção.
  */
-export type ShellSection = "hub" | "map" | "collection" | "mastery" | "bestiary" | "stories" | "achievements" | "settings";
+export type ShellSection = "hub" | "map" | "collection" | "mastery" | "bestiary" | "stories" | "achievements" | "account" | "settings";
 
 export interface ShellNav {
   /** Volta para o Meu Recife, a tela inicial e a casa do jogador. */
@@ -19,6 +19,8 @@ export interface ShellNav {
   onOpenBestiary(): void;
   onOpenStories(): void;
   onOpenAchievements(): void;
+  /** Abre o Minha Conta (entrar, criar conta e levar o progresso para outro aparelho). */
+  onOpenAccount(): void;
   onOpenSettings(): void;
 }
 
@@ -45,6 +47,7 @@ const ITEMS: ReadonlyArray<{ section: ShellSection; icon: string; label: string;
   { section: "bestiary", icon: ICONS.spiky, label: "Ameaças", open: (nav) => nav.onOpenBestiary() },
   { section: "stories", icon: ICONS.book, label: "História", open: (nav) => nav.onOpenStories() },
   { section: "achievements", icon: ICONS.trophy, label: "Conquistas", open: (nav) => nav.onOpenAchievements() },
+  { section: "account", icon: ICONS.account, label: "Minha Conta", open: (nav) => nav.onOpenAccount() },
   { section: "settings", icon: ICONS.gear, label: "Configurações", open: (nav) => nav.onOpenSettings() },
 ];
 
@@ -57,6 +60,7 @@ export const MAP_NAV_IDS: Record<ShellSection, string> = {
   bestiary: "map-bestiary",
   stories: "map-stories",
   achievements: "map-achievements",
+  account: "map-account",
   settings: "map-settings",
 };
 

@@ -5,6 +5,7 @@ import { getScreenHost } from "./host";
 import { appShell, type AppShellHandle, type ShellContent, type ShellView } from "./AppShell";
 import { levelBackgroundPath } from "../../assets/levelBackgrounds";
 import { LEVELS } from "../../data/levels";
+import { accountScreen } from "./screens/AccountScreen";
 import { achievementsScreen } from "./screens/AchievementsScreen";
 import { bestiaryScreen } from "./screens/BestiaryScreen";
 import { collectionScreen } from "./screens/CollectionScreen";
@@ -29,6 +30,11 @@ export interface SectionRouter {
   goMap(): void;
   /** Chamado quando a pilha volta ao `home` (o hub reconfere os Guardiões). */
   onSectionClosed?(): void;
+  /**
+   * Refaz a cena do zero. A troca de conta abre OUTRO save: cenário, Conchas, Guardiões e HUD
+   * precisam ser lidos de novo, e nenhuma tela aberta pode continuar mostrando o save anterior.
+   */
+  reboot(): void;
 }
 
 /** O que a seção precisa saber além de qual é. */
@@ -47,6 +53,7 @@ export function sectionNav(router: SectionRouter): ShellNav {
     onOpenBestiary: () => openSection("bestiary", router),
     onOpenStories: () => openSection("stories", router),
     onOpenAchievements: () => openSection("achievements", router),
+    onOpenAccount: () => openSection("account", router),
     onOpenSettings: () => openSection("settings", router),
   };
 }
@@ -64,6 +71,7 @@ const BACKDROPS: Record<ShellView, number> = {
   bestiary: 3,
   stories: 2,
   achievements: 5,
+  account: 4,
   settings: 1,
 };
 
@@ -80,7 +88,9 @@ function contentFor(section: ShellView, router: SectionRouter, options: SectionO
           ? storyIndexScreen(back, nav, (levelId) => router.isUnlocked(levelId), true)
           : section === "achievements"
             ? achievementsScreen(progression, back, nav, true)
-            : settingsScreen(back, nav, true);
+            : section === "account"
+              ? accountScreen(back, nav, true, () => router.reboot())
+              : settingsScreen(back, nav, true);
   const host = getScreenHost(router.game);
   return {
     view: section,
@@ -104,6 +114,7 @@ const NAV_PREFIX: Record<ShellView, string> = {
   bestiary: "bestiary",
   stories: "stories",
   achievements: "achievements",
+  account: "account",
   settings: "settings",
 };
 
@@ -113,6 +124,7 @@ const BACK_ID: Record<ShellView, string> = {
   bestiary: "bestiary-back",
   stories: "story-index-back",
   achievements: "achievements-back",
+  account: "account-back",
   settings: "settings-back",
 };
 

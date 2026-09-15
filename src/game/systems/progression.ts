@@ -10,3 +10,8 @@ export function getProgression(): ProgressionService {
   if (!service) service = new ProgressionService(getSaveManager(), { levelIds: LEVEL_IDS, unlocks: GUARDIAN_UNLOCKS });
   return service;
 }
+
+/** Troca de conta: o serviço aponta para o save antigo, então ele cai junto com o `SaveManager`. */
+export function resetProgression(): void {
+  service = null;
+}

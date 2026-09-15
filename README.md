@@ -30,6 +30,19 @@ Abra `http://localhost:5173`. O jogo usa mouse e touch em layout horizontal 16:9
 - A carta da fase abre a história de abertura (na primeira vez) e depois a preparação: objetivos, dificuldade, ameaças conhecidas e as cinco vagas do esquadrão.
 - Concluir objetivos rende estrelas e Conchas, a moeda permanente gasta fora da partida.
 
+## Contas e saves
+
+O jogo roda inteiro no navegador, sem servidor. "Conta" aqui é uma conta **deste aparelho**, com nome e senha, e serve para duas coisas concretas: separar saves e levar o progresso para outro lugar.
+
+- **Um save por conta.** Quem joga sem entrar continua no save do aparelho (`guardioes-do-recife.save`); cada conta tem o seu (`guardioes-do-recife.save:<id>`). Entrar é só trocar a chave que o `SaveManager` abre, então dois irmãos no mesmo computador nunca jogam por cima um do outro.
+- **Nome é único.** A comparação ignora maiúsculas, acentos e espaço sobrando ("Ana", "ana" e " aNa " são a mesma pessoa), então não existem dois usuários com o mesmo nome.
+- **A senha não é guardada.** Fica só a derivação PBKDF2-SHA-256 com sal por conta (`core/account/passwords.ts`). Em contexto sem `crypto.subtle` (http puro, `file://`) o esquema cai para um plano B fraco, **marcado como tal** no registro — nunca é senha em texto puro.
+- **Progresso já salvo vira conta.** Criar conta pergunta se o progresso do aparelho vem junto; vindo, ele é copiado (o save do convidado fica intacto) e carimbado com o `profileId` da conta nova.
+- **Jogar em outro aparelho.** `exportCode()` empacota conta e save num "código do Recife" (`GR1.…`) para colar no outro aparelho, onde a mesma senha o abre. Se a conta já existir lá, o código só substitui o progresso dela quando a senha for a mesma. É a ponte honesta enquanto não houver servidor: **ninguém guarda o progresso por você** — sem o código, o save fica no navegador onde foi jogado.
+- **Trocar de conta reabre tudo.** `systems/session.ts` derruba os serviços únicos da página (`ProgressStore`, `progression`) e a cena se refaz (`router.reboot()`), senão a conta nova continuaria mexendo no documento da anterior.
+- As contas ficam em `guardioes-do-recife.accounts`; apagar uma conta apaga o save dela e devolve o jogador ao modo convidado.
+
+
 ## Encontros do Recife
 
 Os quatro Guardiões além dos cinco fundadores não se compram: eles são **encontrados**. Cada um tem uma fase curta própria em `src/game/data/encounters/`, fora da campanha (não entra em `LEVELS`, não vale estrela, não mexe na contagem de fases).
@@ -84,6 +97,7 @@ Menus são HTML por cima do canvas (`src/game/ui/dom`), alinhados ao jogo e esca
 - **Mapa do Recife**: as seis fases em sequência, com estrelas, e os nós de Encontro pendurados nelas. Deixou de ser a tela inicial: agora é uma seção como as outras, com VOLTAR para o Meu Recife.
 - **Menu de pause**: o botão Ⅱ pausa e abre continuar, configurações, reiniciar e sair para o mapa.
 - **Conquistas do Recife**: a lista com barra de progresso, o que já caiu e o que falta.
+- **Minha Conta**: entrar, criar conta, trocar senha, apagar conta e o código do Recife para jogar em outro aparelho. O letreiro do Meu Recife mostra quem está jogando ("Convidado" quando ninguém entrou). Ver [Contas e saves](#contas-e-saves).
 
 ## UX da partida
 
@@ -171,6 +185,7 @@ Uma partida inteira vive em `src/game/core/match/Match.ts`, sem Phaser:
 - `src/game/data`: balanceamento, catálogo de Guardiões e inimigos, registro de fases.
 - `src/game/core`: regras puras e testáveis (rota, correntes, economia com razão de fontes, ondas, árvore de upgrades, projétil, status, auras, alvo e formas de alcance, habilidades de inimigo, encontro de chefe).
 - `src/game/core/match`: o motor único da partida (`Match`): estado, `tick()` de passo fixo, comandos (`placeGuardian`, `upgradeGuardian`, `sellGuardian`, `startNextWave`), eventos de domínio, `MatchStats`, `MatchClock` (pause e velocidade). Cena e simulação de balanceamento rodam o mesmo motor.
+- `src/game/core/account`: contas locais (`AccountStore`, `passwords`) — nome único, senha derivada, um save por conta e o código de transferência. Puro: o armazenamento entra por injeção.
 - `src/game/core/save`: progressão permanente versionada (`PlayerProgress`, `SaveManager`, migrações); nunca se mistura com o estado da partida.
 - `src/game/objects`: views Phaser (`EnemyView`, `GuardianView`, `ProjectileView`, áreas) que só desenham o que o motor diz.
 - `src/game/scenes`: carregamento, hub (`HubScene`), menu de fases, apresentação da partida (`GameScene`) e HUD.
@@ -178,8 +193,8 @@ Uma partida inteira vive em `src/game/core/match/Match.ts`, sem Phaser:
 - `src/game/data/reef`: catálogo de decoração, layout do Recife (lugares, canteiros, zonas — tudo em % 0–100) e o comportamento de hub de cada Guardião.
 - `src/game/assets/reefArt.ts`: chaves e caminhos da arte do Recife. Nada disso entra no boot — a cena pede o fundo e só as peças que estão plantadas.
 - `public/assets/reef/`: o fundo pintado e as 18 decorações, fatiadas das folhas por `scripts/slice-reef-sheet.py`.
-- `src/game/systems`: `MatchEffects` (evento → efeito/som/mensagem), áudio provisório, overlay de debug, fundo procedural, `ProgressStore`, `settings` e `story`.
-- `src/game/ui/dom`: camada de telas em HTML (`ScreenHost`, `h`, `ui.css`) e as telas de preparação, resultado, coleção, bestiário, histórias, configurações e pause.
+- `src/game/systems`: `MatchEffects` (evento → efeito/som/mensagem), áudio provisório, overlay de debug, fundo procedural, `ProgressStore`, `accounts` (registro de contas da página), `session` (entrar/sair reabre o save), `settings` e `story`.
+- `src/game/ui/dom`: camada de telas em HTML (`ScreenHost`, `h`, `ui.css`) e as telas de preparação, resultado, coleção, bestiário, histórias, conta, configurações e pause.
 - `src/game/core/progression`: objetivos, estrelas, recompensas, desbloqueios e o `ProgressionService` que aplica o resultado de uma partida.
 
 ## Como estender
@@ -193,6 +208,7 @@ Uma partida inteira vive em `src/game/core/match/Match.ts`, sem Phaser:
 - Novo Encontro: uma fase em `data/encounters/`, a entrada em `ENCOUNTERS` e a condição `encounterCompleted` no Guardião. `tests/encounters.test.ts` valida rota, plataformas, ondas e o aliado prometido.
 - Nova história: uma entrada em `data/story.ts` com o gatilho (`levelIntro`, `levelOutro` ou `manual`); o save guarda só os ids lidos.
 - Nova conquista: uma entrada em `ACHIEVEMENTS` com a medida e a meta; a avaliação e a tela se viram sozinhas.
+- Nova seção no menu lateral: um id em `ShellSection`, a ação em `ShellNav` (e nos `fallbackNav` das telas que abrem sozinhas), o item em `ITEMS` (`ui/dom/shell.ts`) e as entradas de `BACKDROPS`, `NAV_PREFIX` e `BACK_ID` em `ui/dom/sections.ts` — o TypeScript cobra cada uma delas.
 - Nova configuração: campo em `PlayerSettings`, padrão em `DEFAULT_SETTINGS`, saneamento em `sanitizeProgress` e a linha na tela de configurações.
 - Guardião novo no Meu Recife: uma entrada em `HUB_BEHAVIORS` (`data/reef/hubBehaviors.ts`) e nada mais — a cena só faz `residents.map(hubBehavior)`, e quem esquecer de cadastrar ganha o comportamento padrão em vez de derrubar o hub.
 - Nova decoração do Recife: uma entrada em `DECORATIONS` (`data/reef/decorations.ts`) com a condição de liberação (a mesma união `UnlockCondition` dos Guardiões) e os tipos de canteiro que a aceitam. A arte é declarada: `{ type: "sprite", key, path }` aponta para `public/assets/reef/<id>.png`, e `{ type: "vector", layers }` deixa a peça nascer desenhada com formas do Phaser enquanto o PNG não existe — só o renderizador lê `art`, então a troca é uma linha. Um canteiro novo entra em `REEF_SLOTS` com o `order` seguinte (a fila precisa ficar sem buraco) e **não pode tapar um lugar pintado** — a área proibida é o `keepOut` do lugar, que é o que ele OCUPA na arte, bem maior que o `radius` do alvo de clique. `tests/reef-catalog.test.ts` cobra as duas coisas, já contando o sorteio de ±15% no tamanho.
