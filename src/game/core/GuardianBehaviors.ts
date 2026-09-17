@@ -207,7 +207,7 @@ export function updatePushWave<E extends BehaviorEnemy>(guardian: BehaviorGuardi
 // ----------------------------------------------------------- Peixe-Pedra
 
 /**
- * Vida máxima mínima para o Contra-Ataque Abissal valer a pena travar um alvo.
+ * Vida máxima mínima para o Caçador da Corrente valer a pena travar um alvo.
  *
  * Fica acima do comum mais gordo (Peixe Invasor, 90) e abaixo do Cascudo (210): o bote focado é para
  * o grandão, e travar um peixinho só gastaria a recarga curta à toa.
@@ -215,7 +215,7 @@ export function updatePushWave<E extends BehaviorEnemy>(guardian: BehaviorGuardi
 const FOCUS_MIN_MAX_HEALTH = 150;
 
 /**
- * O alvo mais forte da zona, para o Contra-Ataque Abissal travar.
+ * O alvo mais forte da zona, para o Caçador da Corrente travar.
  *
  * "Mais forte" é vida MÁXIMA, não vida atual: o que interessa é o tamanho da presa, não o quanto ela
  * já apanhou. Sem isso ele travaria o cardume moribundo em vez do Cascudo que acabou de chegar.

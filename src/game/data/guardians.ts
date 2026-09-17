@@ -544,7 +544,7 @@ export const GUARDIANS: Record<GuardianId, GuardianDefinition> = {
         color: 0xa4f26b,
         upgrades: [
           {
-            name: "Esporos Venenosos",
+            name: "Toxina Viva",
             description: `${stonefish.garden.level1.damage} de dano e veneno de ${stonefish.garden.level1.poison.damagePerTick}/s por ${seconds(stonefish.garden.level1.poison.durationMs)}. O bote deixa uma nuvem de raio ${stonefish.garden.level1.cloud.radius} por ${seconds(stonefish.garden.level1.cloud.durationMs)}: quem atravessa é envenenado e anda a ${Math.round(stonefish.garden.level1.cloud.slowFactor * 100)}% da velocidade.`,
             cost: stonefish.upgradeCosts[0],
             trap: {
@@ -556,7 +556,7 @@ export const GUARDIANS: Record<GuardianId, GuardianDefinition> = {
             },
           },
           {
-            name: "Jardim Tóxico",
+            name: "Jardim Abissal",
             description: `Nuvem maior (raio ${stonefish.garden.level2.cloud.radius}) e mais duradoura. Quem morre envenenado dentro dela espalha a toxina num raio de ${stonefish.garden.level2.spreadOnDeath.radius} — uma vez por morte, sem reação em cadeia.`,
             cost: stonefish.upgradeCosts[1],
             trap: {
@@ -577,7 +577,7 @@ export const GUARDIANS: Record<GuardianId, GuardianDefinition> = {
         color: 0xffb35c,
         upgrades: [
           {
-            name: "Espinhos Perfurantes",
+            name: "Espinhos Cortantes",
             description: `A zona encolhe para ${stonefish.predator.level1.triggerRadius}, mas o bote sobe para ${stonefish.predator.level1.damage} de dano IGNORANDO ARMADURA. Troca área por punição.`,
             cost: stonefish.upgradeCosts[0],
             trap: {
@@ -589,7 +589,7 @@ export const GUARDIANS: Record<GuardianId, GuardianDefinition> = {
             },
           },
           {
-            name: "Contra-Ataque Abissal",
+            name: "Caçador da Corrente",
             description: `${stonefish.predator.level2.damage} de dano ignorando armadura. Quando um alvo forte entra na zona ele TRAVA a presa, carrega os espinhos em ${seconds(stonefish.predator.level2.focus.armMs)} e cobra pela vida máxima dela: +${frac(stonefish.predator.level2.focus.bonusPerMaxHealth)} dessa vida, até +${stonefish.predator.level2.focus.maxBonus} de dano.`,
             cost: stonefish.upgradeCosts[1],
             trap: {

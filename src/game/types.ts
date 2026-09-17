@@ -223,7 +223,7 @@ export interface ToxinSpread {
 }
 
 /**
- * Contra-Ataque Abissal: o Peixe-Pedra trava o alvo mais forte que entra na zona e o bote sai mais
+ * Caçador da Corrente: o Peixe-Pedra trava o alvo mais forte que entra na zona e o bote sai mais
  * pesado quanto mais vida esse alvo tiver.
  */
 export interface AmbushFocus {
@@ -258,13 +258,13 @@ export interface TrapEffect {
   /** Raio, em pixels de rota, em que inimigos acionam a armadilha. */
   triggerRadius: number;
   damage: number;
-  /** Espinhos Perfurantes: o bote ignora armadura. */
+  /** Espinhos Cortantes: o bote ignora armadura. */
   armorPiercing?: boolean;
   poison?: PoisonEffect;
   cloud?: ToxicCloudEffect;
   /** Jardim Tóxico II. */
   spreadOnDeath?: ToxinSpread;
-  /** Contra-Ataque Abissal. */
+  /** Caçador da Corrente. */
   focus?: AmbushFocus;
 }
 

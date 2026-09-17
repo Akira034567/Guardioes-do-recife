@@ -34,7 +34,7 @@ export class TrapCore {
   private phaseUntil: number;
   /** Desde quando está camuflado sem atacar. A maestria B2 (Paciência Mortal) lê isto. */
   private camouflagedSince = 0;
-  /** O bote em curso travou um alvo forte (Contra-Ataque Abissal)? */
+  /** O bote em curso travou um alvo forte (Caçador da Corrente)? */
   private focusedStrike = false;
 
   constructor(
@@ -68,7 +68,7 @@ export class TrapCore {
   }
 
   /**
-   * `focusTarget`: há um alvo forte na zona para travar (Contra-Ataque Abissal). Quando existe, o
+   * `focusTarget`: há um alvo forte na zona para travar (Caçador da Corrente). Quando existe, o
    * tempo de armar cai para o do `focus` — os espinhos carregam muito mais rápido.
    */
   update(now: number, enemiesInZone: number, options: { focusTarget?: boolean; rearmMultiplier?: number } = {}): TrapEvent[] {
@@ -118,7 +118,7 @@ export class TrapCore {
 }
 
 /**
- * Dano do bote contra um alvo, já com o bônus de Contra-Ataque Abissal.
+ * Dano do bote contra um alvo, já com o bônus de Caçador da Corrente.
  *
  * O bônus é proporcional à VIDA MÁXIMA do alvo e tem teto: sem o teto, um chefe com 1600 de vida
  * cairia num bote só, que é exatamente o que essa mecânica não pode fazer. Contra um comum de 90 o

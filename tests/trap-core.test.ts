@@ -74,7 +74,7 @@ describe("ciclo da emboscada", () => {
   });
 });
 
-describe("Contra-Ataque Abissal", () => {
+describe("Caçador da Corrente", () => {
   it("carrega mais rápido quando trava uma presa", () => {
     const core = new TrapCore(predator, 0);
     core.update(predator.settleMs, 0);

@@ -157,16 +157,23 @@ test("places the shark only in the margin band and locks the other branch after 
   expect(pageErrors).toEqual([]);
 });
 
-test("buries the stonefish on the route and arms it after a few seconds", async ({ page }) => {
+test("snaps the stonefish to the edge of the current and cycles the ambush", async ({ page }) => {
+  test.setTimeout(120_000);
   const { canvas, clickGame, pageErrors } = await openGame(page, `level=recife-1&${NEW_SQUAD}`);
   await clickGame(squadCard(3), CARD_Y);
-  await clickGame(700, 150);
+  // V3.2: ele mora na BEIRA da correnteza. Em (700, 90) a rota está a ~170px — longe demais.
+  await clickGame(700, 90);
   await expect(canvas).toHaveAttribute("data-guardians", "0");
-  await clickGame(700, 260);
+  // Perto da rota vale, e o jogo encaixa na borda em vez de aceitar o toque cru.
+  await clickGame(700, 200);
   await expect(canvas).toHaveAttribute("data-guardians", "1");
   await expect(canvas).toHaveAttribute("data-pearls", "85");
-  await expect(canvas).toHaveAttribute("data-trap-phase", "arming");
-  await expect(canvas).toHaveAttribute("data-trap-phase", /armed|triggered|cooldown/, { timeout: 15_000 });
+  // Ele se acomoda uma vez e some no cenário; daí em diante o ciclo é fechado e se repete.
+  await expect(canvas).toHaveAttribute("data-trap-phase", "settling");
+  await expect(canvas).toHaveAttribute("data-trap-phase", "camouflaged", { timeout: 15_000 });
+  // Passa a primeira onda por cima dele: arma, dá o bote, recarrega e volta a se camuflar.
+  await expect(canvas).toHaveAttribute("data-trap-phase", /arming|striking|cooldown/, { timeout: 60_000 });
+  await expect(canvas).toHaveAttribute("data-trap-phase", "camouflaged", { timeout: 30_000 });
   expect(pageErrors).toEqual([]);
 });
 
