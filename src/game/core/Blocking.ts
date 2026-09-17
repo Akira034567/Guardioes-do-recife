@@ -78,13 +78,26 @@ export class BlockingSystem {
         held.push(enemy);
       }
 
-      const inContact = enemies.filter(
+      /**
+       * Quem está ENCOSTANDO nele, preso ou não.
+       *
+       * V3.1: o dano de contato é do CORPO do Baiacu, não do agarrão. Antes só quem estava preso se
+       * machucava, então um Baiacu lotado — ou em recarga depois de soltar — virava enfeite enquanto a
+       * fila passava raspando nos espinhos. A janela de contato é curta por natureza, então passar de
+       * raspão custa uma fração de segundo de dano e ficar preso custa o fluxo inteiro: o dano por
+       * inimigo continua saindo do tempo que ele passa encostado.
+       */
+      const touching = enemies.filter(
         (enemy) =>
           !enemy.dead &&
           !enemy.reachedGoal &&
-          !enemy.blockedById &&
           hasReachedBlockerContact(enemy.pathDistance, anchor, BLOCKER_BODY_RADIUS + enemy.definition.hitRadius),
       );
+      if (stats.contactDamagePerSecond > 0) {
+        for (const enemy of touching) hooks.damage(enemy, stats.contactDamagePerSecond * (deltaMs / 1000));
+      }
+
+      const inContact = touching.filter((enemy) => !enemy.blockedById);
       const candidates = inContact
         .filter((enemy) => enemy.isBlockable && !this.isReleased(blocker.id, enemy.id, now))
         .sort((first, second) => second.pathDistance - first.pathDistance);
@@ -98,7 +111,6 @@ export class BlockingSystem {
         enemy.setBlocked(blocker.id, enemy.pathDistance);
         const key = this.key(blocker.id, enemy.id);
         if (!this.grabs.has(key)) this.grabs.set(key, { grabbedAt: now });
-        if (stats.contactDamagePerSecond > 0) hooks.damage(enemy, stats.contactDamagePerSecond * (deltaMs / 1000));
       }
 
       // Chefes não são bloqueados: a Fortaleza pausa por pouco tempo; a Tartaruga só desacelera.
@@ -107,9 +119,6 @@ export class BlockingSystem {
         .forEach((enemy) => {
           if (stats.bossHold && enemy.status.tryHold(stats.bossHold.durationMs * stats.controlDurationMultiplier, stats.bossHold.immunityMs, now)) {
             hooks.onBossHeld?.(blocker, enemy);
-          }
-          if (enemy.status.isHeld(now) && stats.contactDamagePerSecond > 0) {
-            hooks.damage(enemy, stats.contactDamagePerSecond * (deltaMs / 1000));
           }
           if (hold) enemy.status.applySlow(hold.bossSlow.factor, hold.bossSlow.durationMs * stats.controlDurationMultiplier, now);
         });

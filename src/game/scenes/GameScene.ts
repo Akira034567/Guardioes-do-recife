@@ -1,6 +1,7 @@
 import Phaser from "phaser";
 import { preloadEnemyArt } from "../assets/enemyArt";
 import { preloadGoldenArt } from "../assets/goldenArt";
+import { preloadStatusArt } from "../assets/statusArt";
 import { GoldenCrownView } from "../objects/GoldenCrownView";
 import { GoldenFishBadge } from "../objects/GoldenFishBadge";
 import { GUARDIAN_ART, hasGuardianArt, preloadGuardianUpgradeArt } from "../assets/guardianArt";
@@ -166,6 +167,8 @@ export class GameScene extends Phaser.Scene {
     preloadEnemyArt(this, [...new Set(this.level.waves.flatMap((wave) => wave.groups.map((group) => group.enemyId)))]);
     // Peixinho Dourado: toda fase concede um, então a arte vem sempre.
     preloadGoldenArt(this);
+    // Ícones de status: leves e usados em qualquer fase.
+    preloadStatusArt(this);
   }
 
   create(): void {

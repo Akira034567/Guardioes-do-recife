@@ -1,6 +1,7 @@
 import Phaser from "phaser";
 import { enemyFrameKeys, hasEnemyArt } from "../assets/enemyArt";
 import { DEPTH } from "../constants";
+import { STATUS_ICON_GAP, STATUS_ICON_MAX, STATUS_ICON_SIZE, statusIconKey, type StatusIcon } from "../assets/statusArt";
 import type { MatchEnemy } from "../core/match/MatchEnemy";
 import { ELITES, type EliteId } from "../data/elites";
 import { orientationFor, spriteTilt } from "../core/SpriteOrientation";
@@ -40,6 +41,8 @@ export class EnemyView extends Phaser.GameObjects.Container {
   private nextSpontaneousGuardMs = Number.POSITIVE_INFINITY;
   private readonly bodyGraphic: Phaser.GameObjects.Graphics;
   private readonly statusGraphic: Phaser.GameObjects.Graphics;
+  /** Fileira de ícones de status acima da criatura; reaproveitada, nunca recriada por quadro. */
+  private readonly statusIcons: Phaser.GameObjects.Image[] = [];
   private readonly healthBar: Phaser.GameObjects.Graphics;
 
   constructor(
@@ -73,6 +76,12 @@ export class EnemyView extends Phaser.GameObjects.Container {
       this.frameMs = 160;
     }
     this.add([this.bodyGraphic, this.statusGraphic, this.healthBar]);
+    // Três ícones fixos, escondidos até serem precisos: trocar textura é barato, criar objeto não.
+    for (let slot = 0; slot < STATUS_ICON_MAX; slot += 1) {
+      const icon = scene.add.image(0, 0, statusIconKey("stun")).setDisplaySize(STATUS_ICON_SIZE, STATUS_ICON_SIZE).setVisible(false);
+      this.statusIcons.push(icon);
+      this.add(icon);
+    }
     if (this.sprite) this.bodyGraphic.setVisible(false);
     this.drawBody();
     this.setDepth(DEPTH.enemies + (enemy.definition.isBoss ? 2 : 0));
@@ -211,35 +220,28 @@ export class EnemyView extends Phaser.GameObjects.Container {
       graphic.lineStyle(1, 0x4fd6ff, 0.6);
       graphic.strokeCircle(0, 0, radius + 11);
     }
-    if (slowed) {
-      graphic.lineStyle(2, 0x7de6ff, 0.7);
-      graphic.strokeCircle(0, 0, radius + 4);
-    }
-    if (vulnerable) {
-      graphic.lineStyle(2, 0xd58cff, 0.85);
-      graphic.strokeCircle(0, 0, radius + 8);
-    }
-    if (poison > 0) {
-      graphic.fillStyle(0x8ef26b, 0.9);
-      for (let index = 0; index < 2 + poison; index += 1) {
-        const angle = -Math.PI / 2 + index * 0.7;
-        graphic.fillCircle(Math.cos(angle) * (radius + 3), Math.sin(angle) * (radius + 3) - 2, 2.5);
+    // V3.1: os cinco efeitos que a criatura SOFRE viraram ícones. `revealed` e `priority` seguem
+    // anéis logo abaixo, porque falam de leitura do campo, não de algo que ela está sofrendo.
+    const active: StatusIcon[] = [];
+    if (stunned) active.push("stun");
+    if (poison > 0) active.push("poison");
+    if (slowed) active.push("slow");
+    if (vulnerable) active.push("vulnerable");
+    if (marked) active.push("marked");
+    const shown = active.slice(0, STATUS_ICON_MAX);
+    const rowWidth = (shown.length - 1) * STATUS_ICON_GAP;
+    this.statusIcons.forEach((icon, slot) => {
+      const name = shown[slot];
+      if (!name) {
+        icon.setVisible(false);
+        return;
       }
-    }
-    if (stunned) {
-      graphic.fillStyle(0xfff27a, 0.95);
-      for (let index = 0; index < 4; index += 1) {
-        const angle = (Math.PI / 2) * index + Math.PI / 4;
-        graphic.fillCircle(Math.cos(angle) * (radius + 6), Math.sin(angle) * (radius + 6), 3);
-      }
-    }
-    if (marked) {
-      // Marca do Tubarão Alfa: triângulo vermelho apontando para a presa.
-      graphic.fillStyle(0xff4d5e, 0.95);
-      graphic.fillTriangle(-7, -radius - 24, 7, -radius - 24, 0, -radius - 14);
-      graphic.lineStyle(1, 0xfff0f0, 0.9);
-      graphic.strokeTriangle(-7, -radius - 24, 7, -radius - 24, 0, -radius - 14);
-    }
+      icon.setTexture(statusIconKey(name));
+      icon.setDisplaySize(STATUS_ICON_SIZE, STATUS_ICON_SIZE);
+      icon.setPosition(slot * STATUS_ICON_GAP - rowWidth / 2, -radius - 21);
+      icon.setVisible(true);
+    });
+
     if (priority) {
       // Ameaça prioritária do Sonar: losango roxo.
       graphic.lineStyle(2, 0x9b7bff, 0.95);

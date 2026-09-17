@@ -249,8 +249,16 @@ export class MatchEffects {
         // A variante base do Tubarão caía no ramo `ring` e desenhava um anel do tamanho do alcance
         // na posição do próprio Tubarão: o golpe parecia acontecer nele, e não na presa.
         const stats = guardian.stats;
-        const abilityStyle = artVariant(guardian.guardianId, guardian.progress).ability;
+        const variant = artVariant(guardian.guardianId, guardian.progress);
+        const abilityStyle = variant.ability;
         const scale = GUARDIAN_ART[guardian.guardianId].effectScale;
+        // Variante que reserva a arte para a habilidade (Tartaruga, ramo Correnteza): o golpe básico
+        // fica só com o tranco vetorial, e a imagem guarda o seu momento para a onda de empurrão.
+        if (variant.artOnlyOnAbility) {
+          this.shockwave(event.x, event.y, accent, 30);
+          audio.play("impact");
+          return;
+        }
         if (stats.areaAttack || event.spinning) {
           // Giro de verdade: o efeito é em volta do Guardião porque é ali que ele acontece.
           effects.ring(this.abilityKeyFor(guardian, "ring"), event.x, event.y + 8, event.radius * 2, { spin: event.spinning });

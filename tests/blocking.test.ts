@@ -5,7 +5,7 @@ import { FakeEnemy, FakeGuardian } from "./helpers/fakes";
 const noop = { damage: () => undefined };
 
 describe("blocking system", () => {
-  it("reproduces the pufferfish: holds up to capacity, deals contact damage, ignores bosses", () => {
+  it("reproduces the pufferfish: holds up to capacity, hurts everyone touching, ignores bosses", () => {
     const system = new BlockingSystem();
     const puffer = new FakeGuardian("P", "pufferfish", 400, 0);
     const first = new FakeEnemy("A", "swimmer", 380);
@@ -14,9 +14,11 @@ describe("blocking system", () => {
     const damaged: string[] = [];
     system.update([puffer], [first, second, boss], 0, 16, { damage: (enemy) => damaged.push(enemy.id) });
     expect(first.blockedById).toBe("P");
-    expect(second.blockedById).toBeNull();
-    expect(boss.blockedById).toBeNull();
-    expect(damaged).toEqual(["A"]);
+    expect(second.blockedById, "capacidade 1: o segundo não é preso").toBeNull();
+    expect(boss.blockedById, "chefe nunca é preso").toBeNull();
+    // V3.1: o dano de contato é do CORPO dele. Quem encosta se machuca — preso, esperando a vaga, ou
+    // chefe passando reto. Antes só o agarrado sangrava, e um Baiacu lotado virava enfeite.
+    expect(damaged.sort()).toEqual(["A", "B", "Z"]);
     for (let now = 16; now <= 10_000; now += 16) system.update([puffer], [first, second, boss], now, 16, noop);
     expect(first.blockedById).toBe("P");
   });

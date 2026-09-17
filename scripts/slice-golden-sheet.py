@@ -33,9 +33,12 @@ BOTTOM = [
     ("coroa", 1318, 1774),
 ]
 
-# Maior lado do PNG final. A coroa aparece com ~30px acima do Guardião e o maior efeito com ~140px;
-# 256 dá folga para tela grande sem inchar o que o boot carrega.
-MAX_SIDE = 256
+# Maior lado do PNG final.
+#
+# Era 256 e a pasta inteira ficou em 728 KB — carregados em TODA partida, quase o peso da arte de um
+# Guardião inteiro. Nada aqui passa de ~78 px na tela (a coroa tem 30), então 128 já é o dobro do
+# necessário e corta o pacote em ~4x.
+MAX_SIDE = 128
 
 # Abaixo disto o pixel é só halo e não conta para o recorte útil.
 ALPHA_FLOOR = 8

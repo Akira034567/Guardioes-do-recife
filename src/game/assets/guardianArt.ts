@@ -26,6 +26,15 @@ export interface ArtVariant {
   /** Nome da pasta em `public/assets/guardians/<pasta do Guardião>/`. */
   folder: string;
   ability: AbilityStyle;
+  /**
+   * A arte de Habilidade e de Impacto fica RESERVADA para a habilidade periódica: o golpe básico não
+   * desenha nenhuma das duas, só o tranco vetorial.
+   *
+   * É o caso da Tartaruga no ramo Correnteza. O golpe dela sai a cada 1,5s e a habilidade — a onda que
+   * empurra a fila — a cada 9s; com a mesma arte nos dois, o anel piscava o tempo todo e o momento que
+   * importava sumia no meio. Agora a imagem só aparece quando a onda acontece de verdade.
+   */
+  artOnlyOnAbility?: boolean;
 }
 
 export interface GuardianArtProfile {
@@ -39,6 +48,11 @@ export interface GuardianArtProfile {
   assetFolder?: string;
   /** Nome do arquivo da coluna "Habilidade" (padrão `projectile`; os novos usam `ability`). */
   abilityFile?: string;
+  /**
+   * Troca os papéis de "Habilidade" e "Impacto". O Golfinho veio com as duas colunas invertidas na
+   * prancha: o que estava como impacto é o pulso, e o que estava como habilidade é o respingo no alvo.
+   */
+  swapAbilityAndImpact?: boolean;
   /** `false` quando a variante não tem `portrait.png` (o card do HUD fica oculto). */
   hasPortrait?: boolean;
 }
@@ -157,8 +171,8 @@ export const GUARDIAN_ART: Record<GuardianId, GuardianArtProfile> = {
         { folder: "casco_2", ability: "ring" },
       ],
       b: [
-        { folder: "corrente_1", ability: "ring" },
-        { folder: "corrente_2", ability: "ring" },
+        { folder: "corrente_1", ability: "ring", artOnlyOnAbility: true },
+        { folder: "corrente_2", ability: "ring", artOnlyOnAbility: true },
       ],
     },
   },
@@ -185,6 +199,7 @@ export const GUARDIAN_ART: Record<GuardianId, GuardianArtProfile> = {
     effectScale: 0.55,
     assetFolder: "golfinho",
     abilityFile: "ability",
+    swapAbilityAndImpact: true,
     base: { folder: "base", ability: "ring" },
     branches: {
       a: [
@@ -237,7 +252,14 @@ export function artFolder(guardianId: GuardianId): string {
 
 /** Nome do arquivo (sem extensão) de um tipo de imagem para este Guardião. */
 export function artFileName(guardianId: GuardianId, kind: ArtKind): string {
-  if (kind === "projectile") return GUARDIAN_ART[guardianId].abilityFile ?? "projectile";
+  const profile = GUARDIAN_ART[guardianId];
+  const abilityFile = profile.abilityFile ?? "projectile";
+  // A troca vale para os DOIS lados de uma vez: senão as duas chaves apontariam para o mesmo arquivo.
+  if (profile.swapAbilityAndImpact) {
+    if (kind === "projectile") return "impact";
+    if (kind === "impact") return abilityFile;
+  }
+  if (kind === "projectile") return abilityFile;
   return kind;
 }
 
