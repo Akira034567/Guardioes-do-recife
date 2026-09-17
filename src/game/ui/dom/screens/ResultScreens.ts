@@ -1,4 +1,4 @@
-import { artTextureKeyForFolder, artVariant, GUARDIAN_ART } from "../../../assets/guardianArt";
+import { artPath, artTextureKeyForFolder, artVariant, GUARDIAN_ART } from "../../../assets/guardianArt";
 import { DIFFICULTIES } from "../../../data/difficulty";
 import type { MatchResult } from "../../../core/progression/MatchResult";
 import { objectiveLabel } from "../../../core/progression/objectives";
@@ -6,6 +6,7 @@ import type { MatchOutcome } from "../../../core/progression/ProgressionService"
 import { GLOBAL_CURRENCY } from "../../../data/progression";
 import { GUARDIANS } from "../../../data/guardians";
 import { GUARDIAN_UNLOCKS } from "../../../data/unlocks";
+import { ENCOUNTERS, type EncounterDefinition } from "../../../data/encounters";
 import type { GuardianId } from "../../../types";
 import { button, h } from "../h";
 import type { Screen, ScreenHost } from "../ScreenHost";
@@ -15,6 +16,37 @@ export interface ResultActions {
   onNextLevel(): void;
   onChangeSquad(): void;
   onMap(): void;
+  /** Abre o Encontro que esta fase acabou de liberar (ver `pendingEncounterFor`). */
+  onPlayEncounter?(encounter: EncounterDefinition): void;
+}
+
+/**
+ * O Encontro que esta fase destrancou, quando ainda não foi feito.
+ *
+ * Um Encontro fica pendurado na fase que o abre (`after`), e o jogador só descobria isso voltando ao
+ * mapa e reparando num satélite pequeno ao lado do nó. Terminar a fase é o momento em que ele está
+ * olhando: é aqui que o convite tem que aparecer.
+ */
+export function pendingEncounterFor(levelId: string, completedEncounters: readonly string[]): EncounterDefinition | null {
+  const encounter = ENCOUNTERS.find((candidate) => candidate.after === levelId);
+  return encounter && !completedEncounters.includes(encounter.id) ? encounter : null;
+}
+
+/** Convite para resgatar o Guardião que espera no Encontro aberto por esta fase. */
+function encounterInvite(encounter: EncounterDefinition, onPlay: () => void): HTMLElement {
+  const definition = GUARDIANS[encounter.guardianId];
+  return h(
+    "div",
+    { class: "gr-invite", testId: "result-encounter-invite" },
+    h("img", { class: "gr-invite__art", src: artPath(encounter.guardianId, GUARDIAN_ART[encounter.guardianId].base, "idle"), alt: "" }),
+    h(
+      "div",
+      { class: "gr-invite__body" },
+      h("strong", { text: `${definition.name} está preso aqui perto` }),
+      h("span", { text: `${encounter.level.name} — ${encounter.teaser}` }),
+    ),
+    button("IR RESGATAR", onPlay, { testId: "result-encounter-go", variant: "primary" }),
+  );
 }
 
 const seconds = (ms: number): string => {
@@ -83,7 +115,14 @@ function achievementToast(outcome: MatchOutcome): HTMLElement | null {
 }
 
 /** Tela de vitória (item 34): estrelas, objetivos, números da partida e recompensa. */
-export function victoryScreen(result: MatchResult, outcome: MatchOutcome, levelName: string, actions: ResultActions): Screen {
+export function victoryScreen(
+  result: MatchResult,
+  outcome: MatchOutcome,
+  levelName: string,
+  actions: ResultActions,
+  /** Encontro aberto por esta fase e ainda não concluído; ausente = sem convite. */
+  pending: EncounterDefinition | null = null,
+): Screen {
   return {
     id: "victory",
     render() {
@@ -107,6 +146,8 @@ export function victoryScreen(result: MatchResult, outcome: MatchOutcome, levelN
           ]),
           achievementToast(outcome),
           rewardBox(outcome),
+          // O convite vem ANTES dos botões: é a novidade da tela, não mais uma opção na fileira.
+          pending && actions.onPlayEncounter ? encounterInvite(pending, () => actions.onPlayEncounter?.(pending)) : null,
           outcome.counted ? null : h("p", { class: "gr-hint", text: "Partida com ferramentas de debug: nada foi salvo na progressão." }),
           h(
             "div",

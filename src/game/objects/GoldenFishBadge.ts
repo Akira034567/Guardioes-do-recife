@@ -105,6 +105,11 @@ export class GoldenFishBadge extends Phaser.GameObjects.Container {
     return this.dragging;
   }
 
+  /** O ponto cai em cima do peixinho? A cena consulta antes de tratar o toque como posicionamento. */
+  contains(x: number, y: number): boolean {
+    return Math.abs(x - this.x) <= this.width / 2 && Math.abs(y - this.y) <= this.height / 2;
+  }
+
   /** Nado parado e giro do redemoinho. */
   sync(deltaMs: number): void {
     this.elapsed += deltaMs;

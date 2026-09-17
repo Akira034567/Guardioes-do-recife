@@ -8,7 +8,7 @@ import { CARD_X, CARD_Y, MENU, openGame, OPTION_B } from "./helpers";
  */
 test.use({ trace: "off", video: "off" });
 
-test("a balanced defense can finish all five waves and unlock the next level", async ({ page }, testInfo) => {
+test("a balanced defense can finish every wave and unlock the next level", async ({ page }, testInfo) => {
   test.skip(testInfo.project.name !== "desktop-chromium", "Full balance run is covered once in Chromium.");
   test.setTimeout(240_000);
   const { canvas, clickGame, pageErrors } = await openGame(page);
@@ -53,7 +53,7 @@ test("a balanced defense can finish all five waves and unlock the next level", a
   await page.getByTestId("result-next").click();
   await expect(canvas).toHaveAttribute("data-level", "recife-2");
   await expect(canvas).toHaveAttribute("data-game-state", "countdown");
-  await expect(canvas).toHaveAttribute("data-pearls", "220");
+  await expect(canvas).toHaveAttribute("data-pearls", "200");
 
   await clickGame(MENU.x, MENU.y);
   await expect(canvas).toHaveAttribute("data-screen", "menu");

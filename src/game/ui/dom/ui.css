@@ -513,7 +513,8 @@
  */
 .gr-screen[data-screen="map"] {
   display: block;
-  container-type: inline-size;
+  /* `size` e não `inline-size`: as consultas de canvas BAIXO (celular deitado) perguntam altura. */
+  container-type: size;
   padding: 0;
   background: #02141f;
   backdrop-filter: none;
@@ -1403,7 +1404,7 @@
 .gr-screen[data-screen="achievements"],
 .gr-screen[data-screen="settings"] {
   display: block;
-  container-type: inline-size;
+  container-type: size;
   padding: 0;
   background: #02141f;
   backdrop-filter: none;
@@ -4068,4 +4069,209 @@
 #ui-layer[data-contrast="high"] .gr-field__code {
   background: #01161f;
   border-color: var(--gr-cyan);
+}
+
+/* ==========================================================================
+   V3.1 — o Encontro precisa se anunciar.
+   O satélite de 36 px não dizia nem que havia um Guardião ali, nem qual fase
+   era. A etiqueta responde as duas coisas, e o pulso chama o olho quando o nó
+   acabou de abrir.
+   ========================================================================== */
+
+.gr-world__encounter-tag {
+  position: absolute;
+  top: calc(40px * var(--gr-scale));
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: calc(1px * var(--gr-scale));
+  white-space: nowrap;
+  pointer-events: none;
+  text-align: center;
+  background: rgba(20, 8, 44, 0.9);
+  border: calc(1px * var(--gr-scale)) solid rgba(192, 166, 255, 0.6);
+  border-radius: calc(9px * var(--gr-scale));
+  padding: calc(3px * var(--gr-scale)) calc(8px * var(--gr-scale));
+}
+
+.gr-world__encounter-tag strong {
+  font-size: calc(9px * var(--gr-scale));
+  letter-spacing: calc(0.4px * var(--gr-scale));
+  color: #e6d8ff;
+}
+
+.gr-world__encounter-tag span {
+  font-size: calc(9px * var(--gr-scale));
+  color: rgba(214, 199, 255, 0.78);
+}
+
+.gr-world__encounter-tag--locked {
+  opacity: 0.55;
+}
+
+/* Disponível: a etiqueta acende e o nó pulsa, porque é a coisa nova no mapa. */
+.gr-world__encounter-tag--available {
+  border-color: #ffd76a;
+  box-shadow: 0 0 calc(12px * var(--gr-scale)) rgba(255, 215, 106, 0.35);
+}
+
+.gr-world__encounter-tag--available strong {
+  color: #ffd76a;
+}
+
+.gr-world__node--encounter[data-state="available"] {
+  animation: gr-encounter-pulse 2.2s ease-in-out infinite;
+}
+
+@keyframes gr-encounter-pulse {
+  0%, 100% { box-shadow: 0 0 calc(14px * var(--gr-scale)) rgba(178, 140, 255, 0.55); }
+  50% { box-shadow: 0 0 calc(26px * var(--gr-scale)) rgba(255, 215, 106, 0.8); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .gr-world__node--encounter[data-state="available"] {
+    animation: none;
+  }
+}
+
+/* ---- convite da tela de vitória para o Encontro que a fase abriu */
+
+.gr-invite {
+  display: flex;
+  align-items: center;
+  gap: calc(12px * var(--gr-scale));
+  margin-top: calc(10px * var(--gr-scale));
+  padding: calc(10px * var(--gr-scale)) calc(14px * var(--gr-scale));
+  border: calc(1px * var(--gr-scale)) solid rgba(192, 166, 255, 0.55);
+  border-radius: calc(14px * var(--gr-scale));
+  background: linear-gradient(120deg, rgba(48, 26, 92, 0.9), rgba(20, 12, 44, 0.9));
+  text-align: left;
+}
+
+.gr-invite__art {
+  width: calc(54px * var(--gr-scale));
+  height: calc(54px * var(--gr-scale));
+  object-fit: contain;
+  flex: none;
+}
+
+.gr-invite__body {
+  display: flex;
+  flex-direction: column;
+  gap: calc(2px * var(--gr-scale));
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.gr-invite__body strong {
+  color: #ffd76a;
+  font-size: calc(14px * var(--gr-scale));
+}
+
+.gr-invite__body span {
+  color: var(--gr-shell);
+  font-size: calc(11px * var(--gr-scale));
+}
+
+@media (max-width: 720px) {
+  .gr-invite {
+    flex-wrap: wrap;
+    justify-content: center;
+    text-align: center;
+  }
+
+  .gr-invite__body {
+    flex-basis: 100%;
+    align-items: center;
+  }
+}
+
+/* ==========================================================================
+   V3.1 — celular.
+   Três problemas reais em tela pequena: alvo de toque miúdo, recorte da câmera
+   comendo a borda, e menu desenhado para 1280x720 espremido num canvas baixo.
+   ========================================================================== */
+
+/* 1. Dedo não é ponteiro. Em tela de toque todo controle vira alvo de 44 px — o
+      mínimo que não erra — sem mexer no visual de quem joga com mouse. */
+@media (pointer: coarse) {
+  .gr-button,
+  .gr-world__nav-item,
+  .gr-world__back,
+  .gr-world__region-step {
+    min-height: calc(44px * var(--gr-scale));
+  }
+
+  .gr-album__item,
+  .gr-mastery__node {
+    min-height: calc(40px * var(--gr-scale));
+  }
+
+  /* O nó do mapa é o alvo mais errado de todos: é redondo e fica no meio da arte. */
+  .gr-world__node {
+    min-width: calc(44px * var(--gr-scale));
+    min-height: calc(44px * var(--gr-scale));
+  }
+}
+
+/* 2. Recorte da tela (notch, ilha, cantos redondos). A camada segue o canvas, que
+      pode encostar na borda física em tela cheia. */
+.gr-screen {
+  padding-left: env(safe-area-inset-left, 0);
+  padding-right: env(safe-area-inset-right, 0);
+  padding-top: env(safe-area-inset-top, 0);
+  padding-bottom: env(safe-area-inset-bottom, 0);
+}
+
+/* 3. Canvas baixo (celular deitado, janela espremida). O menu lateral vira uma
+      fileira em cima e o miolo passa a rolar, em vez de cortar o conteúdo. */
+@container (max-height: 460px) {
+  .gr-album__layout {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto minmax(0, 1fr);
+    overflow-y: auto;
+  }
+
+  .gr-world__side {
+    flex-direction: row;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: calc(6px * var(--gr-scale));
+    padding: calc(6px * var(--gr-scale));
+  }
+
+  .gr-world__nav {
+    flex-direction: row;
+    flex-wrap: wrap;
+    gap: calc(4px * var(--gr-scale));
+  }
+
+  /* A marca e a frase do rodapé são as primeiras coisas a sair: não são navegação. */
+  .gr-world__brand,
+  .gr-world__side-foot {
+    display: none;
+  }
+
+  .gr-world__nav-item span:not(.gr-icon) {
+    display: none;
+  }
+
+  .gr-panel {
+    max-height: 100%;
+    overflow-y: auto;
+  }
+}
+
+/* Tela estreita de verdade: a fileira de ações empilha em vez de espremer. */
+@container (max-width: 420px) {
+  .gr-actions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .gr-actions .gr-button {
+    width: 100%;
+  }
 }

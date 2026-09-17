@@ -24,7 +24,8 @@ test("o Camarão volta ao repouso entre os golpes", async ({ page }) => {
 test("a Baleia ganha Corais Corrompidos no Difícil e os perde ao serem rompidos", async ({ page }) => {
   test.slow();
   // Item 11. A onda do chefe do Recife 1 é a última; `wave` pula direto para ela.
-  const { canvas, pageErrors } = await openGame(page, "level=recife-1&difficulty=dificil&wave=5&debug=1");
+  // V3: a fase 1 passou de 5 para 7 ondas, então a última é a 7 (índice 6).
+  const { canvas, pageErrors } = await openGame(page, "level=recife-1&difficulty=dificil&wave=6&debug=1");
   await expect(canvas).toHaveAttribute("data-difficulty", "dificil");
   await expect(canvas).toHaveAttribute("data-boss-weak-points", "4/4", { timeout: 45_000 });
   expect(pageErrors).toEqual([]);
@@ -34,7 +35,7 @@ test("no Normal a Baleia não tem coral nenhum", async ({ page }) => {
   // O chefe leva ~8s para entrar em campo, e com os testes correndo em paralelo isso estica.
   test.slow();
   // O gate é por dificuldade: a fase base fica exatamente como era.
-  const { canvas, pageErrors } = await openGame(page, "level=recife-1&wave=5&debug=1");
+  const { canvas, pageErrors } = await openGame(page, "level=recife-1&wave=6&debug=1");
   await expect(canvas).toHaveAttribute("data-difficulty", "normal");
   await expect(canvas).toHaveAttribute("data-boss", /.+/, { timeout: 45_000 });
   expect(await canvas.evaluate((element) => (element as HTMLCanvasElement).dataset.bossWeakPoints)).toBe("");

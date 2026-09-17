@@ -8,8 +8,8 @@ import { DIFFICULTY_IDS } from "../../../data/difficulty";
 import type { ProgressionService } from "../../../core/progression/ProgressionService";
 import { DIFFICULTIES } from "../../../data/difficulty";
 import { ENCOUNTERS, type EncounterDefinition } from "../../../data/encounters";
-import { ENEMIES } from "../../../data/enemies";
 import { GUARDIANS } from "../../../data/guardians";
+import { ENEMIES } from "../../../data/enemies";
 import { getLevel, LEVELS } from "../../../data/levels";
 import { GLOBAL_CURRENCY } from "../../../data/progression";
 import { isRegionOpen, REGIONS, type RegionDefinition } from "../../../data/regions";
@@ -314,6 +314,14 @@ function encounterNode(
       state === "locked"
         ? h("span", { class: "gr-icon", html: ICONS.lock })
         : h("img", { class: `gr-world__node-art${state === "completed" ? "" : " gr-node__art--unknown"}`, src: art, alt: "" }),
+    ),
+    // O satélite sozinho não dizia NADA: nem que ali mora um Guardião, nem qual fase é. A etiqueta
+    // resolve as duas coisas de uma vez, e some quando o Encontro já foi feito.
+    h(
+      "span",
+      { class: `gr-world__encounter-tag gr-world__encounter-tag--${state}` },
+      h("strong", { text: state === "completed" ? GUARDIANS[encounter.guardianId].shortName : state === "locked" ? "?" : "NOVO GUARDIÃO" }),
+      state === "locked" ? null : h("span", { text: encounter.level.name }),
     ),
   );
 }

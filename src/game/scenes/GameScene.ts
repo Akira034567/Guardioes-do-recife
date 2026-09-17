@@ -20,7 +20,7 @@ import { launchConfigFromUrl, type MatchLaunchConfig } from "../match/MatchLaunc
 import { getProgression } from "../systems/progression";
 import { getSettings } from "../systems/settings";
 import { getScreenHost } from "../ui/dom/host";
-import { defeatScreen, unlockRevealScreen, victoryScreen } from "../ui/dom/screens/ResultScreens";
+import { defeatScreen, pendingEncounterFor, unlockRevealScreen, victoryScreen } from "../ui/dom/screens/ResultScreens";
 import { pauseScreen } from "../ui/dom/screens/PauseScreen";
 import { storyScreen } from "../ui/dom/screens/StoryScreen";
 import { pendingStory } from "../systems/story";
@@ -44,7 +44,7 @@ import { drawLevelBackdrop } from "../systems/LevelBackdrop";
 import { MatchEffects } from "../systems/MatchEffects";
 import { PlacementGhost } from "../objects/PlacementGhost";
 import { InteractableView } from "../objects/InteractableView";
-import { encounterForLevel } from "../data/encounters";
+import { encounterForLevel, type EncounterDefinition } from "../data/encounters";
 import { currentChallenges } from "../core/progression/challenges";
 import type { MatchSnapshot } from "../core/match/MatchSnapshot";
 import { TutorialDirector } from "../core/tutorial/TutorialDirector";
@@ -786,6 +786,9 @@ export class GameScene extends Phaser.Scene {
       if (this.selectedPlacedGuardianId) this.clearPlacedSelection();
       return;
     }
+    // O `pointerdown` do Phaser chega ANTES do `dragstart`: sem esta guarda, pegar o Peixinho com uma
+    // carta na mão posicionaria um Guardião embaixo dele.
+    if (this.goldenBadge?.contains(pointer.worldX, pointer.worldY)) return;
     const definition = GUARDIANS[this.selectedGuardianId];
     if (freeModesOf(definition).length === 0) return;
     this.dropOnField(definition, pointer.worldX, pointer.worldY);
@@ -1027,9 +1030,15 @@ export class GameScene extends Phaser.Scene {
         host.clear();
         this.openLevelSelect();
       },
+      onPlayEncounter: (encounter: EncounterDefinition) => {
+        host.clear();
+        this.openEncounter(encounter.id);
+      },
     };
+    // O convite só aparece na vitória de uma fase de campanha que abriu um Encontro ainda pendente.
+    const invite = outcome.victory && outcome.counted ? pendingEncounterFor(this.level.id, getProgression().progress.completedEncounters) : null;
     const screen = outcome.victory
-      ? victoryScreen(result, outcome, this.level.name, actions)
+      ? victoryScreen(result, outcome, this.level.name, actions, invite)
       : defeatScreen(result, outcome, this.level.name, actions);
     host.push(screen);
     // As apresentações de Guardiões novos entram por cima, uma de cada vez.
@@ -1106,6 +1115,12 @@ export class GameScene extends Phaser.Scene {
   private openLevelSelect(prepareLevelId?: string): void {
     lifecycleLog("match", "exit", { to: "LevelSelectScene" });
     transitionTo(this, "LevelSelectScene", prepareLevelId ? { prepareLevelId } : undefined);
+  }
+
+  /** Vai direto para a preparação de um Encontro (o convite da tela de vitória). */
+  private openEncounter(encounterId: string): void {
+    lifecycleLog("match", "exit", { to: "LevelSelectScene" });
+    transitionTo(this, "LevelSelectScene", { prepareEncounterId: encounterId });
   }
 
   /** Sair pelo pause é ir para casa: o Meu Recife. Vencer continua levando ao mapa, para encadear. */

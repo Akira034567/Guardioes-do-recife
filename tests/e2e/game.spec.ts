@@ -94,7 +94,7 @@ test("locks a unit into one upgrade branch, pauses and restarts without stale st
 test("enforces water and route placement rules on the shipwreck level", async ({ page }) => {
   const { canvas, clickGame, pageErrors } = await openGame(page, "level=recife-5");
   await expect(canvas).toHaveAttribute("data-level", "recife-5");
-  await expect(canvas).toHaveAttribute("data-pearls", "340");
+  await expect(canvas).toHaveAttribute("data-pearls", "360");
 
   // Água-viva: em cima da correnteza é inválido; água livre longe da rota é válido.
   await clickGame(CARD_X.jellyfish, CARD_Y);
@@ -102,7 +102,7 @@ test("enforces water and route placement rules on the shipwreck level", async ({
   await expect(canvas).toHaveAttribute("data-guardians", "0");
   await clickGame(700, 150);
   await expect(canvas).toHaveAttribute("data-guardians", "1");
-  await expect(canvas).toHaveAttribute("data-pearls", "240");
+  await expect(canvas).toHaveAttribute("data-pearls", "270");
 
   // Caranguejo: longe da correnteza é inválido; em cima dela "snapa" para a linha central.
   await clickGame(CARD_X.crab, CARD_Y);
@@ -110,7 +110,7 @@ test("enforces water and route placement rules on the shipwreck level", async ({
   await expect(canvas).toHaveAttribute("data-guardians", "1");
   await clickGame(900, 492);
   await expect(canvas).toHaveAttribute("data-guardians", "2");
-  await expect(canvas).toHaveAttribute("data-pearls", "150");
+  await expect(canvas).toHaveAttribute("data-pearls", "180");
   await expect(canvas).toHaveAttribute("data-selected", "G2");
 
   await clickGame(700, 150);
@@ -170,22 +170,22 @@ test("buries the stonefish on the route and arms it after a few seconds", async 
   expect(pageErrors).toEqual([]);
 });
 
-test("places the dolphin in open water and the turtle on the route", async ({ page }) => {
+test("places the dolphin in open water or on the margin, and the turtle on the route", async ({ page }) => {
   const { canvas, clickGame, pageErrors } = await openGame(page, `level=recife-2&${NEW_SQUAD}`);
-  await expect(canvas).toHaveAttribute("data-pearls", "220");
+  await expect(canvas).toHaveAttribute("data-pearls", "200");
+  // V3.1: o Golfinho aceita água livre E a beira da correnteza, como o Tubarão. (950, 340) é beira —
+  // antes era recusado por não ser água livre, e hoje vale.
   await clickGame(squadCard(4), CARD_Y);
   await clickGame(950, 340);
-  await expect(canvas).toHaveAttribute("data-guardians", "0");
-  await clickGame(640, 180);
   await expect(canvas).toHaveAttribute("data-guardians", "1");
-  await expect(canvas).toHaveAttribute("data-pearls", "100");
+  await expect(canvas).toHaveAttribute("data-pearls", "90");
 
   await clickGame(squadCard(2), CARD_Y);
   await clickGame(720, 200);
   await expect(canvas).toHaveAttribute("data-guardians", "1");
   await clickGame(910, 395);
   await expect(canvas).toHaveAttribute("data-guardians", "2");
-  await expect(canvas).toHaveAttribute("data-pearls", "0");
+  await expect(canvas).toHaveAttribute("data-pearls", "5");
   await expect(canvas).toHaveAttribute("data-selected", "G2");
   await expect(canvas).toHaveAttribute("data-selected-options", "2");
   expect(pageErrors).toEqual([]);
@@ -276,13 +276,15 @@ test("migrates an old save so existing players keep their levels", async ({ page
   await expect(canvas).toHaveAttribute("data-screen", "menu");
   await expect(canvas).toHaveAttribute("data-unlocked-levels", "3");
   const saved = await page.evaluate(() => JSON.parse(window.localStorage.getItem("guardioes-do-recife.save") ?? "{}"));
-  expect(saved.saveVersion).toBe(4);
+  expect(saved.saveVersion).toBe(5);
   expect(saved.completedLevels).toEqual(["recife-1", "recife-2"]);
   expect(saved.levelStars["recife-1"].stars).toBe(1);
   expect(saved.currency.shells).toBeGreaterThan(0);
   // v4 (item 4): a dificuldade passou a ser conquistada, e a migração é conservadora de propósito —
   // save antigo não registrava em qual dificuldade cada fase caiu, então ninguém herda nada.
   expect(saved.levelStars["recife-1"].clearedDifficulties).toEqual([]);
+  // v5 (V3): nasce a maestria permanente. Também conservadora — ninguém herda nó nenhum.
+  expect(saved.mastery).toEqual({});
   const legacy = await page.evaluate(() => window.localStorage.getItem("guardioes-do-recife.progress.v1"));
   expect(legacy, "a chave antiga fica para trás como segurança").not.toBeNull();
   expect(pageErrors).toEqual([]);

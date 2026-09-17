@@ -27,13 +27,16 @@ import type { GuardianId, LevelDefinition } from "../types";
 export class LevelSelectScene extends Phaser.Scene {
   private progress!: LevelProgressApi;
   private prepareLevelId: string | null = null;
+  /** Encontro a abrir direto ao entrar na cena (convite da tela de vitória). */
+  private prepareEncounterId: string | null = null;
 
   constructor() {
     super("LevelSelectScene");
   }
 
-  init(data: { prepareLevelId?: string } = {}): void {
+  init(data: { prepareLevelId?: string; prepareEncounterId?: string } = {}): void {
     this.prepareLevelId = data.prepareLevelId ?? null;
+    this.prepareEncounterId = data.prepareEncounterId ?? null;
   }
 
   create(): void {
@@ -74,6 +77,14 @@ export class LevelSelectScene extends Phaser.Scene {
       }),
     );
 
+    if (this.prepareEncounterId) {
+      const encounter = ENCOUNTERS.find((candidate) => candidate.id === this.prepareEncounterId);
+      this.prepareEncounterId = null;
+      if (encounter) {
+        this.openPreparation(encounter.level, encounter);
+        return;
+      }
+    }
     if (this.prepareLevelId) {
       const level = LEVELS.find((candidate) => candidate.id === this.prepareLevelId);
       this.prepareLevelId = null;
