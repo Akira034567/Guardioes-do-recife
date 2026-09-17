@@ -1,5 +1,6 @@
 import { button, h } from "../h";
 import type { Screen, ScreenHost } from "../ScreenHost";
+import { schoolScreen } from "./SchoolScreen";
 import { settingsScreen } from "./SettingsScreen";
 
 export interface PauseActions {
@@ -15,7 +16,13 @@ export interface PauseInfo {
   pearls: number;
 }
 
-/** Menu de pause (item 36): continuar, reiniciar, configurações e sair para o Meu Recife. */
+/**
+ * Menu de pause (item 36): continuar, consultar a Escola, reiniciar, configurações e sair.
+ *
+ * A Escola entra aqui porque é o único lugar onde o jogador pode consultar o manual SEM abandonar a
+ * partida. A dúvida que ela responde — "o que é esse ícone?", "por que meu tiro erra nessa faixa?" —
+ * nasce no meio da onda, e mandar o jogador sair da fase para descobrir é pedir que ele não descubra.
+ */
 export function pauseScreen(info: PauseInfo, actions: PauseActions): Screen {
   return {
     id: "pause",
@@ -39,6 +46,7 @@ export function pauseScreen(info: PauseInfo, actions: PauseActions): Screen {
             "div",
             { class: "gr-actions gr-actions--stack" },
             button("CONTINUAR", actions.onResume, { testId: "pause-resume", variant: "primary" }),
+            button("ESCOLA DO RECIFE", () => host.push(schoolScreen(() => host.pop())), { testId: "pause-school" }),
             button("CONFIGURAÇÕES", () => host.push(settingsScreen(() => host.pop())), { testId: "pause-settings" }),
             button("REINICIAR FASE", actions.onRestart, { testId: "pause-restart" }),
             button("SAIR PARA O RECIFE", actions.onExit, { testId: "pause-exit" }),

@@ -8,9 +8,13 @@ export function tutorialDone(): boolean {
   return getSaveManager().progress.tutorial.done || getSaveManager().progress.tutorial.skipped;
 }
 
-/** Zera as dicas do tutorial: a próxima partida volta a explicar o básico. */
+/**
+ * Zera o tutorial inteiro: os seis passos do primeiro jogo, os momentos que já dispararam em campo e
+ * as aulas marcadas como lidas na Escola. É tudo ou nada de propósito — quem pede para rever o
+ * tutorial quer rever o tutorial, não metade dele.
+ */
 export function resetTutorial(): void {
   getSaveManager().update((draft) => {
-    draft.tutorial = { completedSteps: [], done: false, skipped: false };
+    draft.tutorial = { completedSteps: [], done: false, skipped: false, seenMoments: [], seenLessons: [] };
   });
 }

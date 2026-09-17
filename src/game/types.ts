@@ -891,7 +891,26 @@ export interface HudSnapshot {
   message: string;
   /** Dica do tutorial em curso (item 30); null quando não há nada a ensinar. */
   tutorial: TutorialHint | null;
+  /** Aula-relâmpago do campo (Escola do Recife); null quando não há nada a ensinar agora. */
+  moment: MomentHint | null;
   gameOver: "victory" | "defeat" | null;
+}
+
+/**
+ * Aula-relâmpago do campo, pronta para desenhar.
+ *
+ * Mora numa fatia própria do HUD, e não junto do passo do tutorial, porque as duas coisas respondem
+ * perguntas diferentes: o passo ensina a MEXER no jogo e só existe no Recife 1; o momento ensina o
+ * JOGO e dispara em qualquer fase, uma vez na vida. Misturá-las num campo só faria o `data-tutorial`
+ * — que os testes leem como "qual passo está na tela" — passar a significar duas coisas.
+ */
+export interface MomentHint {
+  id: string;
+  text: string;
+  /** Ícone do efeito que a aula está explicando, quando é um efeito de status. */
+  statusIcon: string | null;
+  /** A aula da Escola do Recife que abre o assunto inteiro. */
+  lessonId: string;
 }
 
 /** Passo do tutorial pronto para desenhar. */

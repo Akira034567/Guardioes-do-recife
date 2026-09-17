@@ -49,6 +49,8 @@ import { encounterForLevel, type EncounterDefinition } from "../data/encounters"
 import { currentChallenges } from "../core/progression/challenges";
 import type { MatchSnapshot } from "../core/match/MatchSnapshot";
 import { TutorialDirector } from "../core/tutorial/TutorialDirector";
+import { MomentQueue, type MomentSignals } from "../core/tutorial/Moments";
+import { saveSeenMoments, seenMoments } from "../systems/school";
 import { createLevelProgress, getSaveManager } from "../systems/ProgressStore";
 import type {
   BranchId,
@@ -58,6 +60,7 @@ import type {
   HudSnapshot,
   LevelDefinition,
   PlacementDefinition,
+  MomentHint,
   TutorialHint,
   Vec2,
   WavePreviewChip,
@@ -134,6 +137,8 @@ export class GameScene extends Phaser.Scene {
   private debugAccumulatorMs = 0;
   private tutorial: TutorialDirector | null = null;
   private tutorialSaved = "";
+  private moments: MomentQueue | null = null;
+  private momentsSaved = "";
   private readonly unlockAudio = (): void => {
     this.audio?.unlock();
     // A trilha só pode começar depois do primeiro toque do jogador (regra do navegador).
@@ -235,6 +240,9 @@ export class GameScene extends Phaser.Scene {
     this.match.setListener((event) => this.pendingEvents.push(event));
     this.tutorial = this.launch.tutorial ? new TutorialDirector(getSaveManager().progress.tutorial) : null;
     this.tutorialSaved = "";
+    // A fila obedece à mesma chave `?tutorial=0` do tutorial básico: um jogo sem dicas é sem dicas.
+    this.moments = this.launch.tutorial && getSettings().tutorialMoments ? new MomentQueue(seenMoments()) : null;
+    this.momentsSaved = "";
 
     this.audio = new AudioManager();
     this.artEffects = new ArtEffects(this);
@@ -1191,12 +1199,87 @@ export class GameScene extends Phaser.Scene {
     if (JSON.stringify(next) === this.tutorialSaved) return;
     this.tutorialSaved = JSON.stringify(next);
     getSaveManager().update((draft) => {
-      draft.tutorial = next;
+      // Só os campos do diretor: `seenMoments` e `seenLessons` têm dono próprio e não podem ser
+      // apagados por um quadro do HUD.
+      draft.tutorial = { ...draft.tutorial, ...next };
     });
   }
 
-  /** "PULAR" na dica: encerra o tutorial de vez. */
+  /**
+   * Sinais do quadro para a fila de momentos.
+   *
+   * São lidos do estado VIVO da partida, não do snapshot: o snapshot é um resumo de HUD e não carrega
+   * o status de cada inimigo. A derivação dos ícones é a mesma da `EnemyView` de propósito — o momento
+   * tem que falar do ícone que o jogador está vendo naquele instante, não de um que o motor conhece e
+   * a tela não mostra.
+   */
+  private momentSignals(): MomentSignals {
+    const now = this.match.now;
+    const statuses = new Set<string>();
+    const roles = new Set<string>();
+    let cloaked = false;
+    for (const enemy of this.match.enemies) {
+      if (enemy.dead) continue;
+      roles.add(enemy.definition.role);
+      if (enemy.abilities.some((ability) => ability.type === "stealth")) cloaked = true;
+      const status = enemy.status;
+      if (status.isStunned(now) || status.isHeld(now)) statuses.add("stun");
+      if (status.poisonStacks(now) > 0) statuses.add("poison");
+      if (status.slowFactor(now) < 1) statuses.add("slow");
+      if (status.damageMultiplier(now) > 1) statuses.add("vulnerable");
+      if (status.isRevealed(now)) statuses.add("revealed");
+    }
+    return {
+      guardiansOnField: this.match.guardians.map((guardian) => guardian.guardianId),
+      activeStatuses: [...statuses] as MomentSignals["activeStatuses"],
+      enemyRoles: [...roles] as MomentSignals["enemyRoles"],
+      hasCurrentZone: (this.level.currents?.length ?? 0) > 0,
+      hasCloakedEnemy: cloaked,
+    };
+  }
+
+  /**
+   * Aula-relâmpago para o HUD.
+   *
+   * Fica calada enquanto a faixa está OCUPADA por um passo do tutorial — duas vozes ensinando ao mesmo
+   * tempo é pior que uma. O critério é o passo estar na tela, e não o tutorial estar "por terminar":
+   * fora do Recife 1 o diretor nunca conclui nada, e checar `isOver` calaria os momentos para sempre
+   * em todas as outras fases.
+   */
+  private momentHint(stepOnScreen: boolean): MomentHint | null {
+    if (!this.moments) return null;
+    const moment = this.moments.update(this.match.now, this.momentSignals(), stepOnScreen);
+    this.saveMomentState();
+    if (!moment) return null;
+    return {
+      id: moment.id,
+      text: moment.text,
+      statusIcon: moment.art.kind === "status" ? moment.art.icon : null,
+      lessonId: moment.lessonId,
+    };
+  }
+
+  private saveMomentState(): void {
+    if (!this.moments) return;
+    const next = this.moments.seenIds;
+    const key = next.join("|");
+    if (key === this.momentsSaved) return;
+    this.momentsSaved = key;
+    saveSeenMoments(next);
+  }
+
+  /**
+   * "PULAR" na faixa.
+   *
+   * Se o que está na tela é um momento, ele some e a fila cala pelo intervalo — o tutorial básico não
+   * é encerrado por isso. Só quando a faixa mostra um PASSO é que o botão encerra o tutorial de vez.
+   */
   private skipTutorial(): void {
+    if (this.tutorial?.isOver !== false && this.moments) {
+      this.moments.dismiss(this.match.now);
+      this.emitHud();
+      return;
+    }
     this.tutorial?.skip();
     this.saveTutorialState();
     this.emitHud();
@@ -1238,6 +1321,8 @@ export class GameScene extends Phaser.Scene {
     const selected = this.selectedPlacedGuardianId ? this.match.guardian(this.selectedPlacedGuardianId) : undefined;
     const selectedView = selected ? this.guardianViews.get(selected.id) : undefined;
     const gameOver = snapshot.status === "running" ? null : snapshot.status;
+    // O passo vem antes: ele tem preferência na faixa e é o que cala a fila de momentos.
+    const step = this.tutorialHint(snapshot);
     const hud: HudSnapshot = {
       levelId: this.level.id,
       levelName: this.level.name,
@@ -1307,7 +1392,8 @@ export class GameScene extends Phaser.Scene {
       muted: this.audio.isMuted,
       debug: { ...this.debugFlags },
       message: this.message,
-      tutorial: this.tutorialHint(snapshot),
+      tutorial: step,
+      moment: this.momentHint(step !== null),
       gameOver,
     };
     const dataset = this.game.canvas.dataset;
@@ -1332,6 +1418,8 @@ export class GameScene extends Phaser.Scene {
     dataset.paused = String(this.clock.paused);
     dataset.muted = String(this.audio.isMuted);
     dataset.tutorial = hud.tutorial?.id ?? "";
+    // Fatia própria:  continua significando "qual passo está na tela".
+    dataset.moment = hud.moment?.id ?? "";
     dataset.interactables = snapshot.interactables.map((item) => `${item.id}:${item.state}:${Math.round(item.progress * 100)}`).join(",");
     dataset.speed = String(this.clock.speed);
     dataset.difficulty = this.difficulty.id;

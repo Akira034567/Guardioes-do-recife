@@ -10,6 +10,7 @@ import { achievementsScreen } from "./screens/AchievementsScreen";
 import { bestiaryScreen } from "./screens/BestiaryScreen";
 import { collectionScreen } from "./screens/CollectionScreen";
 import { masteryScreen } from "./screens/MasteryScreen";
+import { schoolScreen } from "./screens/SchoolScreen";
 import { settingsScreen } from "./screens/SettingsScreen";
 import { storyIndexScreen } from "./screens/StoryScreen";
 import type { ShellNav, ShellSection } from "./shell";
@@ -41,6 +42,8 @@ export interface SectionRouter {
 export interface SectionOptions {
   /** Abre o álbum já com este Guardião escolhido. */
   collectionFocus?: GuardianId;
+  /** Abre a Escola já nesta aula — o caminho que o momento em campo usa para levar ao manual. */
+  schoolFocus?: string;
 }
 
 /** A navegação lateral desta cena, pronta para entregar a qualquer tela. */
@@ -48,6 +51,7 @@ export function sectionNav(router: SectionRouter): ShellNav {
   return {
     onGoHub: () => openSection("hub", router),
     onGoMap: () => openSection("map", router),
+    onOpenSchool: () => openSection("school", router),
     onOpenCollection: () => openSection("collection", router),
     onOpenMastery: () => openSection("mastery", router),
     onOpenBestiary: () => openSection("bestiary", router),
@@ -66,6 +70,7 @@ const SHELLS = new WeakMap<Phaser.Game, AppShellHandle>();
 
 /** O fundo de cada seção: cada uma empresta a arte de uma fase diferente, como antes. */
 const BACKDROPS: Record<ShellView, number> = {
+  school: 0,
   collection: 0,
   mastery: 2,
   bestiary: 3,
@@ -78,7 +83,9 @@ const BACKDROPS: Record<ShellView, number> = {
 function contentFor(section: ShellView, router: SectionRouter, options: SectionOptions, back: () => void, nav: ShellNav): ShellContent {
   const progression = getProgression();
   const screen =
-    section === "collection"
+    section === "school"
+      ? schoolScreen(back, nav, { focus: options.schoolFocus }, true)
+      : section === "collection"
       ? collectionScreen(progression, back, nav, { focus: options.collectionFocus }, true)
       : section === "mastery"
         ? masteryScreen(progression, back, nav, true)
@@ -109,6 +116,7 @@ function contentFor(section: ShellView, router: SectionRouter, options: SectionO
  * NÃO são recriados. Manter os nomes evita reescrever os testes por uma mudança que é de estrutura.
  */
 const NAV_PREFIX: Record<ShellView, string> = {
+  school: "school",
   collection: "album",
   mastery: "mastery",
   bestiary: "bestiary",
@@ -119,6 +127,7 @@ const NAV_PREFIX: Record<ShellView, string> = {
 };
 
 const BACK_ID: Record<ShellView, string> = {
+  school: "school-back",
   collection: "collection-back",
   mastery: "mastery-back",
   bestiary: "bestiary-back",

@@ -4275,3 +4275,166 @@
     width: 100%;
   }
 }
+
+/* ==========================================================================
+   Escola do Recife — o manual (Guardiões, efeitos, correnteza e ameaças).
+   Reaproveita a moldura do álbum. O que é próprio daqui são a lista agrupada
+   por curso, o selo de aula nova e a caixa da REGRA, que é a razão de cada
+   aula existir e por isso não pode virar letra miúda.
+   ========================================================================== */
+
+/* A lista tem 25 itens em quatro grupos: 186px espremia o nome das aulas. */
+.gr-album--school .gr-album__layout {
+  grid-template-columns: calc(216px * var(--gr-scale)) minmax(0, 1fr);
+}
+
+.gr-album--school .gr-album__list {
+  display: flex;
+  flex-direction: column;
+  gap: calc(5px * var(--gr-scale));
+  overflow-y: auto;
+  min-height: 0;
+}
+
+.gr-school__progress {
+  display: flex;
+  flex-direction: column;
+  gap: calc(2px * var(--gr-scale));
+  padding: calc(9px * var(--gr-scale)) calc(11px * var(--gr-scale));
+  background: rgba(3, 30, 47, 0.72);
+  border: calc(1px * var(--gr-scale)) solid rgba(21, 129, 163, 0.45);
+  border-radius: calc(10px * var(--gr-scale));
+  color: #f2fbff;
+  font-size: calc(13px * var(--gr-scale));
+}
+
+/* Cabeçalho de curso: não é clicável, então não pode parecer um item da lista. */
+.gr-school__course {
+  display: flex;
+  align-items: center;
+  gap: calc(8px * var(--gr-scale));
+  margin-top: calc(8px * var(--gr-scale));
+  padding: calc(6px * var(--gr-scale)) calc(4px * var(--gr-scale));
+  color: var(--gr-cyan);
+  font-size: calc(13px * var(--gr-scale));
+  border-bottom: calc(1px * var(--gr-scale)) solid rgba(21, 129, 163, 0.32);
+}
+
+.gr-school__course strong {
+  display: block;
+  color: #f2fbff;
+  letter-spacing: calc(0.4px * var(--gr-scale));
+}
+
+.gr-album--school .gr-album__item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: calc(8px * var(--gr-scale));
+  font: inherit;
+  font-size: calc(13px * var(--gr-scale));
+  color: var(--gr-shell);
+  background: rgba(3, 30, 47, 0.72);
+  border: calc(1px * var(--gr-scale)) solid rgba(21, 129, 163, 0.45);
+  border-radius: calc(10px * var(--gr-scale));
+  padding: calc(8px * var(--gr-scale)) calc(11px * var(--gr-scale));
+  cursor: pointer;
+  text-align: left;
+}
+
+.gr-album--school .gr-album__item:hover,
+.gr-album--school .gr-album__item:focus-visible {
+  border-color: rgba(95, 224, 255, 0.7);
+}
+
+.gr-album--school .gr-album__item--on {
+  border-color: var(--gr-cyan);
+  background: rgba(8, 56, 82, 0.9);
+  color: #f2fbff;
+}
+
+.gr-school__new {
+  flex: none;
+  font-size: calc(9px * var(--gr-scale));
+  letter-spacing: calc(0.8px * var(--gr-scale));
+  color: #04202f;
+  background: var(--gr-gold, #ffd86a);
+  border-radius: calc(999px * var(--gr-scale));
+  padding: calc(2px * var(--gr-scale)) calc(6px * var(--gr-scale));
+}
+
+.gr-album--school .gr-album__detail {
+  display: flex;
+  flex-direction: column;
+  gap: calc(12px * var(--gr-scale));
+  overflow-y: auto;
+  min-height: 0;
+  padding-right: calc(4px * var(--gr-scale));
+}
+
+.gr-school__head {
+  display: flex;
+  align-items: center;
+  gap: calc(14px * var(--gr-scale));
+}
+
+.gr-school__art {
+  flex: none;
+  width: calc(116px * var(--gr-scale));
+  max-height: calc(92px * var(--gr-scale));
+  object-fit: contain;
+  filter: drop-shadow(0 calc(3px * var(--gr-scale)) calc(10px * var(--gr-scale)) rgba(0, 18, 30, 0.8));
+}
+
+/* O ícone de status é minúsculo no jogo (21px); aqui ele é o assunto da aula. */
+.gr-school__art--icon {
+  width: calc(88px * var(--gr-scale));
+  max-height: calc(88px * var(--gr-scale));
+}
+
+.gr-school__art--glyph {
+  flex: none;
+  color: var(--gr-cyan);
+}
+
+.gr-school__points {
+  margin: 0;
+  padding-left: calc(18px * var(--gr-scale));
+  display: flex;
+  flex-direction: column;
+  gap: calc(7px * var(--gr-scale));
+  color: var(--gr-shell);
+  font-size: calc(13px * var(--gr-scale));
+  line-height: 1.45;
+}
+
+.gr-school__rule {
+  display: flex;
+  flex-direction: column;
+  gap: calc(5px * var(--gr-scale));
+  background: rgba(255, 216, 106, 0.1);
+  border: calc(1px * var(--gr-scale)) solid rgba(255, 216, 106, 0.5);
+  border-radius: calc(12px * var(--gr-scale));
+  padding: calc(11px * var(--gr-scale)) calc(13px * var(--gr-scale));
+  color: #fff3cf;
+  font-size: calc(13px * var(--gr-scale));
+  line-height: 1.45;
+}
+
+.gr-school__rule-tag {
+  font-size: calc(9px * var(--gr-scale));
+  letter-spacing: calc(1.2px * var(--gr-scale));
+  color: var(--gr-gold, #ffd86a);
+}
+
+/* Tela estreita: a Escola vira uma coluna só, como o resto do álbum. */
+@container (max-width: 620px) {
+  .gr-album--school .gr-album__layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .gr-school__head {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+}

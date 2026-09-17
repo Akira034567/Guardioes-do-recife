@@ -33,6 +33,13 @@ export interface PlayerSettings {
   damageNumbers: boolean;
   /** Reforça o contraste das telas de menu (bordas e fundos mais sólidos). */
   highContrast: boolean;
+  /**
+   * Aulas-relâmpago da Escola do Recife durante a partida.
+   *
+   * Separada do tutorial básico porque responde outra pergunta: quem pula os seis passos está dizendo
+   * "sei mexer no jogo", não "não quero saber o que é vulnerabilidade".
+   */
+  tutorialMoments: boolean;
   uiScale: "small" | "normal" | "large";
 }
 
@@ -105,7 +112,14 @@ export interface PlayerProgress {
   achievements: Record<string, { progress: number; unlockedAt: string | null; claimed: boolean }>;
   enemyDiscovery: Record<string, { firstSeenLevelId: string; seenAt: string; kills: number }>;
   storyProgress: { seen: string[] };
-  tutorial: { completedSteps: string[]; done: boolean; skipped: boolean };
+  /**
+   * Tutorial e Escola do Recife.
+   *
+   * `completedSteps` são os passos do primeiro jogo; `seenMoments` são as aulas-relâmpago que já
+   * dispararam em campo (uma vez na VIDA, não por fase); `seenLessons` são as aulas já lidas no
+   * manual, só para marcar o que é novo. Os três moram juntos porque "rever tutorial" zera tudo.
+   */
+  tutorial: { completedSteps: string[]; done: boolean; skipped: boolean; seenMoments: string[]; seenLessons: string[] };
   settings: PlayerSettings;
   guardianStats: Record<string, GuardianCareer>;
   lastLoadout: string[];
@@ -149,6 +163,7 @@ export const DEFAULT_SETTINGS: PlayerSettings = {
   screenShake: true,
   damageNumbers: true,
   highContrast: false,
+  tutorialMoments: true,
   uiScale: "normal",
 };
 
@@ -166,7 +181,7 @@ export function createDefaultProgress(registry: SanitizeRegistry, now: Date): Pl
     achievements: {},
     enemyDiscovery: {},
     storyProgress: { seen: [] },
-    tutorial: { completedSteps: [], done: false, skipped: false },
+    tutorial: { completedSteps: [], done: false, skipped: false, seenMoments: [], seenLessons: [] },
     settings: { ...DEFAULT_SETTINGS },
     guardianStats: {},
     lastLoadout: [],
@@ -335,6 +350,8 @@ export function sanitizeProgress(raw: unknown, registry: SanitizeRegistry, now: 
       completedSteps: stringList(tutorial.completedSteps),
       done: bool(tutorial.done, false),
       skipped: bool(tutorial.skipped, false),
+      seenMoments: stringList(tutorial.seenMoments),
+      seenLessons: stringList(tutorial.seenLessons),
     },
     settings: {
       masterVolume: finite(settings.masterVolume, DEFAULT_SETTINGS.masterVolume, 0, 1),
@@ -345,6 +362,7 @@ export function sanitizeProgress(raw: unknown, registry: SanitizeRegistry, now: 
       screenShake: bool(settings.screenShake, DEFAULT_SETTINGS.screenShake),
       damageNumbers: bool(settings.damageNumbers, DEFAULT_SETTINGS.damageNumbers),
       highContrast: bool(settings.highContrast, DEFAULT_SETTINGS.highContrast),
+      tutorialMoments: bool(settings.tutorialMoments, DEFAULT_SETTINGS.tutorialMoments),
       uiScale: settings.uiScale === "small" || settings.uiScale === "large" ? settings.uiScale : "normal",
     },
     guardianStats,

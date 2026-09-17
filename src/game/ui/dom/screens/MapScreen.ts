@@ -29,6 +29,7 @@ export interface MapActions {
   onPlayEncounter(encounter: EncounterDefinition): void;
   onPlayChallenge(challenge: ChallengeDefinition): void;
   onOpenAchievements(): void;
+  onOpenSchool(): void;
   onOpenCollection(): void;
   onOpenMastery(): void;
   onOpenBestiary(): void;
@@ -120,6 +121,7 @@ function sidebar(host: ScreenHost, actions: MapActions): HTMLElement {
     {
       onGoHub: actions.onGoHub,
       onGoMap: () => {},
+      onOpenSchool: actions.onOpenSchool,
       onOpenCollection: actions.onOpenCollection,
       onOpenMastery: actions.onOpenMastery,
       onOpenBestiary: actions.onOpenBestiary,

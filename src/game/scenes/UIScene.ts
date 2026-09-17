@@ -6,6 +6,7 @@ import { PLACEMENT_HINTS } from "../core/PlacementRules";
 import { ENEMIES, resolveEnemy } from "../data/enemies";
 import { DEFAULT_LOADOUT, GUARDIANS } from "../data/guardians";
 import { EventBus, Events } from "../EventBus";
+import { statusIconKey, type StatusIcon } from "../assets/statusArt";
 import { HUD_LAYOUT } from "../hudLayout";
 import { hudIcon, type HudIconName } from "../ui/hud/HudIcons";
 import { GLOW_PAD, HUD_COLORS, HUD_FONT, hudBar, hudPanel, type PanelStyle } from "../ui/hud/HudSkin";
@@ -195,6 +196,7 @@ export class UIScene extends Phaser.Scene {
   private tutorialText!: Phaser.GameObjects.Text;
   private tutorialSkip!: HudControl;
   private tutorialFocus!: Phaser.GameObjects.Graphics;
+  private tutorialIcon!: Phaser.GameObjects.Image;
   private optionButtons: OptionButton[] = [];
   private sellButton!: HudControl;
   private sellValue!: Phaser.GameObjects.Text;
@@ -864,19 +866,51 @@ export class UIScene extends Phaser.Scene {
       onClick: () => EventBus.emit(Events.skipTutorial),
     });
     this.tutorialSkip.setVisible(false);
+    // O ícone do efeito, para o momento que fala de status. Fica à esquerda do texto e some quando a
+    // faixa está mostrando um passo do tutorial, que não tem ilustração.
+    this.tutorialIcon = this.add
+      .image(TUTORIAL_HINT.x - TUTORIAL_HINT.width / 2 + 24, y, statusIconKey("slow"))
+      .setDisplaySize(24, 24)
+      .setVisible(false);
   }
 
+  /**
+   * A faixa serve aos dois, e o PASSO TEM PREFERÊNCIA.
+   *
+   * Uma faixa só existe de propósito: são os dois a mesma promessa ao jogador — "isto é o jogo te
+   * explicando alguma coisa, e não está travando nada". Duas faixas em lugares diferentes seriam duas
+   * linguagens para a mesma ideia. A preferência do passo é o que garante que o tutorial básico nunca
+   * seja atropelado por uma aula-relâmpago (a fila também se cala sozinha, do lado da `GameScene`).
+   */
   private renderTutorial(snapshot: HudSnapshot): void {
-    const hint = snapshot.tutorial;
-    const visible = Boolean(hint) && !snapshot.gameOver;
+    const step = snapshot.tutorial;
+    const moment = step ? null : snapshot.moment;
+    const visible = Boolean(step ?? moment) && !snapshot.gameOver;
     this.tutorialBox.setVisible(visible);
     this.tutorialText.setVisible(visible);
     this.tutorialSkip.setVisible(visible);
     this.tutorialFocus.clear();
-    if (!hint || !visible) return;
-    this.tutorialText.setText(`${hint.step}/${hint.total} · ${hint.text}`);
+    if (!visible) {
+      this.tutorialIcon.setVisible(false);
+      return;
+    }
+
+    if (moment) {
+      const withIcon = moment.statusIcon !== null && this.textures.exists(statusIconKey(moment.statusIcon as StatusIcon));
+      this.tutorialIcon.setVisible(withIcon);
+      if (withIcon) this.tutorialIcon.setTexture(statusIconKey(moment.statusIcon as StatusIcon));
+      // Com ícone, o texto desloca para não passar por baixo dele.
+      const left = TUTORIAL_HINT.x - TUTORIAL_HINT.width / 2 + (withIcon ? 44 : 16);
+      this.tutorialText.setX(left);
+      this.tutorialText.setText(moment.text);
+      return;
+    }
+
+    this.tutorialIcon.setVisible(false);
+    this.tutorialText.setX(TUTORIAL_HINT.x - TUTORIAL_HINT.width / 2 + 16);
+    this.tutorialText.setText(`${step!.step}/${step!.total} · ${step!.text}`);
     // Contorno no controle citado pela dica; o registro sabe onde cada botão está.
-    const target = hint.highlight ? UI_REGISTRY.get(hint.highlight) : undefined;
+    const target = step!.highlight ? UI_REGISTRY.get(step!.highlight) : undefined;
     if (!target) return;
     this.tutorialFocus.lineStyle(3, 0xffd86a, 0.95);
     this.tutorialFocus.strokeRoundedRect(target.x - target.width / 2 - 4, target.y - target.height / 2 - 4, target.width + 8, target.height + 8, 10);

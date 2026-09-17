@@ -189,6 +189,11 @@ function playSection(settings: PlayerSettings, apply: (patch: Partial<PlayerSett
     "settings-play",
     choice(ICONS.waves, "Tremor de tela", "settings-shake", settings.screenShake, (value) => apply({ screenShake: value })),
     choice(ICONS.target, "Números de dano", "settings-damage", settings.damageNumbers, (value) => apply({ damageNumbers: value })),
+    choice(ICONS.book, "Aulas em campo", "settings-moments", settings.tutorialMoments, (value) => apply({ tutorialMoments: value })),
+    h("p", {
+      class: "gr-hint gr-config__note",
+      text: "As aulas em campo aparecem uma vez na vida, quando a coisa acontece pela primeira vez — o primeiro veneno, a primeira correnteza, o primeiro chefe. Desligadas, a Escola do Recife continua inteira no menu.",
+    }),
   );
 }
 
@@ -215,7 +220,7 @@ function dataSection(apply: (patch: Partial<PlayerSettings>) => void, redraw: ()
       "div",
       { class: "gr-config__row", testId: "settings-tutorial", dataValue: done ? "done" : "pending" },
       h("span", { class: "gr-icon", html: ICONS.book }),
-      h("span", { class: "gr-config__label", text: "Dicas do tutorial" }),
+      h("span", { class: "gr-config__label", text: "Tutorial e Escola" }),
       h(
         "button",
         {
@@ -229,7 +234,7 @@ function dataSection(apply: (patch: Partial<PlayerSettings>) => void, redraw: ()
           },
         },
         h("span", { class: "gr-icon", html: ICONS.play }),
-        h("span", { text: done ? "REINICIAR TUTORIAIS" : "AINDA RODANDO" }),
+        h("span", { text: done ? "REVER TUDO DE NOVO" : "AINDA RODANDO" }),
       ),
     ),
     h(
