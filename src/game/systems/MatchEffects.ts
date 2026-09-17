@@ -50,6 +50,12 @@ const TONE_FOR_CAUSE: Partial<Record<DamageCause, DamageTone>> = {
   weakPoint: "weakPoint",
 };
 
+/**
+ * Quanto tempo o pulso do sonar leva para atravessar o alcance. Número de APRESENTAÇÃO: o efeito de
+ * jogo (revelar, marcar, aplicar vulnerabilidade) já aconteceu no instante do evento.
+ */
+const SONAR_TRAVEL_MS = 1150;
+
 export class MatchEffects {
   private readonly damageNumbers = new DamageAggregator();
   private readonly floatingText: FloatingTextPool;
@@ -347,8 +353,12 @@ export class MatchEffects {
       case "pushWave": {
         if (!guardian) return;
         effects.ring(this.abilityKeyFor(guardian, "ring"), event.x, event.y + 6, event.radius * 2, { durationMs: event.visualMs, alpha: 0.8 });
-        const surge = scene.add.circle(event.x, event.y, event.radius * 0.4).setStrokeStyle(4, 0x6fe3ff, 0.85).setDepth(DEPTH.effects);
-        scene.tweens.add({ targets: surge, radius: event.radius, alpha: 0, duration: event.visualMs, ease: "Quad.Out", onComplete: () => surge.destroy() });
+        // A frente da repulsa acompanha o deslize dos inimigos (ver `EnemyView.applyPosition`): ela
+        // acelera para fora com `Back.easeOut`, que é o gesto de empurrar — a antiga `Quad.Out`
+        // desacelerava logo e a onda parecia frear justo quando as criaturas saíam voando.
+        const surge = scene.add.circle(event.x, event.y, event.radius * 0.3).setStrokeStyle(5, 0x6fe3ff, 0.9).setDepth(DEPTH.effects);
+        scene.tweens.add({ targets: surge, radius: event.radius, duration: event.visualMs, ease: "Back.easeOut", onComplete: () => surge.destroy() });
+        scene.tweens.add({ targets: surge, alpha: 0, duration: event.visualMs, ease: "Quad.In" });
         event.pushedIds.forEach((id) => {
           const enemy = this.host.match.enemy(id);
           if (enemy) this.shockwave(enemy.x, enemy.y, 0x9fefff, 18);
@@ -357,10 +367,27 @@ export class MatchEffects {
         return;
       }
       case "sonarWave": {
+        // V3.1: o pulso VIAJA. A 520 ms ele estourava antes de o jogador entender que algo saiu do
+        // Golfinho; agora leva mais que o dobro, com uma onda secundária logo atrás para dar volume à
+        // frente que se abre. O alfa cai devagar no começo e rápido no fim (Quad.In), que é o que faz
+        // ler como "a onda passou" em vez de "o círculo sumiu".
         const color = event.wave.coordinate ? 0x9b7bff : event.wave.vulnerability ? 0xb59cff : 0x6fd6ff;
-        const circle = scene.add.circle(event.x, event.y, 12).setStrokeStyle(3, color, 0.85).setDepth(DEPTH.effects);
-        scene.tweens.add({ targets: circle, radius: event.radius, alpha: 0, duration: 520, ease: "Sine.Out", onComplete: () => circle.destroy() });
-        if (guardian) effects.ring(this.abilityKeyFor(guardian, "ring"), event.x, event.y + 6, event.radius * 2, { alpha: 0.45, durationMs: 520 });
+        const travelMs = SONAR_TRAVEL_MS;
+        const front = scene.add.circle(event.x, event.y, 10).setStrokeStyle(3, color, 0.9).setDepth(DEPTH.effects);
+        scene.tweens.add({ targets: front, radius: event.radius, duration: travelMs, ease: "Sine.Out", onComplete: () => front.destroy() });
+        scene.tweens.add({ targets: front, alpha: 0, duration: travelMs, ease: "Quad.In" });
+        // A segunda crista sai um pouco depois e mais fraca: dá espessura à frente de onda.
+        const echo = scene.add.circle(event.x, event.y, 6).setStrokeStyle(2, color, 0.5).setDepth(DEPTH.effects);
+        scene.tweens.add({
+          targets: echo,
+          radius: event.radius * 0.82,
+          alpha: 0,
+          duration: travelMs,
+          delay: travelMs * 0.18,
+          ease: "Sine.Out",
+          onComplete: () => echo.destroy(),
+        });
+        if (guardian) effects.ring(this.abilityKeyFor(guardian, "ring"), event.x, event.y + 6, event.radius * 2, { alpha: 0.45, durationMs: travelMs });
         if (event.wave.index === 0) audio.play("zap");
         return;
       }

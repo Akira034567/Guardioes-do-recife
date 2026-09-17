@@ -636,6 +636,16 @@ export class UIScene extends Phaser.Scene {
       const name = this.add
         .text(x, cardTop + 13, definition.shortName, { fontFamily: HUD_FONT.strong, fontSize: "12px", color: HUD_COLORS.text })
         .setOrigin(0.5);
+      // Número da vaga: é o atalho de teclado (1 a 5). Discreto no canto, porque no celular ele não
+      // serve para nada — mas quem joga no computador precisa descobrir que existe.
+      this.add
+        .text(x - cardWidth / 2 + 7, cardTop + 7, `${index + 1}`, {
+          fontFamily: HUD_FONT.strong,
+          fontSize: "10px",
+          color: HUD_COLORS.textDim,
+        })
+        .setOrigin(0, 0)
+        .setAlpha(0.75);
       const icon =
         this.artIcon(artTextureKey(id, GUARDIAN_ART[id].base, "idle"), x - 27, cardTop + 41, 42, 34) ??
         this.add.circle(x - 27, cardTop + 41, 14, definition.color, 1).setStrokeStyle(3, definition.accent, 1);

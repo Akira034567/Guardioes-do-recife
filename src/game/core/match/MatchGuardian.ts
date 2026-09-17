@@ -18,7 +18,8 @@ import {
   type UpgradeProgress,
 } from "../UpgradeTree";
 import type { MatchEnemy } from "./MatchEnemy";
-import { NEUTRAL_MASTERY, resolveMastery, type MasteryBonus } from "../progression/mastery";
+import { combineBonus, NEUTRAL_MASTERY, resolveMastery, type MasteryBonus } from "../progression/mastery";
+import { goldenBonusFor } from "../../data/goldenFish";
 
 export interface GuardianPlacement {
   x: number;
@@ -76,9 +77,13 @@ export class MatchGuardian {
     return this.definition.id;
   }
 
-  /** Bônus permanente desta unidade. O nó 5 só acende com um ramo no nível 2. */
+  /**
+   * Bônus desta unidade: maestria (permanente, da espécie) MAIS a coroa do Peixinho (desta partida,
+   * desta unidade). São fontes separadas e cada uma soma a sua parte — ver `combineBonus`.
+   */
   get mastery(): MasteryBonus {
-    return this.masteryLevel > 0 ? resolveMastery(this.guardianId, this.masteryLevel, this.progress) : NEUTRAL_MASTERY;
+    const permanent = this.masteryLevel > 0 ? resolveMastery(this.guardianId, this.masteryLevel, this.progress) : NEUTRAL_MASTERY;
+    return this.crowned ? combineBonus(permanent, goldenBonusFor(this.guardianId, this.branchId)) : permanent;
   }
 
   get isCrowned(): boolean {

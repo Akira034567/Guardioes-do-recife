@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { Match } from "../src/game/core/match/Match";
-import { GOLDEN_AMPLIFICATION, GOLDEN_AWARD_WAVE_FRACTION, goldenAwardWaveIndex, goldenBoostFor, GOLDEN_FISH } from "../src/game/data/goldenFish";
+import { GOLDEN_AMPLIFICATION, GOLDEN_AWARD_WAVE_FRACTION, GOLDEN_BOOSTS, goldenAwardWaveIndex, goldenBoostFor, GOLDEN_FISH } from "../src/game/data/goldenFish";
+import { GUARDIANS } from "../src/game/data/guardians";
 import { getLevel } from "../src/game/data/levels";
 import type { MatchEvent } from "../src/game/core/match/MatchEvents";
 import type { LevelDefinition } from "../src/game/types";
@@ -118,6 +119,56 @@ describe("coroação", () => {
     match.execute({ type: "crownGuardian", instanceId: id });
     const crowned = events.find((event) => event.type === "goldenFishCrowned");
     expect(crowned).toMatchObject({ branchId: "b", summary: goldenBoostFor("pistol-shrimp", "b").summary });
+  });
+});
+
+describe("o que a coroa faz", () => {
+  it("amplifica os atributos da unidade coroada, e só dela", () => {
+    const match = new Match(level);
+    const first = match.execute({ type: "placeGuardian", guardianId: "pistol-shrimp", x: 375, y: 245 });
+    const second = match.execute({ type: "placeGuardian", guardianId: "pistol-shrimp", x: 925, y: 500 });
+    const crownedId = first.ok ? (first.instanceId as string) : "";
+    const plainId = second.ok ? (second.instanceId as string) : "";
+    const before = match.guardian(crownedId)!.stats.damage;
+
+    runUntil(match, "goldenFishAwarded");
+    expect(match.execute({ type: "crownGuardian", instanceId: crownedId }).ok).toBe(true);
+
+    const boost = GOLDEN_BOOSTS["pistol-shrimp"].base;
+    expect(match.guardian(crownedId)!.stats.damage).toBeCloseTo(before * boost.damageMultiplier!);
+    expect(match.guardian(crownedId)!.stats.cooldownMs).toBeCloseTo(GUARDIANS["pistol-shrimp"].cooldownMs / boost.attackSpeedMultiplier!);
+    // A unidade do lado não ganha nada: a coroa é de UMA, não do esquadrão.
+    expect(match.guardian(plainId)!.stats.damage).toBe(before);
+  });
+
+  it("segue o ramo da unidade: coroar depois de evoluir usa o pacote daquele ramo", () => {
+    const match = new Match(level);
+    const placed = match.execute({ type: "placeGuardian", guardianId: "pistol-shrimp", x: 375, y: 245 });
+    const id = placed.ok ? (placed.instanceId as string) : "";
+    runUntil(match, "goldenFishAwarded");
+    match.execute({ type: "upgradeGuardian", instanceId: id, branchId: "b" });
+    const beforeCrown = match.guardian(id)!.stats.damage;
+    match.execute({ type: "crownGuardian", instanceId: id });
+    expect(match.guardian(id)!.stats.damage).toBeCloseTo(beforeCrown * GOLDEN_BOOSTS["pistol-shrimp"].b.damageMultiplier!);
+  });
+
+  it("mira a faixa declarada em todo Guardião e em todo ramo", () => {
+    for (const guardianId of Object.keys(GOLDEN_BOOSTS) as Array<keyof typeof GOLDEN_BOOSTS>) {
+      for (const key of ["base", "a", "b"] as const) {
+        const boost = GOLDEN_BOOSTS[guardianId][key];
+        // Soma nominal dos eixos, como na maestria: aqui o alvo é bem mais alto porque vale para UMA
+        // unidade e por UMA partida.
+        const gain = Object.entries(boost).reduce((total, [field, value]) => {
+          if (field.endsWith("Bonus")) return total;
+          const lowerIsBetter = field === "abilityCooldownMultiplier" || field === "rearmMultiplier" || field === "trapArmMultiplier";
+          return total + (lowerIsBetter ? 1 - (value as number) : (value as number) - 1);
+        }, 0);
+        // Margem de ponto flutuante: 1.2 - 1 dá 0,19999… As vagas de bloqueio (`*Bonus`) somam por
+        // fora e não entram nesta conta, então quem as tem fica acima do que o número mostra.
+        expect(gain, `${guardianId}.${key}`).toBeGreaterThan(GOLDEN_AMPLIFICATION.min - 0.001);
+        expect(gain, `${guardianId}.${key}`).toBeLessThanOrEqual(0.55);
+      }
+    }
   });
 });
 

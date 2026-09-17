@@ -1,3 +1,4 @@
+import type { MasteryBonus } from "../core/progression/mastery";
 import type { BranchId, GuardianId } from "../types";
 
 /**
@@ -20,9 +21,11 @@ import type { BranchId, GuardianId } from "../types";
  * - Visualmente também não se confundem: dourado é SEMPRE peixinho coroado. O efeito do nó 5 da
  *   maestria tem partícula própria, não-dourada.
  *
- * 🔶 Os números de amplificação NÃO estão definidos: `GOLDEN_AMPLIFICATION` é o alvo de faixa, e cada
- *    entrada descreve o que o ramo ganha. A estrutura (escolha, estado na partida, ponto de aplicação)
- *    está pronta; a calibração vem depois do próximo rebalanceamento.
+ * Os números vivem em `GOLDEN_BOOSTS`, um por Guardião e por ramo, e entram no MESMO canal da maestria
+ * (`combineBonus`) — as duas fontes somam cada uma a sua parte, nenhuma sobrescreve a outra.
+ *
+ * 🔶 Primeira passada de calibração: cada pacote mira a faixa declarada em `GOLDEN_AMPLIFICATION`,
+ *    medida no eixo que interessa àquele Guardião. Falta confirmar em partida.
  */
 
 /** Momento da fase em que o Peixinho é concedido: fração das ondas já limpas. */
@@ -123,6 +126,65 @@ export const GOLDEN_FISH: Record<GuardianId, GoldenFishProfile> = {
     "Sonar: eco-onda extra ao fim do pulso.",
   ),
 };
+
+/**
+ * Amplificação de cada Guardião, por ramo. Os campos são os mesmos da maestria: o que é multiplicador
+ * multiplica, o que é `*Bonus` soma. Cada pacote mexe no eixo que É a função daquele Guardião — a
+ * coroa aumenta o volume do que a unidade já faz, nunca muda o que ela faz.
+ */
+export const GOLDEN_BOOSTS: Record<GuardianId, Record<"base" | BranchId, Partial<MasteryBonus>>> = {
+  "pistol-shrimp": {
+    base: { damageMultiplier: 1.25, attackSpeedMultiplier: 1.1 },
+    a: { damageMultiplier: 1.16, attackSpeedMultiplier: 1.16, projectileSpeedMultiplier: 1.2 },
+    b: { damageMultiplier: 1.28, rangeMultiplier: 1.1 },
+  },
+  jellyfish: {
+    base: { damageMultiplier: 1.22, debuffDurationMultiplier: 1.2 },
+    a: { damageMultiplier: 1.15, abilityCooldownMultiplier: 0.8, rangeMultiplier: 1.15 },
+    b: { damageMultiplier: 1.15, controlDurationMultiplier: 1.25, debuffDurationMultiplier: 1.15 },
+  },
+  pufferfish: {
+    base: { contactDamageMultiplier: 1.3, controlDurationMultiplier: 1.15 },
+    a: { contactDamageMultiplier: 1.3, blockCapacityBonus: 1, controlDurationMultiplier: 1.15 },
+    b: { damageMultiplier: 1.25, abilityCooldownMultiplier: 0.82, rangeMultiplier: 1.1 },
+  },
+  "reef-crab": {
+    base: { damageMultiplier: 1.2, attackSpeedMultiplier: 1.12 },
+    a: { damageMultiplier: 1.28, attackSpeedMultiplier: 1.08 },
+    b: { damageMultiplier: 1.2, rangeMultiplier: 1.15 },
+  },
+  "ink-octopus": {
+    base: { debuffDurationMultiplier: 1.25, rangeMultiplier: 1.12 },
+    a: { debuffDurationMultiplier: 1.3, abilityCooldownMultiplier: 0.8 },
+    b: { rangeMultiplier: 1.2, attackSpeedMultiplier: 1.12 },
+  },
+  shark: {
+    base: { damageMultiplier: 1.25, rangeMultiplier: 1.1 },
+    a: { attackSpeedMultiplier: 1.2, damageMultiplier: 1.12 },
+    b: { damageMultiplier: 1.28, rangeMultiplier: 1.08 },
+  },
+  "sea-turtle": {
+    base: { controlDurationMultiplier: 1.25, blockCapacityBonus: 1 },
+    a: { controlDurationMultiplier: 1.2, blockCapacityBonus: 2 },
+    b: { rangeMultiplier: 1.2, pushDistanceMultiplier: 1.25, blockCapacityBonus: 1 },
+  },
+  stonefish: {
+    base: { damageMultiplier: 1.25, rearmMultiplier: 0.85, trapArmMultiplier: 0.9 },
+    a: { damageMultiplier: 1.2, debuffDurationMultiplier: 1.2, rearmMultiplier: 0.9 },
+    b: { damageMultiplier: 1.2, controlDurationMultiplier: 1.2, rearmMultiplier: 0.9 },
+  },
+  dolphin: {
+    base: { rangeMultiplier: 1.2, debuffDurationMultiplier: 1.2 },
+    a: { rangeMultiplier: 1.2, abilityCooldownMultiplier: 0.78 },
+    b: { debuffDurationMultiplier: 1.25, abilityCooldownMultiplier: 0.8, rangeMultiplier: 1.08 },
+  },
+};
+
+/** A amplificação desta unidade, dado o ramo que ela escolheu (ou nenhum ainda). */
+export function goldenBonusFor(guardianId: GuardianId, branchId: BranchId | null): Partial<MasteryBonus> {
+  const boosts = GOLDEN_BOOSTS[guardianId];
+  return branchId ? boosts[branchId] : boosts.base;
+}
 
 /** O que a coroa faz nesta unidade, dado o ramo que ela escolheu (ou nenhum ainda). */
 export function goldenBoostFor(guardianId: GuardianId, branchId: BranchId | null): GoldenBranchBoost {

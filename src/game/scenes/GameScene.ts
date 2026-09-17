@@ -2,6 +2,7 @@ import Phaser from "phaser";
 import { preloadEnemyArt } from "../assets/enemyArt";
 import { preloadGoldenArt } from "../assets/goldenArt";
 import { GoldenCrownView } from "../objects/GoldenCrownView";
+import { GoldenFishBadge } from "../objects/GoldenFishBadge";
 import { GUARDIAN_ART, hasGuardianArt, preloadGuardianUpgradeArt } from "../assets/guardianArt";
 import { preloadLevelBackground } from "../assets/levelBackgrounds";
 import { DEPTH, GAME_HEIGHT, GAME_WIDTH, HUD_BOTTOM, HUD_TOP } from "../constants";
@@ -118,8 +119,8 @@ export class GameScene extends Phaser.Scene {
   private loadout: GuardianId[] = [];
   private selectedGuardianId: GuardianId | null = null;
   private selectedPlacedGuardianId: string | null = null;
-  /** Peixinho Dourado concedido e à espera de escolha: o próximo clique numa unidade coroa. */
-  private goldenPending = false;
+  /** O Peixinho esperando no canto; some quando o jogador o arrasta até um Guardião. */
+  private goldenBadge: GoldenFishBadge | null = null;
   private crownView: GoldenCrownView | null = null;
   /** Arraste em curso: o jogador apertou uma carta e ainda não soltou. Ver `handleWorldPointerUp`. */
   private dragPlacing = false;
@@ -318,6 +319,11 @@ export class GameScene extends Phaser.Scene {
     this.lifecycle.transition("destroying");
     this.disposables.disposeAll();
 
+    // O Phaser REAPROVEITA a cena entre partidas: o que nasce fora dos mapas precisa morrer aqui.
+    this.goldenBadge?.destroy();
+    this.goldenBadge = null;
+    this.crownView?.destroy();
+    this.crownView = null;
     this.enemyViews.forEach((view) => view.destroy());
     this.weakPointViews.forEach((view) => view.destroy());
     this.guardianViews.forEach((view) => view.destroy());
@@ -424,8 +430,8 @@ export class GameScene extends Phaser.Scene {
         break;
       }
       case "goldenFishAwarded":
-        this.goldenPending = true;
-        this.showMessage("O Peixinho Dourado chegou! Toque em um Guardião para coroá-lo.", 4200);
+        this.spawnGoldenBadge();
+        this.showMessage("O Peixinho Dourado chegou! Arraste-o até o Guardião que você quer coroar.", 4600);
         break;
       case "goldenFishCrowned": {
         const guardian = this.match.guardian(event.id);
@@ -518,6 +524,7 @@ export class GameScene extends Phaser.Scene {
     for (const view of this.enemyViews.values()) view.sync(now, deltaMs);
     for (const view of this.weakPointViews.values()) view.sync(deltaMs);
     for (const view of this.guardianViews.values()) view.sync(now, enemyPosition, blockedPosition);
+    this.goldenBadge?.sync(deltaMs);
     if (this.crownView) {
       const crowned = this.match.crownedGuardianId ? this.match.guardian(this.match.crownedGuardianId) : null;
       if (crowned) this.crownView.sync(crowned.x, crowned.y, deltaMs);
@@ -573,6 +580,9 @@ export class GameScene extends Phaser.Scene {
     this.input.on("pointerup", this.handleWorldPointerUp, this);
     // ESC desfaz a seleção; sem nada selecionado, abre o menu de pause.
     this.input.keyboard?.on("keydown-ESC", this.handleEscape, this);
+    // 1 a 5 escolhem a carta daquela vaga do esquadrão — a mesma ação do clique na carta, incluindo
+    // apertar de novo para largar. Só no teclado: o celular continua no toque.
+    this.input.keyboard?.on("keydown", this.handleSlotKey, this);
     // O menu do navegador no botão direito atrapalha o cancelamento por clique.
     this.game.canvas.addEventListener("contextmenu", preventContextMenu);
 
@@ -602,6 +612,7 @@ export class GameScene extends Phaser.Scene {
       this.input.off("pointerdown", this.handleWorldPointerDown, this);
       this.input.off("pointerup", this.handleWorldPointerUp, this);
       this.input.keyboard?.off("keydown-ESC", this.handleEscape, this);
+      this.input.keyboard?.off("keydown", this.handleSlotKey, this);
     });
     this.disposables.add("listeners do canvas", () => {
       this.game.canvas.removeEventListener("contextmenu", preventContextMenu);
@@ -612,6 +623,23 @@ export class GameScene extends Phaser.Scene {
     this.disposables.add("efeitos", () => this.effects.destroy());
     this.disposables.add("áudio", () => this.audio.destroy());
     this.disposables.add("overlay de debug", () => this.debugOverlay.destroy());
+  }
+
+  /**
+   * Atalhos 1–5: uma tecla por vaga do esquadrão, na MESMA ordem das cartas do HUD.
+   *
+   * Aceita a fileira de números e o teclado numérico. Ignora quando o jogador está digitando em
+   * algum campo (a tela de conta tem um), senão escrever "guardiao1" viraria uma compra.
+   */
+  private handleSlotKey(event: KeyboardEvent): void {
+    if (this.match.status !== "running") return;
+    const target = event.target as HTMLElement | null;
+    if (target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable)) return;
+    if (event.altKey || event.ctrlKey || event.metaKey) return;
+    const slot = Number.parseInt(event.key, 10);
+    if (!Number.isInteger(slot) || slot < 1 || slot > this.loadout.length) return;
+    event.preventDefault();
+    this.selectGuardian(this.loadout[slot - 1]);
   }
 
   private selectGuardian(id: GuardianId): void {
@@ -697,22 +725,46 @@ export class GameScene extends Phaser.Scene {
   private selectPlacedGuardian(instanceId: string): void {
     const guardian = this.match.guardian(instanceId);
     if (!guardian) return;
-    // Com o Peixinho em mãos, o clique numa unidade COROA em vez de selecionar: é a única decisão
-    // pendente naquele momento, e ela é definitiva.
-    if (this.goldenPending) {
-      const crowned = this.match.execute({ type: "crownGuardian", instanceId });
-      if (crowned.ok) {
-        this.goldenPending = false;
-        return;
-      }
-      this.showMessage(crowned.ok ? "" : crowned.message, 1600);
-    }
     this.selectedPlacedGuardianId = instanceId;
     this.selectedGuardianId = null;
     const branch = guardian.branch ? ` · ${guardian.branch.name}` : "";
     this.showMessage(`${guardian.definition.name} · nível ${guardian.upgradeLevel}/${guardian.maxUpgradeLevel}${branch}`, 1400);
     this.emitHud();
     this.renderPlacementState();
+  }
+
+  /**
+   * Põe o Peixinho no canto inferior direito. Arrastar é a única forma de coroar: soltar em cima de um
+   * Guardião gasta o Peixinho, soltar no vazio traz ele de volta para o canto.
+   */
+  private spawnGoldenBadge(): void {
+    this.goldenBadge?.destroy();
+    this.goldenBadge = new GoldenFishBadge(this, {
+      guardianAt: (x, y) => {
+        // Raio generoso: a coroa é para o Guardião que o jogador MIROU, não para o pixel exato.
+        const hit = this.match.guardians
+          .map((guardian) => ({ guardian, distance: Math.hypot(guardian.x - x, guardian.y - y) }))
+          .filter((entry) => entry.distance <= 52)
+          .sort((first, second) => first.distance - second.distance)[0];
+        return hit ? { id: hit.guardian.id, x: hit.guardian.x, y: hit.guardian.y } : null;
+      },
+      crown: (instanceId) => {
+        const result = this.match.execute({ type: "crownGuardian", instanceId });
+        if (!result.ok) {
+          this.showMessage(result.message, 1800);
+          return false;
+        }
+        this.goldenBadge = null;
+        return true;
+      },
+      // Enquanto o peixinho está na mão, nenhuma carta de Guardião fica selecionada por engano.
+      onDragStateChanged: (dragging) => {
+        if (!dragging) return;
+        this.selectedGuardianId = null;
+        this.ghost.hide();
+        this.renderPlacementState();
+      },
+    });
   }
 
   private clearPlacedSelection(): void {

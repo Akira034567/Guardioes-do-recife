@@ -10,6 +10,11 @@ import { ENEMY_SHAPES } from "./EnemyShapes";
  * Desenho de um inimigo. Nenhuma regra vive aqui: `sync()` lê o `MatchEnemy` do motor e redesenha
  * só o que mudou (vida, status). Substituído por sprites quando a arte dos inimigos for ligada.
  */
+/** Salto maior que isto num quadro só pode ser teleporte (empurrão), não nado. */
+const SLIDE_THRESHOLD = 42;
+/** Constante de tempo do deslize: ~3× isto para o resíduo sumir. */
+const SLIDE_DECAY_MS = 110;
+
 export class EnemyView extends Phaser.GameObjects.Container {
   private lastHealth = Number.NaN;
   private statusSignature = "";
@@ -19,6 +24,11 @@ export class EnemyView extends Phaser.GameObjects.Container {
   private readonly sprite: Phaser.GameObjects.Image | null;
   private readonly frameKeys: string[] = [];
   private readonly frameMs: number;
+  /** Deslocamento visual que sobra de um teleporte e decai a zero (ver `applyPosition`). */
+  private slideX = 0;
+  private slideY = 0;
+  private lastX = 0;
+  private lastY = 0;
   private frameIndex = 0;
   private frameClockMs = 0;
   /** Quadros do nado normal e da pose de defesa, já resolvidos em chaves de textura. */
@@ -87,7 +97,7 @@ export class EnemyView extends Phaser.GameObjects.Container {
 
   sync(now: number, deltaMs = 0): void {
     const enemy = this.enemy;
-    this.setPosition(enemy.x, enemy.y);
+    this.applyPosition(enemy.x, enemy.y, deltaMs);
     this.refreshDepth();
     if (this.sprite) this.animate(now, enemy.heading, deltaMs);
     else this.bodyGraphic.setRotation(spriteTilt(enemy.heading));
@@ -100,6 +110,37 @@ export class EnemyView extends Phaser.GameObjects.Container {
     }
     if (now >= this.nextSpontaneousGuardMs) this.triggerGuard(now, "interval");
     this.refreshStatusVisual(now);
+  }
+
+  /**
+   * Põe a criatura no lugar — deslizando quando o MOTOR a teleporta.
+   *
+   * Empurrão (Repulsa Ancestral, corrente forte, coice da armadilha) move o inimigo ao longo da rota
+   * de uma vez só: o motor precisa que seja instantâneo, senão a posição de jogo e a desenhada
+   * discordariam. Mas ver a criatura sumir e reaparecer 170 px atrás é ilegível. Então guardamos a
+   * diferença como um DESLOCAMENTO VISUAL que decai a zero: o estado de jogo já está no destino e o
+   * desenho chega lá deslizando. Nada aqui muda regra nenhuma.
+   */
+  private applyPosition(x: number, y: number, deltaMs: number): void {
+    const jumped = Math.hypot(x - this.lastX, y - this.lastY);
+    // Nenhum inimigo anda 42 px num quadro: um salto desse tamanho só pode ser teleporte.
+    if (jumped > SLIDE_THRESHOLD && this.lastX !== 0) {
+      this.slideX += this.lastX - x;
+      this.slideY += this.lastY - y;
+    }
+    this.lastX = x;
+    this.lastY = y;
+    if (this.slideX !== 0 || this.slideY !== 0) {
+      // Decaimento exponencial: rápido no começo, suave no fim, e independente da taxa de quadros.
+      const keep = Math.exp(-(deltaMs || 16) / SLIDE_DECAY_MS);
+      this.slideX *= keep;
+      this.slideY *= keep;
+      if (Math.abs(this.slideX) < 0.5 && Math.abs(this.slideY) < 0.5) {
+        this.slideX = 0;
+        this.slideY = 0;
+      }
+    }
+    this.setPosition(x + this.slideX, y + this.slideY);
   }
 
   /** Troca de quadro no ritmo da arte e vira a criatura para o lado em que ela nada. */

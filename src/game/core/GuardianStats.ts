@@ -125,7 +125,7 @@ export function resolveGuardianStats(
     stun: resolveLast(applied, "stun") ?? null,
     electricField: resolveLast(applied, "electricField") ?? null,
     blocks,
-    blockCapacity: blocks ? (resolveLast(applied, "blockCapacity") ?? definition.blockCapacity ?? 1) : 0,
+    blockCapacity: blocks ? (resolveLast(applied, "blockCapacity") ?? definition.blockCapacity ?? 1) + mastery.blockCapacityBonus : 0,
     contactDamagePerSecond: (resolveLast(applied, "contactDamagePerSecond") ?? definition.contactDamagePerSecond ?? 0) * mastery.contactDamageMultiplier,
     bossHold: resolveLast(applied, "bossHold") ?? null,
     armorPiercing: applied.some((upgrade) => upgrade.armorPiercing),

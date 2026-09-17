@@ -19,6 +19,8 @@ export interface MasteryBonus {
   trapArmMultiplier: number;
   chargeMaxBonus: number;
   pushDistanceMultiplier: number;
+  /** Vagas de bloqueio a mais (aditivo). Hoje só a coroa do Peixinho usa. */
+  blockCapacityBonus: number;
   /**
    * Nó 5 disponível para esta unidade. Vira `null` enquanto ela não chegar ao nível 2 de um ramo.
    *
@@ -43,6 +45,7 @@ export const NEUTRAL_MASTERY: MasteryBonus = {
   trapArmMultiplier: 1,
   chargeMaxBonus: 0,
   pushDistanceMultiplier: 1,
+  blockCapacityBonus: 0,
   capstone: null,
 };
 
@@ -92,6 +95,23 @@ export function resolveMastery(
   const capstoneReady = clamped >= MASTERY_MAX_LEVEL && branch.branchId !== null && branch.upgradeLevel >= 2;
   bonus.capstone = capstoneReady ? { id: tree.capstone.id, branchId: branch.branchId as "a" | "b" } : null;
   return bonus;
+}
+
+/**
+ * Junta dois pacotes de bônus PERMANENTES/da partida: multiplica o que é multiplicador e soma o que
+ * é aditivo. Serve para a maestria (permanente) conviver com a coroa do Peixinho (de uma partida) sem
+ * que um sobrescreva o outro — são fontes separadas, e cada uma soma a sua parte.
+ */
+export function combineBonus(base: MasteryBonus, extra: Partial<MasteryBonus> | null): MasteryBonus {
+  if (!extra) return base;
+  const result: MasteryBonus = { ...base };
+  for (const key of MULTIPLIERS) {
+    const value = extra[key];
+    if (value !== undefined) result[key] *= value;
+  }
+  result.chargeMaxBonus += extra.chargeMaxBonus ?? 0;
+  result.blockCapacityBonus += extra.blockCapacityBonus ?? 0;
+  return result;
 }
 
 /** Ganho efetivo aproximado dos nós numéricos, para a interface mostrar "+13%" sem inventar conta. */
