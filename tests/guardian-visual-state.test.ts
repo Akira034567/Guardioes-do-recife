@@ -91,8 +91,12 @@ describe("estado visual do Guardião", () => {
     }
   });
 
-  it("trata a armadilha enterrada como repouso", () => {
-    expect(guardianVisualState(base({ trapPhase: "armed", strikeAt: 1000 }))).toBe("idle");
-    expect(guardianVisualState(base({ trapPhase: "triggered" }))).toBe("attack");
+  it("trata o Peixe-Pedra camuflado como repouso e a abertura dos espinhos como ataque", () => {
+    // V3.2: abrir os espinhos (`arming`) JÁ é a pose de ataque — é o aviso que o jogador precisa ver
+    // antes do bote. Camuflado e se acomodando são repouso.
+    expect(guardianVisualState(base({ trapPhase: "camouflaged", strikeAt: 1000 }))).toBe("idle");
+    expect(guardianVisualState(base({ trapPhase: "settling" }))).toBe("idle");
+    expect(guardianVisualState(base({ trapPhase: "arming" }))).toBe("attack");
+    expect(guardianVisualState(base({ trapPhase: "striking" }))).toBe("attack");
   });
 });

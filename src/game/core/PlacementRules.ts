@@ -37,6 +37,7 @@ export const PLACEMENT_HINTS: Record<PlacementMode, string> = {
   water: "uma área livre da água",
   route: "qualquer ponto da correnteza",
   margin: "a beira da correnteza",
+  ambush: "a beira da correnteza (ele se encaixa sozinho na borda mais próxima)",
 };
 
 function insidePlayfield(point: Vec2): boolean {
@@ -123,6 +124,46 @@ export function validateAnyPlacement(
   return first ?? { ...validateWaterPlacement(context, point), mode: "water" };
 }
 
+/**
+ * Emboscada: o jogador aponta um trecho da correnteza e o jogo ENCAIXA o Guardião na borda mais
+ * próxima do toque, virado para dentro.
+ *
+ * É o que resolve o "peixe enterrado magicamente no meio da água": ele passa a parecer um bicho
+ * agarrado numa pedra esperando a presa passar, com a zona de ataque invadindo a rota. O lado sai do
+ * clique — tocar acima da rota encaixa em cima, abaixo encaixa embaixo — então dá para escolher a
+ * margem sem nenhum controle novo.
+ */
+export function validateAmbushPlacement(context: PlacementContext, point: Vec2): PlacementValidation {
+  const closest = context.route.getClosestPoint(point);
+  const result: PlacementValidation = {
+    valid: true,
+    reason: "Posição válida",
+    x: point.x,
+    y: point.y,
+    routeDistance: closest.routeDistance,
+    progress: closest.progress,
+  };
+  if (closest.distance > PLACEMENT.ambushReach) return { ...result, valid: false, reason: "Toque perto da correnteza" };
+  if (closest.routeDistance < PLACEMENT.routeEndClearance || closest.routeDistance > context.route.totalLength - PLACEMENT.routeEndClearance) {
+    return { ...result, valid: false, reason: "Muito perto da entrada ou do Recife" };
+  }
+  const tangent = context.route.getTangentAtDistance(closest.routeDistance);
+  const length = Math.hypot(tangent.x, tangent.y) || 1;
+  // Normal da rota. O sinal vem do lado em que o jogador tocou; em cima da linha, cai no lado de cima.
+  const normalX = -tangent.y / length;
+  const normalY = tangent.x / length;
+  const side = Math.sign((point.x - closest.point.x) * normalX + (point.y - closest.point.y) * normalY) || 1;
+  const snapped = {
+    x: closest.point.x + normalX * side * PLACEMENT.ambushOffset,
+    y: closest.point.y + normalY * side * PLACEMENT.ambushOffset,
+  };
+  if (!insidePlayfield(snapped)) return { ...result, ...snapped, valid: false, reason: "Fora da área jogável" };
+  if (near(snapped, context.guardians, PLACEMENT.ambushSeparation)) {
+    return { ...result, ...snapped, valid: false, reason: "Muito perto de outro Guardião" };
+  }
+  return { ...result, ...snapped };
+}
+
 /** Validação para os modos de toque livre (plataformas são tratadas pelos seus próprios alvos de clique). */
 export function validatePlacement(mode: Exclude<PlacementMode, "platform">, context: PlacementContext, point: Vec2): PlacementValidation {
   switch (mode) {
@@ -132,5 +173,7 @@ export function validatePlacement(mode: Exclude<PlacementMode, "platform">, cont
       return validateRoutePlacement(context, point);
     case "margin":
       return validateMarginPlacement(context, point);
+    case "ambush":
+      return validateAmbushPlacement(context, point);
   }
 }

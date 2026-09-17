@@ -880,7 +880,10 @@ export class Match {
       now: this.nowMs,
       damage: (enemy, amount, options) => this.damage(enemy, amount, { cause: "trap", ...options }),
       earn: (amount) => this.earn(amount, "GuardianGeneration", DEFAULT_PLAYER_ID),
-      spawnCloud: (ownerId, x, y, cloud) => this.areas.createToxicCloud(ownerId, x, y, cloud, this.nowMs, this.emitBound),
+      spawnCloud: (ownerId, x, y, cloud) => {
+        const owner = this.guardianList.find((candidate) => candidate.id === ownerId);
+        this.areas.createToxicCloud(ownerId, x, y, cloud, this.nowMs, this.emitBound, owner?.stats.trap?.spreadOnDeath ?? null);
+      },
       onEscaped: (blockerId, enemyId) => {
         const blocker = this.guardian(blockerId);
         const cooldown = blocker?.stats.blockHold?.releaseCooldownMs ?? 500;
@@ -1035,6 +1038,16 @@ export class Match {
       });
     }
     if (!outcome.killed) return;
+    // Jardim Tóxico II: quem morre envenenado dentro da nuvem contamina os vizinhos. Precisa vir
+    // ANTES da remoção, enquanto a posição do morto ainda é a do baque.
+    if (enemy.status.isPoisoned(this.nowMs)) {
+      this.areas.spreadOnDeath(enemy, {
+        now: this.nowMs,
+        enemies: this.targetPool,
+        damage: (target, amount, damageOptions) => this.damage(target, amount, damageOptions),
+        emit: this.emitBound,
+      });
+    }
     this.removeWeakPointsOf(enemy.id);
     this.abilitySystem.died(enemy, this.abilityWorld());
     this.onBossEvents(this.bossEncounter.onRemoved(enemy), enemy);

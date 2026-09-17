@@ -110,6 +110,8 @@ export type MatchEvent =
   | (Timed & { type: "fieldPulsed"; ownerId: string; x: number; y: number; radius: number; hitCount: number })
   | (Timed & { type: "fieldExpired"; ownerId: string })
   | (Timed & { type: "cloudCreated"; ownerId: string; kind: "ink" | "toxic"; x: number; y: number; radius: number; durationMs: number })
+  /** Jardim Tóxico II: a toxina saltou de quem morreu para os vizinhos. */
+  | (Timed & { type: "toxinSpread"; ownerId: string; x: number; y: number; radius: number; targetIds: string[] })
   | (Timed & { type: "cloudExpired"; ownerId: string })
   // economia
   | (Timed & { type: "pearlsChanged"; playerId: PlayerId; pearls: number; delta: number; source: PearlSource | PearlSink })

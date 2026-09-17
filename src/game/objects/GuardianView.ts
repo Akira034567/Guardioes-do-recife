@@ -239,8 +239,10 @@ export class GuardianView extends Phaser.GameObjects.Container {
     const bob = Math.sin(now / 420 + this.x) * (this.visualState === "idle" ? 1.8 : 0.8);
     const dash = this.dashOffset(now);
     this.updateAimFacing();
-    const buried = this.trapPhase === "arming" || this.trapPhase === "armed";
-    const trapAlpha = this.trapPhase === "cooldown" ? 0.7 : this.trapPhase === "arming" ? 0.85 : 1;
+    // V3.2: "escondido" é camuflado/acomodando. Abrir os espinhos já é estar à mostra.
+    const buried = this.trapPhase === "camouflaged" || this.trapPhase === "settling";
+    // Camuflado ele fica translúcido, como pedra à deriva; o bote traz o corpo inteiro de volta.
+    const trapAlpha = buried ? 0.62 : this.trapPhase === "cooldown" ? 0.8 : 1;
     if (this.artSprite) {
       // O recuo do golpe acompanha o lado para o qual a criatura está virada.
       const mirror = this.facingLeft ? -1 : 1;
@@ -479,8 +481,8 @@ export class GuardianView extends Phaser.GameObjects.Container {
         break;
       }
       case "stonefish": {
-        // Pedra irregular com espinhos; enterrado mostra só olhos e pontas.
-        const buried = this.trapPhase === "arming" || this.trapPhase === "armed";
+        // Pedra irregular com espinhos; camuflado mostra só olhos e pontas.
+        const buried = this.trapPhase === "camouflaged" || this.trapPhase === "settling";
         graphic.fillStyle(primary, buried ? 0.55 : 1);
         graphic.fillEllipse(0, buried ? 8 : 2, 52, buried ? 14 : 30);
         graphic.lineStyle(3, accent, 1);

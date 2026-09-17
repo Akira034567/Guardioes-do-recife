@@ -110,7 +110,6 @@ describe("maestria nos atributos efetivos", () => {
     const stone = resolveGuardianStats(GUARDIANS.stonefish, progress, undefined, {}, resolveMastery("stonefish", MASTERY_MAX_LEVEL));
     const plainStone = resolveGuardianStats(GUARDIANS.stonefish, progress);
     expect(stone.trap?.armMs).toBeCloseTo((plainStone.trap?.armMs ?? 0) * 0.96);
-    expect(stone.trap?.charge.max).toBeCloseTo((plainStone.trap?.charge.max ?? 0) + 0.03);
   });
 
   it("nunca deixa a maestria mexer no que é decisão de ramo", () => {

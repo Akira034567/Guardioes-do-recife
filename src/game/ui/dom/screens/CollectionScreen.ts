@@ -566,7 +566,7 @@ const ATTACK_LABELS: Record<GuardianDefinition["attackKind"], string> = {
   area: "Área",
   melee: "Corpo a corpo",
   ink: "Tinta",
-  trap: "Armadilha",
+  trap: "Emboscada",
   sonar: "Sonar",
 };
 
@@ -575,6 +575,7 @@ const PLACEMENT_LABELS: Record<GuardianDefinition["placementMode"], string> = {
   water: "Água aberta",
   route: "Sobre a correnteza",
   margin: "Beira da correnteza",
+  ambush: "Borda da correnteza",
 };
 
 const TARGETING_LABELS: Record<NonNullable<GuardianDefinition["targeting"]>, string> = {

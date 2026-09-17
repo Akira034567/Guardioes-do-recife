@@ -1,14 +1,14 @@
-import type { GuardianId, ToxicCloudEffect, TrapEffect, Vec2 } from "../types";
+import type { GuardianId, ToxicCloudEffect, Vec2 } from "../types";
 import type { AuraSource } from "./Auras";
 import type { BlockableEnemy } from "./Blocking";
 import { distinctSpeciesInRange } from "./Chorus";
-import { applyMarkTo, applyPoisonTo, applyStun, applyVulnerabilityTo, knockbackAlongPath } from "./CrowdControl";
+import { applyMarkTo, applyPoisonTo, applyVulnerabilityTo, knockbackAlongPath } from "./CrowdControl";
 import { flowFieldFor, type FlowField } from "./FlowField";
 import type { GuardianStats } from "./GuardianStats";
 import type { GuardianRuntime } from "./GuardianRuntime";
 import type { SonarWave } from "./Sonar";
 import { aliveInRange, isWounded, selectThreat, type TargetCandidate, type TargetPolicy } from "./Targeting";
-import { trapChargeMultipliers, type TrapPhase } from "./TrapCore";
+import { focusedDamage, type AmbushPhase } from "./TrapCore";
 
 /**
  * Comportamentos dos Guardiões novos, sem Phaser, usados pela cena e pela simulação. Cada função
@@ -59,8 +59,8 @@ export interface DamageOptions {
 }
 
 export type BehaviorEvent =
-  | { type: "trapPhase"; guardianId: string; phase: TrapPhase }
-  | { type: "trapTrigger"; guardianId: string; x: number; y: number; radius: number; targetIds: string[]; chargeBonus: number }
+  | { type: "trapPhase"; guardianId: string; phase: AmbushPhase }
+  | { type: "trapTrigger"; guardianId: string; x: number; y: number; radius: number; targetIds: string[]; focusedId: string | null }
   | { type: "mark"; guardianId: string; enemyId: string }
   | { type: "pushWave"; guardianId: string; x: number; y: number; radius: number; pushedIds: string[]; visualMs: number }
   | { type: "sonarWave"; guardianId: string; x: number; y: number; radius: number; wave: SonarWave; priorityId: string | null }
@@ -207,52 +207,56 @@ export function updatePushWave<E extends BehaviorEnemy>(guardian: BehaviorGuardi
 // ----------------------------------------------------------- Peixe-Pedra
 
 /**
- * Alguém dentro do raio está a ponto de escapar?
+ * Vida máxima mínima para o Contra-Ataque Abissal valer a pena travar um alvo.
  *
- * Medido ao longo da ROTA, não em linha reta: o que interessa é quem já passou da armadilha e está
- * chegando na borda de saída. Quem acabou de entrar também está longe do centro, mas está do lado de
- * ANTES — e disparar nele seria exatamente o tiro precipitado que a V3.1 veio corrigir.
+ * Fica acima do comum mais gordo (Peixe Invasor, 90) e abaixo do Cascudo (210): o bote focado é para
+ * o grandão, e travar um peixinho só gastaria a recarga curta à toa.
  */
-function someoneLeaving<E extends BehaviorEnemy>(guardian: BehaviorGuardian, inRadius: readonly E[], trap: TrapEffect): boolean {
-  const exit = trap.exitTrigger;
-  const anchor = guardian.routeDistance;
-  if (!exit || anchor === null || anchor === undefined) return false;
-  const limit = trap.triggerRadius - exit.exitMargin;
-  return inRadius.some((enemy) => enemy.pathDistance - anchor >= limit);
+const FOCUS_MIN_MAX_HEALTH = 150;
+
+/**
+ * O alvo mais forte da zona, para o Contra-Ataque Abissal travar.
+ *
+ * "Mais forte" é vida MÁXIMA, não vida atual: o que interessa é o tamanho da presa, não o quanto ela
+ * já apanhou. Sem isso ele travaria o cardume moribundo em vez do Cascudo que acabou de chegar.
+ */
+function strongestIn<E extends BehaviorEnemy>(enemies: readonly E[]): E | null {
+  let best: E | null = null;
+  for (const enemy of enemies) {
+    if (!best || enemy.definition.maxHealth > best.definition.maxHealth) best = enemy;
+  }
+  return best;
 }
 
-/** Armadilha: avança a máquina de estados e resolve o disparo. */
+/** Emboscada: avança o ciclo e resolve o bote. */
 export function updateTrap<E extends BehaviorEnemy>(guardian: BehaviorGuardian, enemies: readonly E[], hooks: BehaviorHooks<E>): void {
   const trap = guardian.stats.trap;
   const core = guardian.runtime.trap;
   if (!trap || !core) return;
   const now = hooks.now;
-  const inRadius = aliveInRange(enemies, guardian, trap.triggerRadius);
-  for (const event of core.update(now, inRadius.length, { leaving: someoneLeaving(guardian, inRadius, trap), rearmMultiplier: guardian.stats.rearmMultiplier })) {
+  const inZone = aliveInRange(enemies, guardian, trap.triggerRadius);
+  // Só vale travar quem realmente pesa: contra um comum o bônus seria ruído e o bote sairia antes
+  // da hora, desperdiçando a recarga curta.
+  const prey = trap.focus ? strongestIn(inZone) : null;
+  const worthFocusing = Boolean(prey && prey.definition.maxHealth >= FOCUS_MIN_MAX_HEALTH);
+
+  for (const event of core.update(now, inZone.length, { focusTarget: worthFocusing, rearmMultiplier: guardian.stats.rearmMultiplier })) {
     if (event.type === "phase") {
       hooks.emit?.({ type: "trapPhase", guardianId: guardian.id, phase: event.phase });
       continue;
     }
-    const multipliers = trapChargeMultipliers(trap, event.chargeBonus);
-    const controlMultiplier = multipliers.control * guardian.stats.controlDurationMultiplier;
-    for (const enemy of inRadius) {
-      if (trap.damage > 0) hooks.damage(enemy, trap.damage * multipliers.damage, { sourceId: guardian.id, cause: "trap" });
+    // O bote acontece AGORA, então quem está na zona agora é quem leva — e não quem estava quando
+    // os espinhos começaram a abrir.
+    const hit = aliveInRange(enemies, guardian, trap.triggerRadius);
+    const focused = event.focused ? strongestIn(hit) : null;
+    for (const enemy of hit) {
+      if (trap.damage > 0) {
+        const amount = enemy === focused ? focusedDamage(trap.damage, trap.focus, enemy.definition.maxHealth) : trap.damage;
+        hooks.damage(enemy, amount, { armorPiercing: trap.armorPiercing, sourceId: guardian.id, cause: "trap" });
+      }
       if (trap.poison) {
         applyPoisonTo(enemy, trap.poison, now, guardian.stats.debuffDurationMultiplier);
         hooks.emit?.({ type: "poisoned", enemyId: enemy.id });
-      }
-      if (trap.stun) {
-        const applied = applyStun(enemy, trap.stun.durationMs, now, {
-          eliteFactor: trap.stun.eliteFactor,
-          bossFactor: trap.stun.bossFactor,
-          durationMultiplier: controlMultiplier,
-        });
-        if (applied > 0) hooks.emit?.({ type: "stunned", enemyId: enemy.id });
-      }
-      if (trap.knockback) {
-        const blocker = enemy.blockedById;
-        const result = knockbackAlongPath(enemy, trap.knockback.distance, now, { eliteFactor: trap.knockback.eliteFactor, bossSlow: null });
-        if (result === "pushed" && blocker) hooks.onEscaped?.(blocker, enemy.id);
       }
     }
     if (trap.cloud) hooks.spawnCloud?.(guardian.id, guardian.x, guardian.y, trap.cloud);
@@ -262,11 +266,12 @@ export function updateTrap<E extends BehaviorEnemy>(guardian: BehaviorGuardian, 
       x: guardian.x,
       y: guardian.y,
       radius: trap.triggerRadius,
-      targetIds: inRadius.map((enemy) => enemy.id),
-      chargeBonus: event.chargeBonus,
+      targetIds: hit.map((enemy) => enemy.id),
+      focusedId: focused?.id ?? null,
     });
   }
 }
+
 
 // -------------------------------------------------------------- Golfinho
 

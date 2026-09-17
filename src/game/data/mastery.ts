@@ -220,17 +220,17 @@ export const MASTERY: Record<GuardianId, GuardianMastery> = {
   stonefish: {
     guardianId: "stonefish",
     nodes: [
-      node(1, "Areia Solta", "−4% no tempo para se enterrar: entra em operação mais cedo.", { trapArmMultiplier: 0.96 }),
-      node(2, "Rearme Rápido", "−4% na recarga da armadilha.", { rearmMultiplier: 0.96 }),
-      node(3, "Sombra Larga", "+4% no raio de gatilho e de explosão.", { rangeMultiplier: 1.04 }),
-      node(4, "Paciência Fria", "+3 pontos percentuais no teto da carga (de +36% para +39%).", { chargeMaxBonus: 0.03 }),
+      node(1, "Bote Rápido", "−4% no tempo de abrir os espinhos: o bote sai mais cedo.", { trapArmMultiplier: 0.96 }),
+      node(2, "Fôlego Curto", "−4% na recarga entre emboscadas.", { rearmMultiplier: 0.96 }),
+      node(3, "Sombra Larga", "+4% na zona de emboscada.", { rangeMultiplier: 1.04 }),
+      node(4, "Peçonha Densa", "+4% na duração do veneno que ele aplica.", { debuffDurationMultiplier: 1.04 }),
     ],
     capstone: capstone(
       "territorio-mortal",
       "Território Mortal",
-      "O chão onde ele estava continua perigoso.",
-      "Veneno: deixa mais resíduo no lugar depois de disparar.",
-      "Emboscada: acrescenta um choque extra, ou uma repulsa leve, no momento em que emerge.",
+      "A espera e o veneno dele deixam de ser passageiros.",
+      "Ecossistema Tóxico: a PRIMEIRA vez que um inimigo entra no Jardim recebe uma dose extra e curta de veneno.",
+      "Paciência Mortal: cada segundo camuflado sem atacar soma dano ao próximo bote, até um teto.",
     ),
   },
   dolphin: {

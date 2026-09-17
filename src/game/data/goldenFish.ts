@@ -113,10 +113,10 @@ export const GOLDEN_FISH: Record<GuardianId, GoldenFishProfile> = {
   ),
   stonefish: profile(
     "stonefish",
-    "A areia em volta dele cintila.",
-    "Arma mais rápido e explode mais forte.",
-    "Veneno: mais resíduo tóxico no lugar.",
-    "Emboscada: mais choque, ou repulsa mais larga, ao emergir.",
+    "A pedra em que ele se esconde cintila.",
+    "Zona maior, bote mais forte e recarga mais curta.",
+    "Jardim Tóxico: veneno mais potente e mais duradouro, em área maior.",
+    "Predador: bote mais pesado e espera mais curta entre emboscadas.",
   ),
   dolphin: profile(
     "dolphin",
@@ -169,9 +169,10 @@ export const GOLDEN_BOOSTS: Record<GuardianId, Record<"base" | BranchId, Partial
     b: { rangeMultiplier: 1.2, pushDistanceMultiplier: 1.25, blockCapacityBonus: 1 },
   },
   stonefish: {
-    base: { damageMultiplier: 1.25, rearmMultiplier: 0.85, trapArmMultiplier: 0.9 },
-    a: { damageMultiplier: 1.2, debuffDurationMultiplier: 1.2, rearmMultiplier: 0.9 },
-    b: { damageMultiplier: 1.2, controlDurationMultiplier: 1.2, rearmMultiplier: 0.9 },
+    // A coroa dele não inventa nada: mais área, mais dano, menos recarga e veneno mais longo.
+    base: { damageMultiplier: 1.2, rangeMultiplier: 1.12, rearmMultiplier: 0.85 },
+    a: { damageMultiplier: 1.15, rangeMultiplier: 1.12, debuffDurationMultiplier: 1.2 },
+    b: { damageMultiplier: 1.25, rearmMultiplier: 0.82, rangeMultiplier: 1.08 },
   },
   dolphin: {
     base: { rangeMultiplier: 1.2, debuffDurationMultiplier: 1.2 },

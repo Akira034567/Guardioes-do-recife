@@ -1,37 +1,50 @@
 import type { TrapEffect } from "../types";
 
-export type TrapPhase = "arming" | "armed" | "triggered" | "cooldown";
+/**
+ * Fases da emboscada do Peixe-Pedra.
+ *
+ * `settling` só acontece UMA vez, ao ser colocado: é ele se acomodando na pedra e sumindo no cenário.
+ * Daí em diante o ciclo é fechado — `camouflaged → arming → striking → cooldown → camouflaged` — e
+ * repete a partida inteira.
+ */
+export type AmbushPhase = "settling" | "camouflaged" | "arming" | "striking" | "cooldown";
 
-export type TrapEvent = { type: "trigger"; chargeBonus: number } | { type: "phase"; phase: TrapPhase };
+/** Nome antigo, mantido para não quebrar quem importava o tipo. */
+export type TrapPhase = AmbushPhase;
 
-/** Quanto tempo o Peixe-Pedra fica emergido após disparar (visual). */
+export type TrapEvent = { type: "strike"; focused: boolean } | { type: "phase"; phase: AmbushPhase };
+
+/** Quanto tempo os espinhos ficam abertos depois do bote (janela visual do golpe). */
 export const TRAP_TRIGGER_MS = 450;
 
 /**
- * Máquina de estados da armadilha do Peixe-Pedra, sem Phaser:
- * arming (exposto, enterrando) → armed → triggered (emergido) → cooldown → arming.
+ * Máquina de estados da emboscada, sem Phaser.
  *
- * Com `exitTrigger` (o padrão do Peixe-Pedra desde a V3.1), ela NÃO dispara no primeiro contato: segura
- * o tiro enquanto o grupo se forma e solta quando alguém está prestes a escapar do raio (`leaving`) —
- * o instante em que há mais gente dentro. `maxHoldMs` é a rede de segurança para a fila que não anda.
- * Sem `exitTrigger`, volta ao comportamento simples: dispara assim que há qualquer inimigo no raio.
+ * V3.2, a mudança de identidade: ele não é mais uma mina que explode e morre. Fica camuflado, e no
+ * instante em que alguém entra na zona abre os espinhos (`arming`), dá o bote (`striking`), recolhe e
+ * volta a se camuflar. A recarga é curta de propósito — a pergunta que ele faz ao jogador deixou de
+ * ser "quando vai valer a pena gastar a armadilha" e passou a ser "onde nessa rota os inimigos vão
+ * se agrupar".
  *
- * Quanto mais tempo armada sem disparar, maior o bônus (`charge`), até o teto.
+ * O bote é COMPROMETIDO: depois que os espinhos começam a abrir, ele sai mesmo que o alvo escape. É o
+ * que dá peso à leitura do jogador, e o que diferencia uma emboscada de um tiro teleguiado.
  */
 export class TrapCore {
-  private currentPhase: TrapPhase = "arming";
+  private currentPhase: AmbushPhase = "settling";
   private phaseUntil: number;
-  private armedSince = 0;
-  private firstSeenAt: number | null = null;
+  /** Desde quando está camuflado sem atacar. A maestria B2 (Paciência Mortal) lê isto. */
+  private camouflagedSince = 0;
+  /** O bote em curso travou um alvo forte (Contra-Ataque Abissal)? */
+  private focusedStrike = false;
 
   constructor(
     private config: TrapEffect,
     now = 0,
   ) {
-    this.phaseUntil = now + config.armMs;
+    this.phaseUntil = now + config.settleMs;
   }
 
-  get phase(): TrapPhase {
+  get phase(): AmbushPhase {
     return this.currentPhase;
   }
 
@@ -39,68 +52,79 @@ export class TrapCore {
     return this.phaseUntil;
   }
 
+  /** Está escondido? A apresentação usa para deixá-lo translúcido e parecido com pedra. */
+  get hidden(): boolean {
+    return this.currentPhase === "settling" || this.currentPhase === "camouflaged";
+  }
+
   /** Upgrade comprado: novos tempos, mesma fase. */
   setConfig(config: TrapEffect): void {
     this.config = config;
   }
 
-  /** Bônus acumulado se disparasse agora. */
-  chargeBonus(now: number): number {
-    if (this.currentPhase !== "armed") return 0;
-    const steps = Math.floor(Math.max(0, now - this.armedSince) / this.config.charge.everyMs);
-    return Math.min(this.config.charge.max, steps * this.config.charge.bonus);
+  /** Há quanto tempo ele está parado, camuflado, sem dar o bote. */
+  patienceMs(now: number): number {
+    return this.currentPhase === "camouflaged" ? Math.max(0, now - this.camouflagedSince) : 0;
   }
 
   /**
-   * `leaving`: algum inimigo dentro do raio está a ponto de sair. Quem calcula é o comportamento, que
-   * é quem enxerga as posições; a máquina de estados só decide o que fazer com a informação.
+   * `focusTarget`: há um alvo forte na zona para travar (Contra-Ataque Abissal). Quando existe, o
+   * tempo de armar cai para o do `focus` — os espinhos carregam muito mais rápido.
    */
-  update(now: number, enemiesInRadius: number, options: { leaving?: boolean; rearmMultiplier?: number } = {}): TrapEvent[] {
+  update(now: number, enemiesInZone: number, options: { focusTarget?: boolean; rearmMultiplier?: number } = {}): TrapEvent[] {
     const rearmMultiplier = options.rearmMultiplier ?? 1;
     const events: TrapEvent[] = [];
     switch (this.currentPhase) {
-      case "arming":
+      case "settling":
         if (now >= this.phaseUntil) {
-          this.armedSince = now;
-          this.firstSeenAt = null;
-          events.push(this.enter("armed", Number.POSITIVE_INFINITY));
+          this.camouflagedSince = now;
+          events.push(this.enter("camouflaged", Number.POSITIVE_INFINITY));
         }
         break;
-      case "armed":
-        if (enemiesInRadius <= 0) {
-          this.firstSeenAt = null;
-          break;
-        }
-        if (this.config.exitTrigger) {
-          if (this.firstSeenAt === null) this.firstSeenAt = now;
-          const held = now - this.firstSeenAt;
-          // Segura enquanto ninguém está saindo E a rede de segurança não estourou.
-          if (!options.leaving && held < this.config.exitTrigger.maxHoldMs) break;
-        }
-        events.push({ type: "trigger", chargeBonus: this.chargeBonus(now) });
-        events.push(this.enter("triggered", now + TRAP_TRIGGER_MS));
+      case "camouflaged": {
+        if (enemiesInZone <= 0) break;
+        const focused = Boolean(options.focusTarget && this.config.focus);
+        this.focusedStrike = focused;
+        const armMs = focused && this.config.focus ? this.config.focus.armMs : this.config.armMs;
+        events.push(this.enter("arming", now + armMs));
         break;
-      case "triggered":
+      }
+      case "arming":
+        // Comprometido: sai o bote mesmo que a zona tenha esvaziado no meio da abertura.
+        if (now >= this.phaseUntil) {
+          events.push({ type: "strike", focused: this.focusedStrike });
+          events.push(this.enter("striking", now + TRAP_TRIGGER_MS));
+        }
+        break;
+      case "striking":
         if (now >= this.phaseUntil) events.push(this.enter("cooldown", now + this.config.cooldownMs * rearmMultiplier));
         break;
       case "cooldown":
-        if (now >= this.phaseUntil) events.push(this.enter("arming", now + this.config.armMs));
+        if (now >= this.phaseUntil) {
+          this.camouflagedSince = now;
+          this.focusedStrike = false;
+          events.push(this.enter("camouflaged", Number.POSITIVE_INFINITY));
+        }
         break;
     }
     return events;
   }
 
-  private enter(phase: TrapPhase, until: number): TrapEvent {
+  private enter(phase: AmbushPhase, until: number): TrapEvent {
     this.currentPhase = phase;
     this.phaseUntil = until;
     return { type: "phase", phase };
   }
 }
 
-/** Multiplicadores de dano e de controle a partir do bônus de carga (só um dos dois cresce). */
-export function trapChargeMultipliers(config: TrapEffect, chargeBonus: number): { damage: number; control: number } {
-  return {
-    damage: config.charge.applyTo === "damage" ? 1 + chargeBonus : 1,
-    control: config.charge.applyTo === "control" ? 1 + chargeBonus : 1,
-  };
+/**
+ * Dano do bote contra um alvo, já com o bônus de Contra-Ataque Abissal.
+ *
+ * O bônus é proporcional à VIDA MÁXIMA do alvo e tem teto: sem o teto, um chefe com 1600 de vida
+ * cairia num bote só, que é exatamente o que essa mecânica não pode fazer. Contra um comum de 90 o
+ * bônus é irrelevante; contra um Cascudo ou uma Moreia ele é o motivo de existir.
+ */
+export function focusedDamage(base: number, focus: TrapEffect["focus"], targetMaxHealth: number): number {
+  if (!focus) return base;
+  return base + Math.min(focus.maxBonus, targetMaxHealth * focus.bonusPerMaxHealth);
 }

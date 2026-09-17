@@ -193,6 +193,17 @@ export class MatchEffects {
         if (projectile) this.host.effects.burst(projectile.impactKey, event.x, event.y, { scale: projectile.impactScale });
         return;
       }
+      case "toxinSpread": {
+        // O contágio tem eco próprio: um anel verde curto saindo de quem caiu, para o jogador ver que
+        // a morte fez alguma coisa — e não achar que o veneno apareceu do nada nos vizinhos.
+        this.shockwave(event.x, event.y, 0x8ef26b, event.radius);
+        event.targetIds.forEach((id) => {
+          const enemy = this.host.match.enemy(id);
+          if (enemy) this.shockwave(enemy.x, enemy.y, 0x8ef26b, 16);
+        });
+        audio.play("zap");
+        return;
+      }
       case "fieldPulsed":
         audio.play("zap");
         this.shockwave(event.x, event.y, 0x8ff4ff, event.radius);
@@ -335,7 +346,12 @@ export class MatchEffects {
     if (view && event.type !== "trapPhase") view.playAbility(this.host.match.now);
     switch (event.type) {
       case "trapPhase":
-        if (event.phase === "armed" && guardian) this.shockwave(guardian.x, guardian.y, 0xffd166, 22);
+        // O aviso é a ABERTURA dos espinhos: é ela que dá ao jogador a fração de segundo para ler
+        // que o bote vem. Camuflar de novo é silencioso de propósito.
+        if (event.phase === "arming" && guardian) {
+          this.shockwave(guardian.x, guardian.y, 0xffd166, 26);
+          audio.play("warning");
+        }
         return;
       case "trapTrigger": {
         if (!guardian || !view) return;

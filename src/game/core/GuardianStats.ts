@@ -152,8 +152,8 @@ export function resolveGuardianStats(
     trap: trap
       ? {
           ...trap,
+          // A maestria acelera a abertura dos espinhos; o teto de carga saiu com a `charge`.
           armMs: trap.armMs * mastery.trapArmMultiplier,
-          charge: { ...trap.charge, max: trap.charge.max + mastery.chargeMaxBonus },
         }
       : null,
     sonar: resolveLast(applied, "sonar") ?? definition.sonar ?? null,

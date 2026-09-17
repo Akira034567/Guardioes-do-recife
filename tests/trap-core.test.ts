@@ -1,77 +1,97 @@
 import { describe, expect, it } from "vitest";
-import { TRAP_TRIGGER_MS, TrapCore, trapChargeMultipliers } from "../src/game/core/TrapCore";
+import { focusedDamage, TRAP_TRIGGER_MS, TrapCore } from "../src/game/core/TrapCore";
 import { GUARDIANS } from "../src/game/data/guardians";
 import type { TrapEffect } from "../src/game/types";
 
 const base: TrapEffect = GUARDIANS.stonefish.trap!;
-const ambush2: TrapEffect = GUARDIANS.stonefish.branches[1].upgrades[1].trap!;
+const predator: TrapEffect = GUARDIANS.stonefish.branches[1].upgrades[1].trap!;
 
-describe("trap core", () => {
-  it("arms after armMs, fires when someone is about to escape and rearms after the cooldown", () => {
-    const trap = new TrapCore(base, 0);
-    expect(trap.phase).toBe("arming");
-    expect(trap.update(base.armMs - 1, 1)).toEqual([]);
-    expect(trap.update(base.armMs, 0)).toEqual([{ type: "phase", phase: "armed" }]);
-    expect(trap.update(base.armMs + 10, 0)).toEqual([]);
-    // V3.1: com inimigos dentro mas ninguém saindo, ela SEGURA o tiro.
-    expect(trap.update(base.armMs + 15, 2)).toEqual([]);
-    const events = trap.update(base.armMs + 20, 2, { leaving: true });
-    expect(events[0]).toEqual({ type: "trigger", chargeBonus: 0 });
-    expect(events[1]).toEqual({ type: "phase", phase: "triggered" });
-    const cooldownAt = base.armMs + 20 + TRAP_TRIGGER_MS;
-    expect(trap.update(cooldownAt, 3)).toEqual([{ type: "phase", phase: "cooldown" }]);
-    expect(trap.update(cooldownAt + base.cooldownMs - 1, 3)).toEqual([]);
-    expect(trap.update(cooldownAt + base.cooldownMs, 3)).toEqual([{ type: "phase", phase: "arming" }]);
+describe("ciclo da emboscada", () => {
+  it("acomoda uma vez, camufla, e só abre os espinhos quando alguém entra", () => {
+    const core = new TrapCore(base, 0);
+    expect(core.phase).toBe("settling");
+    expect(core.hidden, "acomodando também é estar escondido").toBe(true);
+
+    // Enquanto se acomoda, inimigo na zona não muda nada.
+    expect(core.update(base.settleMs - 1, 3)).toEqual([]);
+    expect(core.update(base.settleMs, 0)).toEqual([{ type: "phase", phase: "camouflaged" }]);
+    expect(core.hidden).toBe(true);
+
+    // Camuflado e sozinho: continua parado, acumulando paciência.
+    expect(core.update(base.settleMs + 500, 0)).toEqual([]);
+    expect(core.patienceMs(base.settleMs + 500)).toBe(500);
+
+    // Chegou alguém: abre os espinhos. O bote ainda NÃO saiu.
+    const seen = base.settleMs + 600;
+    expect(core.update(seen, 1)).toEqual([{ type: "phase", phase: "arming" }]);
+    expect(core.hidden, "de espinhos abertos ele está à mostra").toBe(false);
+    expect(core.update(seen + base.armMs - 1, 1)).toEqual([]);
+
+    const events = core.update(seen + base.armMs, 1);
+    expect(events[0]).toEqual({ type: "strike", focused: false });
+    expect(events[1]).toEqual({ type: "phase", phase: "striking" });
   });
 
-  it("grows the charge +6% every 2 s while armed, capped at +36%", () => {
-    const trap = new TrapCore(base, 0);
-    trap.update(base.armMs, 0);
-    expect(trap.chargeBonus(base.armMs + 1999)).toBe(0);
-    expect(trap.chargeBonus(base.armMs + 2000)).toBeCloseTo(0.06);
-    expect(trap.chargeBonus(base.armMs + 60_000)).toBeCloseTo(0.36);
-    const [trigger] = trap.update(base.armMs + 6000, 1, { leaving: true });
-    expect(trigger).toEqual({ type: "trigger", chargeBonus: expect.closeTo(0.18, 6) });
-    expect(trapChargeMultipliers(base, 0.15)).toEqual({ damage: expect.closeTo(1.15, 6), control: 1 });
-    expect(trapChargeMultipliers(ambush2, 0.15)).toEqual({ damage: 1, control: expect.closeTo(1.15, 6) });
+  it("o bote é comprometido: sai mesmo se a presa escapar durante a abertura", () => {
+    const core = new TrapCore(base, 0);
+    core.update(base.settleMs, 0);
+    const seen = base.settleMs + 10;
+    core.update(seen, 1);
+    // A zona esvaziou no meio da abertura — e ele sai assim mesmo.
+    const events = core.update(seen + base.armMs, 0);
+    expect(events[0]).toMatchObject({ type: "strike" });
   });
 
-  it("holds the shot until someone is about to leave, and never fires on first contact", () => {
-    // V3.1: a armadilha aposta no instante com MAIS gente dentro. Enquanto ninguém está saindo, ela
-    // espera — e o que a tira da espera é o inimigo mais avançado chegando na borda.
-    expect(base.exitTrigger).toEqual({ exitMargin: 12, maxHoldMs: 2000 });
-    const { maxHoldMs } = base.exitTrigger!;
+  it("fecha o ciclo e volta a emboscar: recarga, camuflagem e bote de novo", () => {
+    const core = new TrapCore(base, 0);
+    core.update(base.settleMs, 0);
+    const seen = base.settleMs + 10;
+    core.update(seen, 1);
+    const struckAt = seen + base.armMs;
+    core.update(struckAt, 1);
+    expect(core.phase).toBe("striking");
 
-    const patient = new TrapCore(base, 0);
-    patient.update(base.armMs, 0);
-    const start = base.armMs + 100;
-    expect(patient.update(start, 1)).toEqual([]);
-    expect(patient.update(start + 400, 3), "grupo crescendo, ninguém saindo: continua esperando").toEqual([]);
-    expect(patient.update(start + 500, 3, { leaving: true })[0]).toMatchObject({ type: "trigger" });
+    const cooldownAt = struckAt + TRAP_TRIGGER_MS;
+    expect(core.update(cooldownAt, 1)).toEqual([{ type: "phase", phase: "cooldown" }]);
+    const readyAt = cooldownAt + base.cooldownMs;
+    expect(core.update(readyAt - 1, 1)).toEqual([]);
+    expect(core.update(readyAt, 0)).toEqual([{ type: "phase", phase: "camouflaged" }]);
 
-    // Rede de segurança: fila parada em cima dela (bloqueador) dispara assim mesmo.
-    const stuck = new TrapCore(base, 0);
-    stuck.update(base.armMs, 0);
-    expect(stuck.update(start, 2)).toEqual([]);
-    expect(stuck.update(start + maxHoldMs - 1, 2)).toEqual([]);
-    expect(stuck.update(start + maxHoldMs, 2)[0]).toMatchObject({ type: "trigger" });
-
-    // O alvo escapou antes: a espera reinicia no próximo que pisar.
-    const reset = new TrapCore(base, 0);
-    reset.update(base.armMs, 0);
-    reset.update(start, 1);
-    reset.update(start + 200, 0);
-    expect(reset.update(start + maxHoldMs + 100, 1)).toEqual([]);
+    // E emboscar de novo — a armadilha antiga morria aqui.
+    expect(core.update(readyAt + 1, 1)).toEqual([{ type: "phase", phase: "arming" }]);
   });
 
-  it("applies the rearm multiplier to the cooldown and keeps the phase across upgrades", () => {
-    const trap = new TrapCore(base, 0);
-    trap.update(base.armMs, 0);
-    trap.update(base.armMs + 10, 1, { leaving: true });
-    trap.setConfig(ambush2);
-    const cooldownAt = base.armMs + 10 + TRAP_TRIGGER_MS;
-    trap.update(cooldownAt, 0, { rearmMultiplier: 0.5 });
-    expect(trap.phase).toBe("cooldown");
-    expect(trap.phaseEndsAt).toBeCloseTo(cooldownAt + ambush2.cooldownMs * 0.5);
+  it("aplica o multiplicador de rearme na recarga", () => {
+    const core = new TrapCore(base, 0);
+    core.update(base.settleMs, 0);
+    core.update(base.settleMs + 10, 1);
+    const struckAt = base.settleMs + 10 + base.armMs;
+    core.update(struckAt, 1, { rearmMultiplier: 0.5 });
+    const cooldownAt = struckAt + TRAP_TRIGGER_MS;
+    core.update(cooldownAt, 0, { rearmMultiplier: 0.5 });
+    expect(core.phase).toBe("cooldown");
+    expect(core.phaseEndsAt).toBeCloseTo(cooldownAt + base.cooldownMs * 0.5);
+  });
+});
+
+describe("Contra-Ataque Abissal", () => {
+  it("carrega mais rápido quando trava uma presa", () => {
+    const core = new TrapCore(predator, 0);
+    core.update(predator.settleMs, 0);
+    const seen = predator.settleMs + 10;
+    core.update(seen, 1, { focusTarget: true });
+    // Com alvo travado o tempo de abertura é o do `focus`, bem menor que o normal.
+    expect(predator.focus!.armMs).toBeLessThan(predator.armMs);
+    expect(core.update(seen + predator.focus!.armMs, 1)[0]).toEqual({ type: "strike", focused: true });
+  });
+
+  it("cobra pela vida máxima do alvo, com teto para o chefe não cair num bote", () => {
+    const focus = predator.focus!;
+    // Contra um comum o bônus é ruído; contra um Cascudo pesa; contra um chefe o teto segura.
+    expect(focusedDamage(100, focus, 90)).toBeCloseTo(109);
+    expect(focusedDamage(100, focus, 210)).toBeCloseTo(121);
+    expect(focusedDamage(100, focus, 1601)).toBeCloseTo(100 + focus.maxBonus);
+    // Sem foco declarado, nada muda.
+    expect(focusedDamage(100, undefined, 1601)).toBe(100);
   });
 });

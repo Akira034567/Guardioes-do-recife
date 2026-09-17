@@ -1,20 +1,20 @@
 import type Phaser from "phaser";
 
 /**
- * Ícones dos efeitos de status, fatiados de uma prancha só
- * (`art/status/status-sheet.png`, cortada por `scripts/slice-status-sheet.py`).
+ * Ícones dos efeitos de status (`art/status/`, preparados por `scripts/prepare-status-icons.py`).
  *
  * Substituem os círculos e pontinhos vetoriais que marcavam status antes: com cinco efeitos podendo
  * coexistir, aquilo virava uma sopa de anéis coloridos em volta da criatura e ninguém distinguia
  * "lento" de "vulnerável". O ícone diz o que é de longe, sem precisar decorar a cor.
  *
- * Nem todo marcador virou ícone: `revealed` (camuflado exposto) e `priority` (ameaça marcada pelo
- * sonar) continuam anéis, porque falam da LEITURA do campo, não de um efeito sofrido pela criatura —
- * misturar os dois na mesma fileira apagaria justamente a diferença.
+ * A mira é REVELADO — o camuflado exposto —, não "marcado". A marca do Tubarão Alfa continua sendo o
+ * triângulo vetorial apontando para a presa, e a prioridade do sonar o losango: as duas dizem "mire
+ * aqui" para o JOGADOR, enquanto os ícones dizem o que a criatura está sofrendo. São coisas
+ * diferentes e um ícone comum apagaria a diferença.
  */
-export type StatusIcon = "stun" | "slow" | "poison" | "vulnerable" | "marked";
+export type StatusIcon = "stun" | "slow" | "poison" | "vulnerable" | "revealed";
 
-export const STATUS_ICONS: readonly StatusIcon[] = ["stun", "slow", "poison", "vulnerable", "marked"];
+export const STATUS_ICONS: readonly StatusIcon[] = ["stun", "slow", "poison", "vulnerable", "revealed"];
 
 export function statusIconKey(icon: StatusIcon): string {
   return `status-${icon}`;
@@ -28,10 +28,17 @@ export function statusIconPath(icon: StatusIcon): string {
  * Lado do ícone em pixels de jogo. A 15 px o floco de neve virava uma mancha azul — estes desenhos
  * têm detalhe demais para ficarem menores que isto e ainda serem reconhecíveis de relance.
  */
-export const STATUS_ICON_SIZE = 19;
+export const STATUS_ICON_SIZE = 21;
 
 /** Espaço entre ícones quando mais de um está ativo. */
-export const STATUS_ICON_GAP = 17;
+export const STATUS_ICON_GAP = 16;
+
+/**
+ * Transparência do ícone. Ele fica EM CIMA do corpo do inimigo, não flutuando acima da cabeça — é
+ * assim que ele diz "esta criatura está envenenada" em vez de "existe um ícone por perto". Um pouco
+ * de transparência mantém a silhueta do bicho legível por baixo.
+ */
+export const STATUS_ICON_ALPHA = 0.88;
 
 /**
  * Quantos cabem ao mesmo tempo sobre uma criatura.

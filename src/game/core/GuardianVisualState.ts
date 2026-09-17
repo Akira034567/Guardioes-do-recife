@@ -57,8 +57,9 @@ export function guardianVisualState(input: VisualInput): GuardianVisualState {
   if (input.engineState === "disabled") return "disabled";
   if (input.now < input.abilityUntilMs) return "ability";
   if (input.trapPhase) {
-    // Armadilha: enterrada é repouso; disparada e esfriando são a pose de ataque.
-    return input.trapPhase === "triggered" || input.trapPhase === "cooldown" ? "attack" : "idle";
+    // Emboscada: camuflado e acomodando são repouso; abrir os espinhos é a pose de ataque, e ela
+    // começa no `arming` — é o aviso que o jogador precisa ver antes do bote.
+    return input.trapPhase === "camouflaged" || input.trapPhase === "settling" ? "idle" : "attack";
   }
   if (input.strikeAt === null) return "idle";
   const since = input.now - input.strikeAt;

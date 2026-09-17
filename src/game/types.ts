@@ -48,9 +48,10 @@ export type GuardianState = "idle" | "windup" | "attack" | "recovery" | "disable
 export type AttackKind = "projectile" | "chain" | "area" | "melee" | "ink" | "trap" | "sonar";
 /**
  * platform: plataforma de pedra da fase; water: água livre longe da rota; route: em cima da correnteza;
- * margin: faixa de água colada à rota (ver `PLACEMENT` em `balance.ts`).
+ * margin: faixa de água colada à rota; ambush: encostado na BORDA da correnteza, virado para dentro
+ * (o Peixe-Pedra) — ver `PLACEMENT` em `balance.ts`.
  */
-export type PlacementMode = "platform" | "water" | "route" | "margin";
+export type PlacementMode = "platform" | "water" | "route" | "margin" | "ambush";
 export type BranchId = "a" | "b";
 /**
  * Política de escolha de alvo (ver `core/Targeting.ts`):
@@ -211,6 +212,27 @@ export interface ToxicCloudEffect {
   radius: number;
   durationMs: number;
   poison: PoisonEffect;
+  /** Lentidão leve de quem atravessa a nuvem (1 = nenhuma). */
+  slowFactor?: number;
+}
+
+/** Jardim Tóxico II: quem morre envenenado dentro da nuvem contamina os vizinhos. UMA vez. */
+export interface ToxinSpread {
+  radius: number;
+  poison: PoisonEffect;
+}
+
+/**
+ * Contra-Ataque Abissal: o Peixe-Pedra trava o alvo mais forte que entra na zona e o bote sai mais
+ * pesado quanto mais vida esse alvo tiver.
+ */
+export interface AmbushFocus {
+  /** Dano extra por ponto de VIDA MÁXIMA do alvo. */
+  bonusPerMaxHealth: number;
+  /** Teto do bônus. Sem ele, um chefe de 1600 de vida morreria de um bote só. */
+  maxBonus: number;
+  /** Tempo de armar quando há alvo travado: os espinhos carregam mais rápido. */
+  armMs: number;
 }
 
 export interface TrapStun {
@@ -219,29 +241,31 @@ export interface TrapStun {
   bossFactor: number;
 }
 
-/** Peixe-Pedra: armadilha enterrada na rota. */
+/**
+ * Peixe-Pedra: a emboscada.
+ *
+ * V3.2 — deixou de ser armadilha descartável e virou predador RECORRENTE. O ciclo é
+ * `camuflado → inimigo entra na zona → arma → bote → recarga → camuflado`, e ele repete a partida
+ * inteira. Antes ele explodia uma vez e ficava inútil esperando um rearme longo, o que produzia
+ * exatamente a sensação de "passaram por ele e ele não fez nada".
+ */
 export interface TrapEffect {
-  /** Tempo para se enterrar e armar após ser colocado ou após o cooldown. */
+  /** Tempo da PRIMEIRA camuflagem, ao ser colocado. Depois disso ele nunca mais se enterra do zero. */
+  settleMs: number;
+  /** Quanto tempo ele leva abrindo os espinhos depois que alguém entra na zona. */
   armMs: number;
   cooldownMs: number;
   /** Raio, em pixels de rota, em que inimigos acionam a armadilha. */
   triggerRadius: number;
   damage: number;
+  /** Espinhos Perfurantes: o bote ignora armadura. */
+  armorPiercing?: boolean;
   poison?: PoisonEffect;
   cloud?: ToxicCloudEffect;
-  stun?: TrapStun;
-  knockback?: { distance: number; eliteFactor: number };
-  /**
-   * Quando disparar: a armadilha segura o tiro enquanto o grupo se forma e solta pouco antes de o
-   * primeiro inimigo escapar do raio — o instante com mais gente dentro.
-   *
-   * `exitMargin` é a folga em pixels: com raio 65 e margem 12, ela dispara quando o mais avançado
-   * está a 53 px dela, faltando 12 para sair. `maxHoldMs` evita a espera eterna quando ninguém anda
-   * (um bloqueador segurando a fila em cima da armadilha).
-   */
-  exitTrigger?: { exitMargin: number; maxHoldMs: number };
-  /** Quanto mais tempo armado, maior o próximo efeito: `+bonus` a cada `everyMs`, até `max`. */
-  charge: { everyMs: number; bonus: number; max: number; applyTo: "damage" | "control" };
+  /** Jardim Tóxico II. */
+  spreadOnDeath?: ToxinSpread;
+  /** Contra-Ataque Abissal. */
+  focus?: AmbushFocus;
 }
 
 /** Golfinho: pulso de ecolocalização. */

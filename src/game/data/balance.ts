@@ -203,6 +203,9 @@ export const GUARDIAN_BALANCE = {
    *
    * 1. Ela BLOQUEIA desde a base (2 vagas) e os DOIS ramos sobem a capacidade: Casco 4 → 6, que é a
    *    barreira de verdade, e Correnteza 3 → 5, que segura menos mas compensa com a zona.
+   *    O TEMPO de agarrão dela é muito maior que o do Baiacu (9s a 14s contra 3,5s a 5,5s): o Baiacu
+   *    é uma parede que belisca, ela é a criatura que SEGURA. Sem essa diferença os dois viravam a
+   *    mesma unidade com números um pouco diferentes.
    * 2. A turbulência saiu do Casco. Antes os dois ramos empurravam água, o que apagava a escolha;
    *    agora `flowField` é EXCLUSIVO do ramo Correnteza — quem quer mexer na água escolhe a água.
    */
@@ -216,15 +219,15 @@ export const GUARDIAN_BALANCE = {
     slowFactor: 0.75,
     slowDurationMs: 1400,
     blockCapacity: 2,
-    blockHold: { durationMs: 3000, releaseCooldownMs: 2500, eliteSlots: 2, bossSlow: { factor: 0.7, durationMs: 1200 } },
+    blockHold: { durationMs: 9000, releaseCooldownMs: 2200, eliteSlots: 2, bossSlow: { factor: 0.7, durationMs: 1800 } },
     shell: {
       level1: {
         blockCapacity: 4,
-        blockHold: { durationMs: 4000, releaseCooldownMs: 3000, eliteSlots: 2, bossSlow: { factor: 0.6, durationMs: 1400 } },
+        blockHold: { durationMs: 12000, releaseCooldownMs: 2200, eliteSlots: 2, bossSlow: { factor: 0.6, durationMs: 2000 } },
       },
       level2: {
         blockCapacity: 6,
-        blockHold: { durationMs: 5000, releaseCooldownMs: 3000, eliteSlots: 2, bossSlow: { factor: 0.5, durationMs: 1600 } },
+        blockHold: { durationMs: 14000, releaseCooldownMs: 2000, eliteSlots: 2, bossSlow: { factor: 0.5, durationMs: 2400 } },
         /** Repulsa Ancestral. */
         pushWave: { cooldownMs: 9000, distance: 110, eliteFactor: 0.6, bossSlow: { factor: 0.5, durationMs: 1600 }, visualMs: 700 },
       },
@@ -232,12 +235,12 @@ export const GUARDIAN_BALANCE = {
     current: {
       level1: {
         blockCapacity: 3,
-        blockHold: { durationMs: 3000, releaseCooldownMs: 2800, eliteSlots: 2, bossSlow: { factor: 0.65, durationMs: 1200 } },
+        blockHold: { durationMs: 10000, releaseCooldownMs: 2400, eliteSlots: 2, bossSlow: { factor: 0.65, durationMs: 1800 } },
         flowField: { radiusMultiplier: 1.8, speedFactor: 0.62 },
       },
       level2: {
         blockCapacity: 5,
-        blockHold: { durationMs: 3500, releaseCooldownMs: 2800, eliteSlots: 2, bossSlow: { factor: 0.6, durationMs: 1400 } },
+        blockHold: { durationMs: 11000, releaseCooldownMs: 2400, eliteSlots: 2, bossSlow: { factor: 0.6, durationMs: 2000 } },
         flowField: { radiusMultiplier: 1.9, speedFactor: 0.55 },
         /** Controle pesado periódico: a corrente devolve a onda inteira 170px rota abaixo. */
         pushWave: { cooldownMs: 9000, distance: 170, eliteFactor: 0.6, bossSlow: { factor: 0.45, durationMs: 2000 }, visualMs: 1500 },
@@ -245,53 +248,79 @@ export const GUARDIAN_BALANCE = {
     },
   },
   /**
-   * Peixe-Pedra — armadilha.
+   * Peixe-Pedra — EMBOSCADA. Não é mais armadilha.
    *
-   * V3.1: o gatilho mudou de ideia. A regra antiga (esperar 2 inimigos, ou estourar um timeout) era
-   * uma aposta que costumava sair errada — ou ele segurava esperando companhia que não vinha, ou
-   * disparava com um alvo só. Agora ele espera o grupo se formar e dispara POUCO ANTES de o primeiro
-   * escapar do raio (`exitTrigger`), que é o instante em que há mais gente dentro. A recarga caiu pela
-   * metade (5s → 2,5s) porque uma armadilha que mira o momento certo precisa ter mais momentos.
+   * V3.2 mudou a identidade inteira. Antes ele se enterrava, explodia uma vez e ficava inútil num
+   * rearme longo; na prática o jogador via a fila passar por cima dele sem nada acontecer. Agora ele
+   * fica agarrado à BORDA da correnteza, camuflado de pedra, e dá botes curtos e repetidos em quem
+   * entra na zona à frente dele. A pergunta que ele faz deixou de ser "quando gasto a armadilha" e
+   * passou a ser "onde nesta rota os inimigos vão se agrupar".
+   *
+   * Os dois ramos puxam para lados opostos de propósito:
+   *   Jardim Tóxico  → área, veneno e território; quer ver enxame.
+   *   Predador       → área menor, bote brutal e anti-armadura; quer ver UM grandão.
    */
   stonefish: {
     cost: 95,
     upgradeCosts: [80, 140] as const,
-    range: 65,
-    /** Não ataca pela FSM: tudo acontece na armadilha. */
+    /** O alcance É a zona de emboscada: o que ele cobre da correnteza a partir da borda. */
+    range: 70,
+    /** Não ataca pela FSM: tudo acontece na emboscada. */
     damage: 0,
-    cooldownMs: 2500,
-    trap: {
-      armMs: 2600,
-      cooldownMs: 2500,
-      triggerRadius: 65,
-      damage: 40,
-      /**
-       * Dispara quando o inimigo mais avançado chega a `triggerRadius − exitMargin` depois da
-       * armadilha — ou seja, a `exitMargin` px de escapar. `maxHoldMs` é a rede de segurança: se
-       * ninguém avança (preso por um bloqueador em cima da armadilha), ela dispara assim mesmo.
-       */
-      exitTrigger: { exitMargin: 12, maxHoldMs: 2000 },
-      charge: { everyMs: 2000, bonus: 0.06, max: 0.36, applyTo: "damage" as const },
-    },
-    venom: {
-      level1: { damage: 34, poison: { damagePerTick: 9, tickMs: 1000, durationMs: 5000, maxStacks: 2 } },
-      level2: {
-        damage: 34,
-        poison: { damagePerTick: 10, tickMs: 1000, durationMs: 6000, maxStacks: 2 },
-        cloud: { radius: 95, durationMs: 4500, poison: { damagePerTick: 8, tickMs: 1000, durationMs: 6000, maxStacks: 2 } },
-      },
-    },
+    cooldownMs: 3000,
     ambush: {
+      /** Só na colocação: ele se acomoda e some no cenário. */
+      settleMs: 1600,
+      /** Abertura dos espinhos depois que alguém entra. Curto, mas visível — é o aviso. */
+      armMs: 420,
+      cooldownMs: 3000,
+      triggerRadius: 70,
+      damage: 46,
+      poison: { damagePerTick: 9, tickMs: 1000, durationMs: 4000, maxStacks: 2 },
+    },
+    /** Ramo A — Jardim Tóxico: enxame e controle de território. */
+    garden: {
       level1: {
-        damage: 58,
-        stun: { durationMs: 1100, eliteFactor: 0.6, bossFactor: 0.3 },
-        charge: { everyMs: 2000, bonus: 0.06, max: 0.36, applyTo: "control" as const },
+        damage: 40,
+        triggerRadius: 78,
+        poison: { damagePerTick: 10, tickMs: 1000, durationMs: 5000, maxStacks: 2 },
+        cloud: {
+          radius: 88,
+          durationMs: 4000,
+          slowFactor: 0.85,
+          poison: { damagePerTick: 8, tickMs: 1000, durationMs: 4000, maxStacks: 2 },
+        },
       },
+      level2: {
+        damage: 40,
+        triggerRadius: 86,
+        poison: { damagePerTick: 10, tickMs: 1000, durationMs: 6000, maxStacks: 2 },
+        cloud: {
+          radius: 108,
+          durationMs: 5000,
+          slowFactor: 0.8,
+          poison: { damagePerTick: 8, tickMs: 1000, durationMs: 6000, maxStacks: 2 },
+        },
+        /**
+         * Quem morre envenenado dentro da nuvem contamina os vizinhos. UMA vez por morte: a dose
+         * espalhada não espalha de novo, senão um cardume viraria reação em cadeia infinita.
+         */
+        spreadOnDeath: { radius: 72, poison: { damagePerTick: 8, tickMs: 1000, durationMs: 4000, maxStacks: 2 } },
+      },
+    },
+    /** Ramo B — Predador de Emboscada: menos área, punição enorme em poucos alvos fortes. */
+    predator: {
+      level1: { damage: 82, triggerRadius: 54, armorPiercing: true },
       level2: {
         damage: 96,
-        stun: { durationMs: 1600, eliteFactor: 0.6, bossFactor: 0.25 },
-        knockback: { distance: 90, eliteFactor: 0.5 },
-        charge: { everyMs: 2000, bonus: 0.06, max: 0.36, applyTo: "control" as const },
+        triggerRadius: 54,
+        armorPiercing: true,
+        /**
+         * Trava o alvo mais forte da zona e cobra pela vida MÁXIMA dele: 10% dela, até 80 de bônus.
+         * Contra um comum de 90 isso é ruído; contra um Cascudo (210) são +21; contra um chefe o teto
+         * segura em +80, que é punição real sem virar execução.
+         */
+        focus: { bonusPerMaxHealth: 0.1, maxBonus: 80, armMs: 240 },
       },
     },
   },
@@ -372,6 +401,15 @@ export const PLACEMENT = {
   marginMax: 120,
   /** Raio de clique de uma plataforma na simulação. */
   platformHitRadius: 47,
+  /**
+   * Emboscada (Peixe-Pedra): distância da linha central em que ele se encaixa, na borda da
+   * correnteza. Fora da faixa de areia, mas perto o bastante para a zona dele invadir a rota.
+   */
+  ambushOffset: 38,
+  /** Até onde do centro da rota o toque ainda conta como "quero ele naquela borda". */
+  ambushReach: 130,
+  /** Separação mínima entre emboscadas e outras unidades da correnteza. */
+  ambushSeparation: 64,
 } as const;
 
 /**

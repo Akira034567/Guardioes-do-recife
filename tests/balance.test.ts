@@ -100,6 +100,17 @@ describe("balance sheet", () => {
     // V3.1: o agarrão do Baiacu deixou de ser permanente em todos os níveis.
     expect(GUARDIANS.pufferfish.blockHold?.durationMs).toBe(3500);
     expect(GUARDIANS.pufferfish.branches[0].upgrades.map((upgrade) => upgrade.blockHold?.durationMs)).toEqual([4500, 5500]);
+    // V3.2: a Tartaruga SEGURA; o Baiacu belisca. O agarrão dela é 2,5x mais longo em todo nível —
+    // sem essa distância os dois eram a mesma unidade com números diferentes.
+    const turtleHolds = [
+      GUARDIANS["sea-turtle"].blockHold?.durationMs ?? 0,
+      ...GUARDIANS["sea-turtle"].branches.flatMap((branch) => branch.upgrades.map((upgrade) => upgrade.blockHold?.durationMs ?? 0)),
+    ];
+    const pufferHolds = [
+      GUARDIANS.pufferfish.blockHold?.durationMs ?? 0,
+      ...GUARDIANS.pufferfish.branches[0].upgrades.map((upgrade) => upgrade.blockHold?.durationMs ?? 0),
+    ];
+    expect(Math.min(...turtleHolds)).toBeGreaterThan(Math.max(...pufferHolds) * 1.5);
     expect(GUARDIANS.pufferfish.branches[0].upgrades.map((upgrade) => upgrade.contactDamagePerSecond)).toEqual([15, 19]);
     expect(GUARDIANS.pufferfish.branches[1].upgrades.map((upgrade) => upgrade.damage)).toEqual([34, 58]);
     // Caranguejo: brawler de alcance curtíssimo.
@@ -129,13 +140,16 @@ describe("balance sheet", () => {
     expect(GUARDIANS["sea-turtle"].branches[1].upgrades.every((upgrade) => upgrade.flowField !== undefined)).toBe(true);
     expect(GUARDIANS["sea-turtle"].branches[1].upgrades.map((upgrade) => upgrade.flowField?.speedFactor)).toEqual([0.62, 0.55]);
     expect(GUARDIANS["sea-turtle"].branches[1].upgrades[1].pushWave?.distance).toBe(170);
-    // Peixe-Pedra: a armadilha cobra caro no instante em que ativa.
-    expect(GUARDIANS.stonefish.trap).toMatchObject({ damage: 40, armMs: 2600, cooldownMs: 2500, charge: { everyMs: 2000, bonus: 0.06, max: 0.36 } });
-    expect(GUARDIANS.stonefish.branches[1].upgrades.map((upgrade) => upgrade.trap?.damage)).toEqual([58, 96]);
-    // V3.1: o gatilho é do Peixe-Pedra inteiro, não só da Fúria — ele sai pouco antes de o primeiro escapar.
-    expect(GUARDIANS.stonefish.trap?.exitTrigger).toEqual({ exitMargin: 12, maxHoldMs: 2000 });
-    expect(GUARDIANS.stonefish.trap?.cooldownMs).toBe(2500);
-    expect(GUARDIANS.stonefish.branches[1].upgrades.every((upgrade) => upgrade.trap?.exitTrigger !== undefined)).toBe(true);
+    // Peixe-Pedra (V3.2): emboscada RECORRENTE na borda da correnteza, não mais armadilha descartável.
+    expect(GUARDIANS.stonefish.trap).toMatchObject({ damage: 46, settleMs: 1600, armMs: 420, cooldownMs: 3000, triggerRadius: 70 });
+    expect(GUARDIANS.stonefish.placementMode).toBe("ambush");
+    expect(GUARDIANS.stonefish.role).toBe("Emboscada • Veneno");
+    // Ramo A troca dano por território; ramo B troca área por punição.
+    expect(GUARDIANS.stonefish.branches[0].upgrades.map((upgrade) => upgrade.trap?.cloud?.radius)).toEqual([88, 108]);
+    expect(GUARDIANS.stonefish.branches[0].upgrades[1].trap?.spreadOnDeath?.radius).toBe(72);
+    expect(GUARDIANS.stonefish.branches[1].upgrades.map((upgrade) => upgrade.trap?.damage)).toEqual([82, 96]);
+    expect(GUARDIANS.stonefish.branches[1].upgrades.every((upgrade) => upgrade.trap?.armorPiercing)).toBe(true);
+    expect(GUARDIANS.stonefish.branches[1].upgrades[1].trap?.focus).toEqual({ bonusPerMaxHealth: 0.1, maxBonus: 80, armMs: 240 });
     // Golfinho: suporte puro; base com 10% de vulnerabilidade.
     expect(GUARDIANS.dolphin).toMatchObject({ damage: 11, cooldownMs: 1400 });
     expect(GUARDIANS.dolphin.sonar?.vulnerability.multiplier).toBe(1.1);

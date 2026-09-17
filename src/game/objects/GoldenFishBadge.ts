@@ -119,6 +119,6 @@ export class GoldenFishBadge extends Phaser.GameObjects.Container {
       this.fish.setTexture(GOLDEN_FISH_FRAMES[next]);
     }
     this.swirl.rotation += deltaMs / 2600;
-    if (!this.dragging) this.fish.y = Math.sin(this.elapsed / 420) * 3;
+    if (!this.dragging) this.fish.y = Math.sin(this.elapsed / 620) * 3;
   }
 }

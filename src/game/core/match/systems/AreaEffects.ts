@@ -1,4 +1,4 @@
-import type { PoisonEffect, ToxicCloudEffect } from "../../../types";
+import type { PoisonEffect, ToxicCloudEffect, ToxinSpread } from "../../../types";
 import type { DamageOptions } from "../../GuardianBehaviors";
 import type { MatchEnemy } from "../MatchEnemy";
 import type { MatchEvent } from "../MatchEvents";
@@ -31,6 +31,8 @@ interface Cloud extends CloudView {
   slowFactor: number;
   vulnerabilityMultiplier: number;
   poison: PoisonEffect | null;
+  /** Jardim Tóxico II: contágio ao morrer envenenado aqui dentro. */
+  spread: ToxinSpread | null;
 }
 
 export interface AreaContext {
@@ -96,6 +98,7 @@ export class AreaEffects {
         slowFactor: definition.slowFactor,
         vulnerabilityMultiplier: definition.vulnerabilityMultiplier,
         poison: null,
+        spread: null,
       },
       now,
       emit,
@@ -103,7 +106,15 @@ export class AreaEffects {
     return true;
   }
 
-  createToxicCloud(ownerId: string, x: number, y: number, cloud: ToxicCloudEffect, now: number, emit: (event: MatchEvent) => void): void {
+  createToxicCloud(
+    ownerId: string,
+    x: number,
+    y: number,
+    cloud: ToxicCloudEffect,
+    now: number,
+    emit: (event: MatchEvent) => void,
+    spread: ToxinSpread | null = null,
+  ): void {
     this.replaceCloud(
       {
         kind: "toxic",
@@ -113,13 +124,37 @@ export class AreaEffects {
         radius: cloud.radius,
         durationMs: cloud.durationMs,
         expiresAt: now + cloud.durationMs,
-        slowFactor: 1,
+        slowFactor: cloud.slowFactor ?? 1,
         vulnerabilityMultiplier: 1,
         poison: cloud.poison,
+        spread,
       },
       now,
       emit,
     );
+  }
+
+  /**
+   * Um inimigo morreu: se estava envenenado dentro de um Jardim Tóxico, a toxina salta para os
+   * vizinhos. UMA vez — a dose espalhada não espalha de novo, senão um cardume inteiro viraria reação
+   * em cadeia e a fase se resolveria sozinha.
+   */
+  spreadOnDeath(victim: MatchEnemy, context: AreaContext): void {
+    for (const cloud of this.cloudList) {
+      if (!cloud.spread) continue;
+      if (victim.distanceTo(cloud.x, cloud.y) > cloud.radius) continue;
+      const touched: string[] = [];
+      for (const enemy of context.enemies) {
+        if (enemy.id === victim.id || enemy.dead || enemy.reachedGoal) continue;
+        if (victim.distanceTo(enemy.x, enemy.y) > cloud.spread.radius) continue;
+        enemy.status.applyPoison(cloud.spread.poison, context.now);
+        touched.push(enemy.id);
+      }
+      if (touched.length > 0) {
+        context.emit({ type: "toxinSpread", now: context.now, ownerId: cloud.ownerId, x: victim.x, y: victim.y, radius: cloud.spread.radius, targetIds: touched });
+      }
+      return;
+    }
   }
 
   /** Remove tudo que pertence a um Guardião vendido. */

@@ -46,7 +46,8 @@ describe("Recife 1 content contracts", () => {
     // V3.1: ela bloqueia desde a base e os DOIS ramos seguram — o que separa os ramos é a água.
     expect(GUARDIANS["sea-turtle"].blocks).toBe(true);
     expect(GUARDIANS["sea-turtle"].branches.every((branch) => branch.upgrades.every((upgrade) => upgrade.blocks))).toBe(true);
-    expect(GUARDIANS.stonefish.placementMode).toBe("route");
+    // V3.2: ele não fica mais no meio da água — encaixa na BORDA da correnteza.
+    expect(GUARDIANS.stonefish.placementMode).toBe("ambush");
     expect(GUARDIANS.stonefish.attackKind).toBe("trap");
     expect(GUARDIANS.stonefish.damage).toBe(0);
     expect(GUARDIANS.dolphin.placementMode).toBe("water");
@@ -104,19 +105,25 @@ describe("Recife 1 content contracts", () => {
 
     const turtle = GUARDIANS["sea-turtle"];
     expect(turtle.branches[0].upgrades.map((upgrade) => upgrade.blockCapacity)).toEqual([4, 6]);
-    expect(turtle.branches[0].upgrades.map((upgrade) => upgrade.blockHold?.durationMs)).toEqual([4000, 5000]);
+    // V3.2: o agarrão da Tartaruga é MUITO mais longo que o do Baiacu — ela segura, ele belisca.
+    expect(turtle.branches[0].upgrades.map((upgrade) => upgrade.blockHold?.durationMs)).toEqual([12000, 14000]);
     expect(turtle.branches[0].upgrades[1].pushWave).toBeDefined();
     expect(turtle.branches[1].upgrades[0].flowField?.speedFactor).toBe(0.62);
     expect(turtle.branches[1].upgrades[1].pushWave?.cooldownMs).toBe(9000);
 
     const stonefish = GUARDIANS.stonefish;
-    expect(stonefish.trap?.armMs).toBe(2600);
-    expect(stonefish.branches[0].upgrades[0].trap?.poison).toMatchObject({ durationMs: 5000, tickMs: 1000 });
-    expect(stonefish.branches[0].upgrades[1].trap?.cloud).toBeDefined();
-    expect(stonefish.branches[1].upgrades[0].trap?.stun?.durationMs).toBe(1100);
-    expect(stonefish.branches[1].upgrades[1].trap).toMatchObject({ stun: { durationMs: 1600 }, exitTrigger: { exitMargin: 12, maxHoldMs: 2000 } });
-    expect(stonefish.branches[1].upgrades.every((upgrade) => upgrade.trap?.charge.applyTo === "control")).toBe(true);
-    expect(stonefish.branches[0].upgrades.every((upgrade) => upgrade.trap?.charge.applyTo === "damage")).toBe(true);
+    // V3.2: emboscador recorrente. `settleMs` é a acomodação inicial; `armMs`, a abertura dos espinhos.
+    expect(stonefish.trap).toMatchObject({ settleMs: 1600, armMs: 420, cooldownMs: 3000 });
+    // Ramo A: os dois níveis soltam nuvem, e o II ainda contamina na morte.
+    expect(stonefish.branches[0].upgrades.every((upgrade) => upgrade.trap?.cloud !== undefined)).toBe(true);
+    expect(stonefish.branches[0].upgrades[1].trap?.spreadOnDeath).toBeDefined();
+    // Ramo B: nenhum dos dois solta nuvem; os dois furam armadura, e só o II trava a presa.
+    expect(stonefish.branches[1].upgrades.every((upgrade) => upgrade.trap?.cloud === undefined)).toBe(true);
+    expect(stonefish.branches[1].upgrades.every((upgrade) => upgrade.trap?.armorPiercing === true)).toBe(true);
+    expect(stonefish.branches[1].upgrades.map((upgrade) => upgrade.trap?.focus !== undefined)).toEqual([false, true]);
+    // A zona encolhe no Predador e cresce no Jardim: é a troca que separa os ramos.
+    expect(stonefish.branches[1].upgrades[0].trap!.triggerRadius).toBeLessThan(stonefish.trap!.triggerRadius);
+    expect(stonefish.branches[0].upgrades[0].trap!.triggerRadius).toBeGreaterThan(stonefish.trap!.triggerRadius);
 
     const dolphin = GUARDIANS.dolphin;
     expect(dolphin.sonar?.vulnerability).toEqual({ multiplier: 1.1, durationMs: 4500 });

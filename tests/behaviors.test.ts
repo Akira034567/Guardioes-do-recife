@@ -9,6 +9,7 @@ import {
   type BehaviorEvent,
   type BehaviorHooks,
 } from "../src/game/core/GuardianBehaviors";
+import { focusedDamage, TRAP_TRIGGER_MS } from "../src/game/core/TrapCore";
 import { GUARDIANS } from "../src/game/data/guardians";
 import { FakeEnemy, FakeGuardian } from "./helpers/fakes";
 
@@ -114,42 +115,64 @@ describe("turtle push wave", () => {
   });
 });
 
-describe("stonefish trap", () => {
-  it("poisons on Veneno I and spawns the toxic cloud on Veneno II", () => {
-    const fish = new FakeGuardian("P", "stonefish", 300, 0, "a", 1, 0);
+describe("emboscada do Peixe-Pedra", () => {
+  it("fica camuflado, abre os espinhos quando alguém entra e só então dá o bote", () => {
+    const fish = new FakeGuardian("P", "stonefish", 300, 0, null, 0, 0);
     const trap = fish.stats.trap!;
-    // V3.1: ela segura o tiro até alguém chegar na borda de saída — 53 px depois dela (raio 65 − 12).
-    const victim = new FakeEnemy("A", "swimmer", 355);
+    const victim = new FakeEnemy("A", "swimmer", 310);
+    const events: BehaviorEvent[] = [];
     const damaged: Array<{ id: string; amount: number }> = [];
-    updateTrap(fish, [victim], hooks(trap.armMs, [], damaged));
-    updateTrap(fish, [victim], hooks(trap.armMs + 1, [], damaged));
-    expect(damaged).toEqual([{ id: "A", amount: trap.damage }]);
-    expect(victim.status.isPoisoned(trap.armMs + 2)).toBe(true);
-    expect(victim.status.drainPoison(trap.armMs + 1 + trap.poison!.tickMs)).toBe(trap.poison!.damagePerTick);
 
-    const garden = new FakeGuardian("G", "stonefish", 300, 0, "a", 2, 0);
-    const clouds: string[] = [];
-    updateTrap(garden, [victim], { ...hooks(trap.armMs), spawnCloud: (ownerId) => clouds.push(ownerId) });
-    updateTrap(garden, [victim], { ...hooks(trap.armMs + 1), spawnCloud: (ownerId) => clouds.push(ownerId) });
-    expect(clouds).toEqual(["G"]);
+    // Antes de se acomodar não acontece nada, mesmo com inimigo em cima.
+    updateTrap(fish, [victim], hooks(trap.settleMs - 1, events, damaged));
+    expect(damaged).toEqual([]);
+
+    // Acomodou: agora está camuflado. O inimigo na zona abre os espinhos, mas o bote ainda não saiu.
+    updateTrap(fish, [victim], hooks(trap.settleMs, events, damaged));
+    updateTrap(fish, [victim], hooks(trap.settleMs + 1, events, damaged));
+    expect(events.some((event) => event.type === "trapPhase" && event.phase === "arming")).toBe(true);
+    expect(damaged, "os espinhos ainda estão abrindo").toEqual([]);
+
+    // Passada a abertura, o bote sai e envenena.
+    const fireAt = trap.settleMs + 1 + trap.armMs;
+    updateTrap(fish, [victim], hooks(fireAt, events, damaged));
+    expect(damaged).toEqual([{ id: "A", amount: trap.damage }]);
+    expect(victim.status.isPoisoned(fireAt + 1)).toBe(true);
   });
 
-  it("stuns and knocks back on Emboscada II, sparing the boss from the push", () => {
-    const fish = new FakeGuardian("P", "stonefish", 300, 0, "b", 2, 0);
+  it("é um ciclo: depois da recarga ele volta a se camuflar e emboscar de novo", () => {
+    const fish = new FakeGuardian("P", "stonefish", 300, 0, null, 0, 0);
     const trap = fish.stats.trap!;
-    // O da frente já está na borda de saída: é ele que puxa o gatilho, e os de trás entram junto.
-    const first = new FakeEnemy("A", "swimmer", 355);
-    const second = new FakeEnemy("B", "swimmer", 310);
-    const boss = new FakeEnemy("Z", "tidebreaker", 315);
-    const events: BehaviorEvent[] = [];
-    updateTrap(fish, [first, second, boss], hooks(trap.armMs, events));
-    const fireAt = trap.armMs + 1;
-    updateTrap(fish, [first, second, boss], hooks(fireAt, events));
-    expect(events.some((event) => event.type === "trapTrigger")).toBe(true);
-    expect(first.status.isStunned(fireAt + 1)).toBe(true);
-    expect(first.pathDistance).toBe(355 - trap.knockback!.distance);
-    expect(boss.pathDistance).toBe(315);
-    expect(boss.status.isStunned(fireAt + 1)).toBe(true);
-    expect(boss.status.isStunned(fireAt + trap.stun!.durationMs * trap.stun!.bossFactor + 5)).toBe(false);
+    const victim = new FakeEnemy("A", "swimmer", 310);
+    const damaged: Array<{ id: string; amount: number }> = [];
+    // Roda tempo suficiente para dois botes: acomodar + (armar + bote + recarga) × 2, com folga.
+    const step = 50;
+    for (let now = 0; now <= trap.settleMs + (trap.armMs + trap.cooldownMs + TRAP_TRIGGER_MS) * 2 + 400; now += step) {
+      updateTrap(fish, [victim], hooks(now, [], damaged));
+    }
+    // A armadilha antiga daria UM golpe e ficaria inútil; o emboscador repete.
+    expect(damaged.length, "o emboscador dá mais de um bote na mesma vida").toBeGreaterThanOrEqual(2);
+  });
+
+  it("Jardim Tóxico solta a nuvem; Predador ignora armadura e cobra pela vida do grandão", () => {
+    const garden = new FakeGuardian("G", "stonefish", 300, 0, "a", 1, 0);
+    const gardenTrap = garden.stats.trap!;
+    const victim = new FakeEnemy("A", "swimmer", 310);
+    const clouds: string[] = [];
+    const cloudHooks = (now: number) => ({ ...hooks(now), spawnCloud: (ownerId: string) => clouds.push(ownerId) });
+    updateTrap(garden, [victim], cloudHooks(gardenTrap.settleMs));
+    updateTrap(garden, [victim], cloudHooks(gardenTrap.settleMs + 1));
+    updateTrap(garden, [victim], cloudHooks(gardenTrap.settleMs + 1 + gardenTrap.armMs));
+    expect(clouds).toEqual(["G"]);
+    expect(gardenTrap.cloud?.slowFactor, "a nuvem também segura quem atravessa").toBeLessThan(1);
+
+    // Predador II: o bônus é pela vida MÁXIMA do alvo, com teto — um chefe não pode cair num bote.
+    const predator = new FakeGuardian("B", "stonefish", 300, 0, "b", 2, 0);
+    const trap = predator.stats.trap!;
+    expect(trap.armorPiercing).toBe(true);
+    const focus = trap.focus!;
+    expect(focusedDamage(trap.damage, focus, 210)).toBeCloseTo(trap.damage + 21);
+    expect(focusedDamage(trap.damage, focus, 1601), "o teto segura o chefe").toBeCloseTo(trap.damage + focus.maxBonus);
   });
 });
+

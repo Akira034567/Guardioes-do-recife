@@ -31,8 +31,12 @@ const FILES: ReadonlyArray<readonly [key: string, file: string]> = [
   [GOLDEN_FLASH_KEY, "coroacao-flash"],
 ];
 
-/** Ritmo do nado do peixinho, quando ele aparece como recompensa. */
-export const GOLDEN_FISH_FRAME_MS = 180;
+/**
+ * Ritmo do nado do peixinho enquanto espera no canto. Lento de propósito: ele está BOIANDO, não
+ * fugindo — a 180 ms parecia agitado demais para um bicho que está lá só esperando ser escolhido.
+ * O giro do redemoinho atrás dele é outro tempo e continua como estava.
+ */
+export const GOLDEN_FISH_FRAME_MS = 300;
 
 /** Tamanho da coroa acima do Guardião, em pixels de jogo. */
 export const GOLDEN_CROWN_WIDTH = 30;
