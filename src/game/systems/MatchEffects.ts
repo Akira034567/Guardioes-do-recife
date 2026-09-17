@@ -60,6 +60,16 @@ const ROUTE_WAVE_REACH = 220;
 
 const SONAR_TRAVEL_MS = 1150;
 
+/**
+ * Meia-abertura do cone do sonar, em graus.
+ *
+ * O pulso deixou de ser uma bolha de 360°: ecolocalização é um facho que o Golfinho VARRE na direção
+ * em que o cardume está, e o círculo completo dizia o contrário — que ele gritava para todo lado e
+ * torcia. 55° para cada lado é largo o bastante para abraçar um grupo espalhado pela rota sem virar
+ * meio círculo outra vez.
+ */
+const SONAR_CONE_DEGREES = 55;
+
 export class MatchEffects {
   private readonly damageNumbers = new DamageAggregator();
   private readonly floatingText: FloatingTextPool;
@@ -419,11 +429,12 @@ export class MatchEffects {
         // ler como "a onda passou" em vez de "o círculo sumiu".
         const color = event.wave.coordinate ? 0x9b7bff : event.wave.vulnerability ? 0xb59cff : 0x6fd6ff;
         const travelMs = SONAR_TRAVEL_MS;
-        const front = scene.add.circle(event.x, event.y, 10).setStrokeStyle(3, color, 0.9).setDepth(DEPTH.effects);
+        const aim = event.aimRadians;
+        const front = this.sonarFront(event.x, event.y, 10, aim).setStrokeStyle(3, color, 0.9).setDepth(DEPTH.effects);
         scene.tweens.add({ targets: front, radius: event.radius, duration: travelMs, ease: "Sine.Out", onComplete: () => front.destroy() });
         scene.tweens.add({ targets: front, alpha: 0, duration: travelMs, ease: "Quad.In" });
         // A segunda crista sai um pouco depois e mais fraca: dá espessura à frente de onda.
-        const echo = scene.add.circle(event.x, event.y, 6).setStrokeStyle(2, color, 0.5).setDepth(DEPTH.effects);
+        const echo = this.sonarFront(event.x, event.y, 6, aim).setStrokeStyle(2, color, 0.5).setDepth(DEPTH.effects);
         scene.tweens.add({
           targets: echo,
           radius: event.radius * 0.82,
@@ -437,7 +448,17 @@ export class MatchEffects {
         // discos grandes no mesmo lugar e a tela virava sopa; as cristas vetoriais acima já contam a
         // repetição. A arte entra só na primeira, que é a que anuncia "o Golfinho fez alguma coisa".
         if (guardian && event.wave.index === 0) {
-          effects.ring(this.abilityKeyFor(guardian, "ring"), event.x, event.y + 6, event.radius * 2, { alpha: 0.45, durationMs: travelMs });
+          // A arte acompanha o cone: ela nasce ADIANTE do Golfinho, no meio do caminho até a borda do
+          // alcance, em vez de envolvê-lo. Centrada nele, um disco de arte desmentia o facho — o
+          // jogador via a frente abrir para um lado e o brilho cobrir os quatro.
+          const forward = aim === null ? 0 : event.radius * 0.5;
+          effects.ring(
+            this.abilityKeyFor(guardian, "ring"),
+            event.x + Math.cos(aim ?? 0) * forward,
+            event.y + Math.sin(aim ?? 0) * forward + 6,
+            aim === null ? event.radius * 2 : event.radius * 1.2,
+            { alpha: 0.45, durationMs: travelMs },
+          );
         }
         if (event.wave.index === 0) audio.play("zap");
         return;
@@ -450,7 +471,21 @@ export class MatchEffects {
       }
       case "chorusStart": {
         if (!guardian) return;
-        effects.ring(this.abilityKeyFor(guardian, "ring"), guardian.x, guardian.y + 6, event.radius * 2, { alpha: 0.7, durationMs: 600 });
+        /**
+         * O Coro é BUFF: quem ganha alguma coisa são os aliados ao alcance, e é em cima deles que a
+         * arte da habilidade aparece — uma por aliado tocado. Antes ela era um disco só, centrado no
+         * Golfinho, e dizia a coisa errada: parecia que o canto fortalecia o cantor.
+         *
+         * No próprio Golfinho fica só o par de anéis de canto: o cantor precisa mostrar que abriu a
+         * boca, mas sem vestir o efeito que ele está distribuindo.
+         */
+        const profile = GUARDIAN_ART[guardian.guardianId];
+        const chorusKey = this.abilityKeyFor(guardian, "ring");
+        event.allyIds.forEach((id) => {
+          const ally = this.host.match.guardian(id);
+          if (!ally) return;
+          effects.burst(chorusKey, ally.x, ally.y - 6, { scale: profile.effectScale * 0.7, durationMs: 700 });
+        });
         const notes = scene.add.graphics().setDepth(DEPTH.effects);
         notes.lineStyle(3, 0xffd76a, 0.9);
         notes.strokeCircle(guardian.x, guardian.y, 20);
@@ -470,6 +505,17 @@ export class MatchEffects {
   }
 
   // --------------------------------------------------------------- helpers
+
+  /**
+   * Uma crista do sonar: arco aberto na direção do cardume, ou círculo inteiro quando não há para onde
+   * apontar. O arco vai sem `closePath` de propósito — fechá-lo desenharia as duas hastes do setor e o
+   * pulso viraria lanterna em vez de frente de onda.
+   */
+  private sonarFront(x: number, y: number, radius: number, aimRadians: number | null): Phaser.GameObjects.Arc {
+    if (aimRadians === null) return this.host.scene.add.circle(x, y, radius);
+    const center = Phaser.Math.RadToDeg(aimRadians);
+    return this.host.scene.add.arc(x, y, radius, center - SONAR_CONE_DEGREES, center + SONAR_CONE_DEGREES).setClosePath(false);
+  }
 
   /**
    * Imagem "Habilidade" da variante atual quando ela é exibida no estilo pedido; senão, a do primeiro

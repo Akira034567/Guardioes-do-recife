@@ -63,9 +63,14 @@ export type BehaviorEvent =
   | { type: "trapTrigger"; guardianId: string; x: number; y: number; radius: number; targetIds: string[]; focusedId: string | null }
   | { type: "mark"; guardianId: string; enemyId: string }
   | { type: "pushWave"; guardianId: string; x: number; y: number; radius: number; distance: number; pushedIds: string[]; visualMs: number }
-  | { type: "sonarWave"; guardianId: string; x: number; y: number; radius: number; wave: SonarWave; priorityId: string | null }
+  /**
+   * `aimRadians` é o rumo do cardume: para onde o pulso deve abrir. `null` quando não dá para apontar
+   * (nenhum inimigo com posição útil) — aí a apresentação volta ao pulso redondo.
+   */
+  | { type: "sonarWave"; guardianId: string; x: number; y: number; radius: number; wave: SonarWave; priorityId: string | null; aimRadians: number | null }
   | { type: "coordinate"; guardianId: string; targetId: string; guardianIds: string[] }
-  | { type: "chorusStart"; guardianId: string; radius: number; durationMs: number }
+  /** `allyIds` são os aliados que o canto pegou: o buff é deles, e é sobre eles que ele se desenha. */
+  | { type: "chorusStart"; guardianId: string; radius: number; durationMs: number; allyIds: string[] }
   | { type: "stunned"; enemyId: string }
   | { type: "poisoned"; enemyId: string }
   | { type: "income"; guardianId: string; x: number; y: number; amount: number };
@@ -276,6 +281,31 @@ export function updateTrap<E extends BehaviorEnemy>(guardian: BehaviorGuardian, 
 
 // -------------------------------------------------------------- Golfinho
 
+/**
+ * Rumo em que o sonar deve abrir: a ameaça marcada quando existe, senão o centro do cardume ao alcance.
+ *
+ * Existe porque o pulso é uma ECOLOCALIZAÇÃO, não uma bolha: o Golfinho procura onde os peixes estão.
+ * `null` quando não há para onde apontar (nenhum inimigo, ou todos exatamente em cima dele).
+ */
+function aimRadiansToward<E extends BehaviorEnemy>(origin: Vec2, focus: E | undefined, pool: readonly E[]): number | null {
+  const target = focus ?? centroidOf(pool);
+  if (!target) return null;
+  const dx = target.x - origin.x;
+  const dy = target.y - origin.y;
+  return dx === 0 && dy === 0 ? null : Math.atan2(dy, dx);
+}
+
+function centroidOf(pool: readonly Vec2[]): Vec2 | null {
+  if (pool.length === 0) return null;
+  let x = 0;
+  let y = 0;
+  for (const item of pool) {
+    x += item.x;
+    y += item.y;
+  }
+  return { x: x / pool.length, y: y / pool.length };
+}
+
 /** Pulso de sonar: revela, aplica vulnerabilidade, marca prioridade e (Eco Perfeito) coordena aliados. */
 export function updateSonar<E extends BehaviorEnemy>(
   guardian: BehaviorGuardian,
@@ -309,7 +339,16 @@ export function updateSonar<E extends BehaviorEnemy>(
         });
       hooks.emit?.({ type: "coordinate", guardianId: guardian.id, targetId: priority.id, guardianIds: coordinated });
     }
-    hooks.emit?.({ type: "sonarWave", guardianId: guardian.id, x: guardian.x, y: guardian.y, radius, wave, priorityId: priority?.id ?? null });
+    hooks.emit?.({
+      type: "sonarWave",
+      guardianId: guardian.id,
+      x: guardian.x,
+      y: guardian.y,
+      radius,
+      wave,
+      priorityId: priority?.id ?? null,
+      aimRadians: aimRadiansToward(guardian, priority, pool),
+    });
   }
 }
 
@@ -320,7 +359,13 @@ export function updateChorus(guardian: BehaviorGuardian, guardians: readonly Beh
   const radius = chorus.radius(guardian.range);
   const allies = guardians.filter((ally) => ally.id !== guardian.id && Math.hypot(ally.x - guardian.x, ally.y - guardian.y) <= radius);
   if (chorus.update(now, allies.length, guardian.stats.abilityCooldownMultiplier)) {
-    emit?.({ type: "chorusStart", guardianId: guardian.id, radius, durationMs: guardian.stats.chorus.durationMs });
+    emit?.({
+      type: "chorusStart",
+      guardianId: guardian.id,
+      radius,
+      durationMs: guardian.stats.chorus.durationMs,
+      allyIds: allies.map((ally) => ally.id),
+    });
   }
   const species = distinctSpeciesInRange(guardian, radius, guardians);
   return chorus.asAuraSource(guardian, guardian.range, species, now);

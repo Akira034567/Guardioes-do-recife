@@ -77,3 +77,35 @@ export function guardianVisualState(input: VisualInput): GuardianVisualState {
 export function textureFor(state: GuardianVisualState): "idle" | "attack" {
   return state === "attack" || state === "ability" ? "attack" : "idle";
 }
+
+/**
+ * Fração 0..1 percorrida da animação de golpe, para as variantes que têm quadros em disco.
+ * `null` fora da janela — ali continua valendo a pose estática de `textureFor`.
+ *
+ * A janela é a do GESTO INTEIRO, não só do `attack`: a antecipação e a recuperação são o começo e o
+ * fim do mesmo movimento, e cortá-las fora deixaria a sequência entrando pela metade. O canto tem a
+ * sua própria janela, que é a duração da pose de habilidade.
+ */
+export function strikeAnimationPhase(
+  state: GuardianVisualState,
+  now: number,
+  strikeAt: number | null,
+  timings: VisualTimings,
+  ability: { fromMs: number; untilMs: number },
+): number | null {
+  if (state === "ability") return fraction(now - ability.fromMs, ability.untilMs - ability.fromMs);
+  if (strikeAt === null) return null;
+  if (state !== "windup" && state !== "attack" && state !== "recovery" && state !== "returning") return null;
+  const span = timings.windupMs + timings.attackMs + timings.recoveryMs;
+  return fraction(now - strikeAt + timings.windupMs, span);
+}
+
+/** Quadro que a fração pede, dentro de uma sequência de `total` quadros. */
+export function strikeFrameAt(phase: number, total: number): number {
+  return Math.max(0, Math.min(total - 1, Math.floor(phase * total)));
+}
+
+function fraction(elapsed: number, span: number): number {
+  if (span <= 0) return 0;
+  return Math.max(0, Math.min(1, elapsed / span));
+}

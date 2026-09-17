@@ -10,6 +10,8 @@ import {
   GUARDIAN_ART_ASSETS,
   GUARDIAN_BASE_ART_ASSETS,
   guardianUpgradeArtAssets,
+  strikeFrameKeys,
+  strikeFramePath,
 } from "../src/game/assets/guardianArt";
 import { RECIFE_ONE_BACKGROUND_KEY, RECIFE_ONE_IMAGE_ASSETS } from "../src/game/assets/recifeOneAssets";
 import type { GuardianId } from "../src/game/types";
@@ -38,9 +40,13 @@ describe("guardian art registry", () => {
     });
   });
 
-  it("registers one unique image per guardian × variant × kind", () => {
-    const expected = GUARDIAN_ORDER.reduce((total, id) => total + 5 * artKindsFor(id).length, 0);
-    expect(GUARDIAN_ART_ASSETS).toHaveLength(expected);
+  it("registers one unique image per guardian × variant × kind, plus the strike frames", () => {
+    const poses = GUARDIAN_ORDER.reduce((total, id) => total + 5 * artKindsFor(id).length, 0);
+    const frames = GUARDIAN_ORDER.reduce(
+      (total, id) => total + allArtVariants(id).reduce((sum, variant) => sum + (variant.strikeFrames ?? 0), 0),
+      0,
+    );
+    expect(GUARDIAN_ART_ASSETS).toHaveLength(poses + frames);
     expect(new Set(GUARDIAN_ART_ASSETS.map((asset) => asset.key)).size).toBe(GUARDIAN_ART_ASSETS.length);
     expect(new Set(GUARDIAN_ART_ASSETS.map((asset) => asset.path)).size).toBe(GUARDIAN_ART_ASSETS.length);
   });
@@ -83,6 +89,18 @@ describe("guardian art registry", () => {
     expect(artTextureFor("ink-octopus", { branchId: "a", upgradeLevel: 2 }, "portrait")).toBe("ink-octopus-debuff-2-portrait");
     expect(artTextureFor("shark", { branchId: "b", upgradeLevel: 2 }, "idle")).toBe("shark-alfa_2-idle");
     expect(artTextureFor("stonefish", { branchId: "a", upgradeLevel: 1 }, "attack")).toBe("stonefish-veneno_1-attack");
+  });
+
+  it("numbers the strike frames from one and keeps them next to the static pose", () => {
+    const coroTwo = GUARDIAN_ART.dolphin.branches.a[1];
+    expect(coroTwo.strikeFrames).toBe(10);
+    const keys = strikeFrameKeys("dolphin", coroTwo);
+    expect(keys[0]).toBe("dolphin-coro_2-attack-1");
+    expect(keys.at(-1)).toBe("dolphin-coro_2-attack-10");
+    expect(strikeFramePath("dolphin", coroTwo, 1)).toBe("assets/guardians/golfinho/coro_2/attack-1.png");
+    keys.forEach((key, index) => expect(onDisk(strikeFramePath("dolphin", coroTwo, index + 1)), key).toBe(true));
+    // A pose estática continua em disco: é ela que aparece enquanto os quadros não carregaram.
+    expect(onDisk(artPath("dolphin", coroTwo, "attack"))).toBe(true);
   });
 
   it("keeps idle and attack as distinct images for every variant", () => {

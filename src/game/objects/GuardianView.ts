@@ -1,11 +1,19 @@
 import Phaser from "phaser";
-import { artTextureFor, artVariant, GUARDIAN_ART, hasGuardianArt, STONEFISH_HIDDEN_KEY, type ArtKind } from "../assets/guardianArt";
+import { artTextureFor, artVariant, GUARDIAN_ART, hasGuardianArt, loadedStrikeFrames, STONEFISH_HIDDEN_KEY, type ArtKind } from "../assets/guardianArt";
 import { DEPTH } from "../constants";
 import { NEUTRAL_AURA, sameAura } from "../core/Auras";
 import type { MatchGuardian } from "../core/match/MatchGuardian";
 import type { TrapPhase } from "../core/TrapCore";
 import type { GuardianState, ResolvedAura, Vec2 } from "../types";
-import { guardianVisualState, textureFor, visualTimings, type GuardianVisualState, type VisualTimings } from "../core/GuardianVisualState";
+import {
+  guardianVisualState,
+  strikeAnimationPhase,
+  strikeFrameAt,
+  textureFor,
+  visualTimings,
+  type GuardianVisualState,
+  type VisualTimings,
+} from "../core/GuardianVisualState";
 import { GUARDIAN_VISUAL } from "../data/balance";
 import { facesLeftToward, spriteTilt } from "../core/SpriteOrientation";
 
@@ -24,8 +32,16 @@ export class GuardianView extends Phaser.GameObjects.Container {
   private visualState: GuardianVisualState = "idle";
   /** Instante do golpe: a âncora de toda a janela de animação. `null` = nenhum golpe em curso. */
   private strikeAt: number | null = null;
+  private abilityFromMs = 0;
   private abilityUntilMs = 0;
   private visualTimings: VisualTimings;
+  /**
+   * Quadros da animação de golpe desta variante, ou `null` quando ela só tem as duas poses. Resolvido
+   * na troca de forma, não a cada quadro: é uma varredura de texturas.
+   */
+  private strikeFrames: string[] | null = null;
+  /** Instante do último `sync`, para `syncArtTexture` saber em que ponto da sequência a animação está. */
+  private nowMs = 0;
   /** Lado do sprite, com a mesma zona morta usada nos inimigos. Vale para TODO Guardião, não só a investida. */
   private facingLeft = false;
   private dashTarget: Vec2 | null = null;
@@ -57,6 +73,7 @@ export class GuardianView extends Phaser.GameObjects.Container {
     this.trapPhase = guardian.trapPhase;
     this.visualTimings = visualTimings(guardian.definition, guardian.stats.cooldownMs);
     this.progressKey = this.currentProgressKey();
+    this.strikeFrames = this.resolveStrikeFrames();
     this.drawBody();
     this.drawBadge();
     this.setDepth(DEPTH.guardians);
@@ -108,7 +125,21 @@ export class GuardianView extends Phaser.GameObjects.Container {
    */
   private textureNow(): string {
     if (this.hiddenAsRock && this.scene.textures.exists(STONEFISH_HIDDEN_KEY)) return STONEFISH_HIDDEN_KEY;
+    const frames = this.strikeFrames;
+    if (frames) {
+      const phase = strikeAnimationPhase(this.visualState, this.nowMs, this.strikeAt, this.visualTimings, {
+        fromMs: this.abilityFromMs,
+        untilMs: this.abilityUntilMs,
+      });
+      if (phase !== null) return frames[strikeFrameAt(phase, frames.length)];
+    }
     return this.artTexture(this.artVisualState);
+  }
+
+  /** Quadros em disco da forma atual, quando estão todos carregados. */
+  private resolveStrikeFrames(): string[] | null {
+    if (!this.artSprite) return null;
+    return loadedStrikeFrames(this.scene, this.guardian.guardianId, artVariant(this.guardian.guardianId, this.guardian.progress));
   }
 
   /** Está em repouso de emboscada? (camuflado, acomodando ou recarregando) */
@@ -122,6 +153,7 @@ export class GuardianView extends Phaser.GameObjects.Container {
    * ou a presa que fez o emboscador abrir os espinhos.
    */
   sync(now: number, enemyPosition: (id: string) => Vec2 | null, facingPosition?: (guardianId: string) => Vec2 | null): void {
+    this.nowMs = now;
     const guardian = this.guardian;
     const state = guardian.state;
     if (state !== this.engineState) {
@@ -163,6 +195,7 @@ export class GuardianView extends Phaser.GameObjects.Container {
     if (progressKey !== this.progressKey) {
       this.progressKey = progressKey;
       this.visualTimings = visualTimings(guardian.definition, guardian.stats.cooldownMs);
+      this.strikeFrames = this.resolveStrikeFrames();
       this.drawBody();
       this.drawBadge();
       this.syncArtTexture();
@@ -187,11 +220,16 @@ export class GuardianView extends Phaser.GameObjects.Container {
       this.auraShown = { ...guardian.aura };
       this.drawBadge();
     }
+    // A pose estática só muda de estado em estado; a animação avança DENTRO do estado, então o quadro
+    // é escolhido a cada `sync`. Quem não tem quadros cai no mesmo `setTexture` de sempre, que é uma
+    // comparação de string.
+    if (this.strikeFrames) this.syncArtTexture();
     this.animatePassiveVisual(now);
   }
 
   /** Pose de habilidade (pulso, sonar, coro, tinta). Chamada pelos efeitos, quando o evento sai. */
   playAbility(now: number, durationMs = GUARDIAN_VISUAL.abilityMs): void {
+    this.abilityFromMs = now;
     this.abilityUntilMs = now + durationMs;
   }
 

@@ -44,7 +44,9 @@ describe("chorus", () => {
     const crab = new FakeGuardian("C", "reef-crab", 40, 0);
     const events: BehaviorEvent[] = [];
     const source = updateChorus(dolphin, [dolphin, crab], 0, (event) => events.push(event));
-    expect(events[0]).toMatchObject({ type: "chorusStart", guardianId: "D" });
+    // O evento leva QUEM foi buffado: é sobre eles que a apresentação desenha o efeito, e o cantor
+    // nunca está na lista.
+    expect(events[0]).toMatchObject({ type: "chorusStart", guardianId: "D", allyIds: ["C"] });
     expect(source?.thematic?.["reef-crab"]).toEqual({ damageMultiplier: 1.15 });
     expect(updateChorus(dolphin, [dolphin, crab], 6500)).toBeNull();
   });
@@ -68,6 +70,32 @@ describe("sonar", () => {
     expect(second[0]).toMatchObject({ index: 1, vulnerability: true, priority: true });
     const third = echo.update(sonar2.echo!.intervalMs * 2, 2);
     expect(third[0]).toMatchObject({ index: 2, coordinate: true });
+  });
+
+  it("aims the pulse at the marked threat, at the centre of the shoal when there is none, and nowhere when the range is empty", () => {
+    const dolphin = new FakeGuardian("D", "dolphin", 0, 0, "b", 2);
+    const north = new FakeEnemy("N", "swimmer", 60);
+    north.y = -60;
+    const south = new FakeEnemy("S", "swimmer", 60);
+    south.y = 60;
+    const events: BehaviorEvent[] = [];
+    const hooks = { now: 0, damage: () => undefined, emit: (event: BehaviorEvent) => events.push(event) };
+    // Onda 0 só localiza: sem ameaça marcada, o rumo é o centro do cardume — aqui, o leste exato.
+    updateSonar(dolphin, [north, south], [dolphin], hooks);
+    const located = events.find((event) => event.type === "sonarWave");
+    expect(located).toMatchObject({ type: "sonarWave", aimRadians: 0 });
+
+    // Onda 1 marca a prioridade, e o cone passa a apontar para ela.
+    const interval = sonar2.echo!.intervalMs;
+    updateSonar(dolphin, [north, south], [dolphin], { ...hooks, now: interval });
+    const analysed = events.filter((event) => event.type === "sonarWave").at(-1);
+    expect(analysed).toMatchObject({ priorityId: "N" });
+    expect((analysed as { aimRadians: number }).aimRadians).toBeCloseTo(Math.atan2(-60, 60));
+
+    // Sem inimigo ao alcance não sai onda nenhuma; e um pulso sem para onde apontar volta ao círculo.
+    const alone = new FakeGuardian("A", "dolphin", 0, 0, "b", 2);
+    updateSonar(alone, [], [alone], { ...hooks, now: 0 });
+    expect(events.filter((event) => event.type === "sonarWave" && event.guardianId === "A")).toEqual([]);
   });
 
   it("reveals, applies vulnerability, flags the priority threat and coordinates allies within their own range", () => {

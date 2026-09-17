@@ -1483,6 +1483,9 @@ export class GameScene extends Phaser.Scene {
     dataset.selectedBranch = selected?.branchId ?? "";
     dataset.selectedOptions = selected ? String(selected.options.length) : "";
     dataset.selectedVariant = selectedView?.artVariantFolder ?? "";
+    // Textura que a unidade selecionada está mostrando AGORA. `selectedVariant` diz a forma; esta diz
+    // o quadro, que é o que muda dentro de um golpe nas variantes com animação em disco.
+    dataset.selectedTexture = selectedView?.currentTextureKey ?? "";
     dataset.sellValue = selected ? String(selected.sellValueAt(ECONOMY.sellRefundRate)) : "";
     dataset.loadout = this.loadout.join(",");
     dataset.debug = String(this.debugFlags.enabled);

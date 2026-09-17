@@ -43,6 +43,18 @@ export interface ArtVariant {
    * importava sumia no meio. Agora a imagem só aparece quando a onda acontece de verdade.
    */
   artOnlyOnAbility?: boolean;
+  /**
+   * Quantos quadros de animação o golpe desta variante tem em disco (`attack-1.png` … `attack-N.png`,
+   * ao lado do `attack.png` estático). Ausente = a variante usa só as duas poses de sempre.
+   *
+   * O Coro II do Golfinho é o primeiro: a prancha dele veio como uma sequência — o dueto enche o peito,
+   * o canto sai e o eco se apaga — e uma pose congelada jogava fora justamente o que ela conta. Os
+   * quadros rodam na janela inteira do golpe (antecipação, golpe, recuperação) e também no canto.
+   *
+   * O `attack.png` estático continua sendo a rede de segurança: se os quadros ainda não carregaram,
+   * a variante desenha a pose de sempre em vez de piscar.
+   */
+  strikeFrames?: number;
 }
 
 export interface GuardianArtProfile {
@@ -215,7 +227,7 @@ export const GUARDIAN_ART: Record<GuardianId, GuardianArtProfile> = {
     branches: {
       a: [
         { folder: "coro_1", ability: "ring" },
-        { folder: "coro_2", ability: "ring" },
+        { folder: "coro_2", ability: "ring", strikeFrames: 10 },
       ],
       b: [
         { folder: "sonar_1", ability: "ring" },
@@ -284,6 +296,28 @@ export function artPath(guardianId: GuardianId, variant: ArtVariant, kind: ArtKi
   return `assets/guardians/${artFolder(guardianId)}/${variant.folder}/${artFileName(guardianId, kind)}.png`;
 }
 
+/** Chave da textura do quadro `index` (base 1) da animação de golpe de uma variante. */
+export function strikeFrameKey(guardianId: GuardianId, variant: ArtVariant, index: number): string {
+  return `${guardianId}-${variant.folder}-attack-${index}`;
+}
+
+export function strikeFramePath(guardianId: GuardianId, variant: ArtVariant, index: number): string {
+  return `assets/guardians/${artFolder(guardianId)}/${variant.folder}/attack-${index}.png`;
+}
+
+/** Os quadros da variante, na ordem de exibição. Vazio quando ela não tem animação em disco. */
+export function strikeFrameKeys(guardianId: GuardianId, variant: ArtVariant): string[] {
+  const total = variant.strikeFrames ?? 0;
+  return Array.from({ length: total }, (_, index) => strikeFrameKey(guardianId, variant, index + 1));
+}
+
+/** Quadros da variante já carregados na cena; `null` quando falta algum (a pose estática assume). */
+export function loadedStrikeFrames(scene: Phaser.Scene, guardianId: GuardianId, variant: ArtVariant): string[] | null {
+  const keys = strikeFrameKeys(guardianId, variant);
+  if (keys.length === 0) return null;
+  return keys.every((key) => scene.textures.exists(key)) ? keys : null;
+}
+
 /**
  * A pedra em que o Peixe-Pedra se transforma enquanto está camuflado ou se recuperando do bote.
  *
@@ -303,9 +337,12 @@ export function allArtVariants(guardianId: GuardianId): ArtVariant[] {
 export const GUARDIAN_ART_ASSETS: ReadonlyArray<{ key: string; path: string; guardianId: GuardianId }> = (
   Object.keys(GUARDIAN_ART) as GuardianId[]
 ).flatMap((guardianId) =>
-  allArtVariants(guardianId).flatMap((variant) =>
-    artKindsFor(guardianId).map((kind) => ({ key: artTextureKey(guardianId, variant, kind), path: artPath(guardianId, variant, kind), guardianId })),
-  ),
+  allArtVariants(guardianId).flatMap((variant) => [
+    ...artKindsFor(guardianId).map((kind) => ({ key: artTextureKey(guardianId, variant, kind), path: artPath(guardianId, variant, kind), guardianId })),
+    // Os quadros do golpe entram na mesma lista das poses: assim a dieta por esquadrão e as provas de
+    // conteúdo os enxergam sem regra nova.
+    ...strikeFrameKeys(guardianId, variant).map((key, index) => ({ key, path: strikeFramePath(guardianId, variant, index + 1), guardianId })),
+  ]),
 );
 
 export function preloadGuardianArt(scene: Phaser.Scene): void {

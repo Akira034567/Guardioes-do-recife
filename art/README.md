@@ -10,6 +10,11 @@ Arquivos de referência e pranchas que não são carregados pelo jogo ficam aqui
   quatro novos (`tubarao`, `tartaruga`, `peixe_pedra`, `golfinho`) têm moldura amarela neon e são cortadas
   por `scripts/slice-neon-sheet.py`.
 
+- `guardians/golfinho/coro_2-canto-sheet.png`: prancha 5x2 da animação de canto do Coro II, cortada por
+  `scripts/slice-dolphin-chorus-sheet.py` nos quadros `coro_2/attack-1..10.png`.
+- `guardians/tartaruga/corrente_2-onda.png`: a onda da Correnteza II, entregue em fundo branco;
+  `scripts/prepare-turtle-wave.py` recorta o fundo e grava `corrente_2/ability.png`.
+
 ## Inimigos
 
 - `enemies/enemies-sheet.png`: prancha "Inimigos do Oceano", cortada por `scripts/slice-enemy-sheet.py`.
