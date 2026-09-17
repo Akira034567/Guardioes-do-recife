@@ -98,6 +98,22 @@ export function settingsScreen(onBack: () => void, nav?: ShellNav, embedded = fa
   };
 }
 
+/**
+ * As seções de configuração, soltas, para quem quiser montá-las noutro lugar.
+ *
+ * Existe por causa da gaveta de pausa: ela mostra TODAS as opções sem abrir outra tela por cima do
+ * mapa, e duplicar estas seções lá seria garantir que as duas versões divergissem na primeira vez
+ * que alguém acrescentasse um ajuste.
+ */
+export function settingsSections(
+  settings: PlayerSettings,
+  apply: (patch: Partial<PlayerSettings>) => void,
+  host: ScreenHost | null,
+  redraw: () => void,
+): HTMLElement[] {
+  return [audioSection(settings, apply), videoSection(settings, apply, host), playSection(settings, apply), accessSection(settings, apply), dataSection(apply, redraw)];
+}
+
 function header(): HTMLElement {
   return h(
     "header",

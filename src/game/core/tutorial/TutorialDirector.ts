@@ -63,8 +63,8 @@ export const TUTORIAL_STEPS: TutorialStep[] = [
   },
   {
     id: "use-speed",
-    text: "O botão 2× acelera a partida. Ⅱ pausa e abre o menu.",
-    highlight: "speed:2",
+    text: "O botão de velocidade alterna entre 1× e 2×. Ⅱ pausa e mostra o mapa com o menu ao lado.",
+    highlight: "speed",
     when: (context) => context.upgradesBought > 0,
     done: (context) => context.speed > 1,
   },

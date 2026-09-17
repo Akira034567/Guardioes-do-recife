@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { CARD_X, CARD_Y, OPTION_A, PAUSE, RESTART, openGame } from "./helpers";
+import { CARD_X, CARD_Y, OPTION_A, PAUSE, restartViaPause, openGame } from "./helpers";
 
 /**
  * Regressões do item 8: o jogo continuava desenhado e parava de responder.
@@ -18,7 +18,7 @@ test("reinicia no meio da fase e continua respondendo aos cliques", async ({ pag
   await clickGame(375, 245);
   await expect(canvas).toHaveAttribute("data-guardians", "1");
 
-  await clickGame(RESTART.x, RESTART.y);
+  await restartViaPause(page, clickGame);
   await expect(canvas).toHaveAttribute("data-guardians", "0");
 
   // O passo que faltava: SELECIONAR alguma coisa depois do reinício. Escolher uma carta redesenha o
@@ -64,7 +64,7 @@ test("expõe as fases do ciclo de vida da partida", async ({ page }) => {
   await clickGame(CARD_X.shrimp, CARD_Y);
   await clickGame(375, 245);
   await expect(canvas).toHaveAttribute("data-guardians", "1");
-  await clickGame(RESTART.x, RESTART.y);
+  await restartViaPause(page, clickGame);
   await expect(canvas).toHaveAttribute("data-guardians", "0");
   await expect(canvas).toHaveAttribute("data-lifecycle", "running");
 

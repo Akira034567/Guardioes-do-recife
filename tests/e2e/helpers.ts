@@ -18,11 +18,28 @@ export const OPTION_B = { x: HUD_LAYOUT.optionButtonXs[1], y: HUD_LAYOUT.optionB
 export const SELL = { x: HUD_LAYOUT.sellButtonX, y: HUD_LAYOUT.optionButtonY } as const;
 /** Botão "PRÓXIMA ONDA" (antigo PULAR). */
 export const NEXT_WAVE = { x: HUD_LAYOUT.skipButtonX, y: HUD_LAYOUT.skipButtonY } as const;
-export const RESTART = { x: HUD_LAYOUT.restartButtonX, y: HUD_LAYOUT.restartButtonY } as const;
-export const MENU = { x: HUD_LAYOUT.menuButtonX, y: HUD_LAYOUT.menuButtonY } as const;
 export const PAUSE = { x: HUD_LAYOUT.pauseButtonX, y: HUD_LAYOUT.topButtonY } as const;
-export const SPEED_1X = { x: HUD_LAYOUT.speedButtonXs[0], y: HUD_LAYOUT.topButtonY } as const;
-export const SPEED_2X = { x: HUD_LAYOUT.speedButtonXs[1], y: HUD_LAYOUT.topButtonY } as const;
+/** Botão único de velocidade: clicar alterna entre 1× e 2×. */
+export const SPEED = { x: HUD_LAYOUT.speedButtonX, y: HUD_LAYOUT.topButtonY } as const;
+
+/**
+ * Reiniciar e Fases saíram do HUD e moram na gaveta de pausa, com confirmação em dois toques.
+ * Estes atalhos fazem o caminho inteiro: pausar, armar e confirmar.
+ */
+async function throughPause(page: Page, clickGame: (x: number, y: number) => Promise<void>, testId: string): Promise<void> {
+  await clickGame(PAUSE.x, PAUSE.y);
+  await expect(page.getByTestId("pause-panel")).toBeVisible();
+  const button = page.getByTestId(testId);
+  await button.click();
+  await expect(button).toHaveAttribute("data-armed", "true");
+  await button.click();
+}
+
+export const restartViaPause = (page: Page, clickGame: (x: number, y: number) => Promise<void>): Promise<void> =>
+  throughPause(page, clickGame, "pause-restart");
+
+export const levelsViaPause = (page: Page, clickGame: (x: number, y: number) => Promise<void>): Promise<void> =>
+  throughPause(page, clickGame, "pause-levels");
 export const RESULT_NEXT = { x: 640, y: 408 } as const;
 // O mapa do Recife é HTML: fases, Encontros e navegação são alcançados por `data-testid`
 // (`map-node-recife-1`, `map-collection`, …), não por coordenada no canvas.

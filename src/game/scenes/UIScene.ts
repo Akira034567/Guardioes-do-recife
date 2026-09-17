@@ -205,7 +205,9 @@ export class UIScene extends Phaser.Scene {
   private skipButton!: HudControl;
   private skipBonus!: Phaser.GameObjects.Text;
   /** Botões de velocidade (1× e 2×) e o estado que eles representam. */
-  private speedButtons: Array<{ speed: 1 | 2; control: HudControl }> = [];
+  private speedButton!: HudControl;
+  /** Velocidade que o botão está mostrando; o clique alterna a partir dela. */
+  private shownSpeed: 1 | 2 = 1;
   /** Prévia da próxima onda, encostada à direita abaixo da barra de cima. */
   private previewPanel!: Phaser.GameObjects.Image;
   private previewTitle!: Phaser.GameObjects.Text;
@@ -399,20 +401,17 @@ export class UIScene extends Phaser.Scene {
 
   private createTopButtons(): void {
     const { topButtonY, speedButtonWidth, topButtonHeight, topButtonSize } = HUD_LAYOUT;
-    this.speedButtons = ([1, 2] as const).map((speed, index) => ({
-      speed,
-      control: this.glassControl({
-        x: HUD_LAYOUT.speedButtonXs[index],
-        y: topButtonY,
-        width: speedButtonWidth,
-        height: topButtonHeight,
-        text: `${speed}×`,
-        fontSize: 15,
-        strong: true,
-        name: `speed:${speed}`,
-        onClick: () => EventBus.emit(Events.setSpeed, speed),
-      }),
-    }));
+    this.speedButton = this.glassControl({
+      x: HUD_LAYOUT.speedButtonX,
+      y: topButtonY,
+      width: speedButtonWidth,
+      height: topButtonHeight,
+      text: "1×",
+      fontSize: 15,
+      strong: true,
+      name: "speed",
+      onClick: () => EventBus.emit(Events.setSpeed, this.shownSpeed === 1 ? 2 : 1),
+    });
 
     this.pauseButton = this.glassControl({
       x: HUD_LAYOUT.pauseButtonX,
@@ -757,8 +756,15 @@ export class UIScene extends Phaser.Scene {
     this.sellButton.add(sellCoin, this.sellValue).setVisible(false);
   }
 
+  /**
+   * Bloco de comandos da direita.
+   *
+   * REINICIAR e FASES saíram daqui na V3.4: os dois jogam a partida fora e estavam a um toque de
+   * distância de PRÓXIMA ONDA, que é o botão mais apertado do jogo. Agora moram na gaveta de pausa,
+   * com confirmação, e PRÓXIMA ONDA fica com o bloco inteiro.
+   */
   private createCommands(): void {
-    const { skipButtonX, skipButtonY, skipButtonWidth, commandButtonHeight, restartButtonX, restartButtonY } = HUD_LAYOUT;
+    const { skipButtonX, skipButtonY, skipButtonWidth, commandButtonHeight } = HUD_LAYOUT;
     this.levelLabel = this.add
       .text(HUD_LAYOUT.commandLabelX, HUD_LAYOUT.commandLabelY, "RECIFE 1", {
         fontFamily: HUD_FONT.strong,
@@ -789,38 +795,6 @@ export class UIScene extends Phaser.Scene {
       .setOrigin(0.5);
     this.skipButton.add(this.skipBonus);
 
-    this.glassControl({
-      x: restartButtonX,
-      y: restartButtonY,
-      width: skipButtonWidth,
-      height: commandButtonHeight,
-      text: "REINICIAR",
-      fontSize: 10,
-      strong: true,
-      icon: "refresh",
-      iconSize: 14,
-      labelOffsetX: 12,
-      maxLabelWidth: skipButtonWidth - 32,
-      name: "restart",
-      onClick: () => EventBus.emit(Events.restart),
-    });
-
-    this.glassControl({
-      x: HUD_LAYOUT.menuButtonX,
-      y: HUD_LAYOUT.menuButtonY,
-      width: HUD_LAYOUT.menuButtonWidth,
-      height: HUD_LAYOUT.menuButtonHeight,
-      text: "FASES",
-      fontSize: 14,
-      strong: true,
-      icon: "map",
-      iconSize: 20,
-      tone: "primary",
-      labelOffsetX: 12,
-      maxLabelWidth: HUD_LAYOUT.menuButtonWidth - 46,
-      name: "levels",
-      onClick: () => EventBus.emit(Events.openLevelSelect),
-    });
   }
 
   // ── Tutorial ─────────────────────────────────────────────────────────────────
@@ -975,16 +949,21 @@ export class UIScene extends Phaser.Scene {
     this.levelChip.setTexture(hudPanel(this, width, HUD_LAYOUT.levelChipHeight, SKIN.pod));
   }
 
-  /** Os botões 1×/2× acendem conforme a velocidade; pausado, nenhum fica aceso. */
+  /**
+   * O botão mostra a velocidade ATUAL e acende quando ela não é a normal.
+   *
+   * Mostrar a atual (e não "o que vai acontecer se eu clicar") é o que deixa o HUD legível de
+   * relance: a barra de cima responde "como está a partida agora", não "o que o botão faz".
+   */
   private renderSpeed(snapshot: HudSnapshot): void {
     const over = snapshot.gameOver !== null;
     const { speedButtonWidth, topButtonHeight } = HUD_LAYOUT;
-    this.speedButtons.forEach(({ speed, control }) => {
-      const active = !snapshot.paused && snapshot.speed === speed;
-      control.setVisible(!over);
-      control.skin(hudPanel(this, speedButtonWidth, topButtonHeight, active ? SKIN.buttonOn : SKIN.button));
-      control.label.setColor(active ? HUD_COLORS.cyanBright : HUD_COLORS.textSoft);
-    });
+    this.shownSpeed = snapshot.speed >= 2 ? 2 : 1;
+    const fast = !snapshot.paused && this.shownSpeed === 2;
+    this.speedButton.setVisible(!over);
+    this.speedButton.label.setText(`${this.shownSpeed}×`);
+    this.speedButton.skin(hudPanel(this, speedButtonWidth, topButtonHeight, fast ? SKIN.buttonOn : SKIN.button));
+    this.speedButton.label.setColor(fast ? HUD_COLORS.cyanBright : HUD_COLORS.textSoft);
   }
 
   private renderWavePreview(snapshot: HudSnapshot): void {

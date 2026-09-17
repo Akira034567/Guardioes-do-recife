@@ -69,6 +69,15 @@ import type {
 const preventContextMenu = (event: Event): void => event.preventDefault();
 
 /** Verde da faixa de margem e o único alfa que ela usa. Ver `GameScene.marginBand()`. 🔶 placeholders. */
+/**
+ * Largura da faixa que a gaveta de pausa ocupa, em pixels de jogo.
+ *
+ * Bate com o CSS (`min(42%, 348px)` mais a folga de 10 px). A cena precisa do número para escolher
+ * de que lado encostar a gaveta sem tapar a rota — não dá para perguntar isso ao DOM antes de ele
+ * existir.
+ */
+const PAUSE_DRAWER_BAND = 352;
+
 const MARGIN_BAND_COLOR = 0x67f2ac;
 const MARGIN_BAND_ALPHA = 0.3;
 
@@ -381,7 +390,7 @@ export class GameScene extends Phaser.Scene {
     }
     const ticks = this.clock.advance(delta, () => this.match.tick());
     this.drainEvents();
-    if (ticks > 0) this.syncViews(ticks * this.match.dtMs);
+    if (ticks > 0) this.syncViews(ticks * this.match.dtMs, Math.min(delta, 100));
     if (ticks > 0) this.syncInteractables();
     this.effects.update(this.match.now);
     if (!this.clock.paused) this.updateCurrentMotes(Math.min(delta, 100) * this.clock.speed);
@@ -519,7 +528,13 @@ export class GameScene extends Phaser.Scene {
     this.effects.handle(event);
   }
 
-  private syncViews(deltaMs: number): void {
+  /**
+   * `deltaMs` é tempo de SIMULAÇÃO (já multiplicado pela velocidade da partida); `realDeltaMs` é
+   * tempo de relógio. Quase tudo aqui quer o primeiro — o inimigo a 2× anda mesmo duas vezes mais
+   * rápido. O que não quer é a interface: o Peixinho Dourado esperando no canto não faz parte da
+   * partida, e acelerar o nado dele junto com a onda é dizer que a UI também está em 2×.
+   */
+  private syncViews(deltaMs: number, realDeltaMs = deltaMs): void {
     const now = this.match.now;
     const enemyPosition = (id: string): Vec2 | null => {
       const enemy = this.match.enemy(id);
@@ -557,7 +572,7 @@ export class GameScene extends Phaser.Scene {
     for (const view of this.enemyViews.values()) view.sync(now, deltaMs);
     for (const view of this.weakPointViews.values()) view.sync(deltaMs);
     for (const view of this.guardianViews.values()) view.sync(now, enemyPosition, facingPosition);
-    this.goldenBadge?.sync(deltaMs);
+    this.goldenBadge?.sync(realDeltaMs);
     if (this.crownView) {
       const crowned = this.match.crownedGuardianId ? this.match.guardian(this.match.crownedGuardianId) : null;
       if (crowned) this.crownView.sync(crowned.x, crowned.y, deltaMs);
@@ -1100,6 +1115,7 @@ export class GameScene extends Phaser.Scene {
           waveLabel: `${snapshot.wave}/${snapshot.totalWaves}`,
           reefLabel: `${snapshot.reef}/${snapshot.maxReef}`,
           pearls: snapshot.pearls,
+          side: this.freeSideForPause(),
         },
         {
           onResume: () => {
@@ -1110,6 +1126,10 @@ export class GameScene extends Phaser.Scene {
             host.clear();
             this.restartGame();
           },
+          onLevels: () => {
+            host.clear();
+            this.openLevelSelect();
+          },
           onExit: () => {
             host.clear();
             this.openHub();
@@ -1117,6 +1137,35 @@ export class GameScene extends Phaser.Scene {
         },
       ),
     );
+  }
+
+  /**
+   * De que lado a gaveta de pausa encosta: o mais LONGE da rota.
+   *
+   * O jogador pausa para olhar o campo, então a coluna não pode cair em cima da pista. A conta é a
+   * massa da rota: se ela vive à direita, a gaveta vai para a esquerda, e vice-versa. Usa os
+   * waypoints, que são a rota autoral — o traçado desenhado é interpolação deles.
+   */
+  private freeSideForPause(): "left" | "right" {
+    const points = this.level.waypoints;
+    if (points.length < 2) return "right";
+    // Conta quanto de rota cai em cada faixa candidata, andando pelo traçado e não só pelos nós:
+    // dois waypoints distantes podem ter entre eles um trecho inteiro dentro da faixa.
+    let left = 0;
+    let right = 0;
+    for (let index = 1; index < points.length; index += 1) {
+      const from = points[index - 1];
+      const to = points[index];
+      const steps = Math.max(1, Math.ceil(Math.hypot(to.x - from.x, to.y - from.y) / 12));
+      for (let step = 0; step <= steps; step += 1) {
+        const x = from.x + ((to.x - from.x) * step) / steps;
+        if (x < 0 || x > GAME_WIDTH) continue;
+        if (x <= PAUSE_DRAWER_BAND) left += 1;
+        if (x >= GAME_WIDTH - PAUSE_DRAWER_BAND) right += 1;
+      }
+    }
+    // Empate vai para a direita: é onde o bloco de comandos já mora, então o olho do jogador já está lá.
+    return left < right ? "left" : "right";
   }
 
   private setPaused(paused: boolean): void {

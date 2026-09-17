@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { CARD_X, CARD_Y, MENU, openGame, OPTION_B } from "./helpers";
+import { CARD_X, CARD_Y, levelsViaPause, openGame, OPTION_B } from "./helpers";
 
 /**
  * Partida completa do Recife 1: leva minutos e gera um trace enorme. Em máquinas com antivírus o
@@ -55,7 +55,7 @@ test("a balanced defense can finish every wave and unlock the next level", async
   await expect(canvas).toHaveAttribute("data-game-state", "countdown");
   await expect(canvas).toHaveAttribute("data-pearls", "200");
 
-  await clickGame(MENU.x, MENU.y);
+  await levelsViaPause(page, clickGame);
   await expect(canvas).toHaveAttribute("data-screen", "menu");
   await expect(canvas).toHaveAttribute("data-unlocked-levels", "2");
   await expect(canvas).toHaveAttribute("data-stars", /[1-3]/);

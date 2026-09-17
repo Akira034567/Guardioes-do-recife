@@ -141,7 +141,7 @@ describe("balance sheet", () => {
     expect(GUARDIANS["sea-turtle"].branches[1].upgrades.map((upgrade) => upgrade.flowField?.speedFactor)).toEqual([0.62, 0.55]);
     expect(GUARDIANS["sea-turtle"].branches[1].upgrades[1].pushWave?.distance).toBe(170);
     // Peixe-Pedra (V3.2): emboscada RECORRENTE na borda da correnteza, não mais armadilha descartável.
-    expect(GUARDIANS.stonefish.trap).toMatchObject({ damage: 46, settleMs: 1600, armMs: 420, cooldownMs: 4500, triggerRadius: 70 });
+    expect(GUARDIANS.stonefish.trap).toMatchObject({ damage: 46, settleMs: 1600, armMs: 420, cooldownMs: 7000, triggerRadius: 70 });
     expect(GUARDIANS.stonefish.placementMode).toBe("ambush");
     expect(GUARDIANS.stonefish.role).toBe("Emboscada • Veneno");
     // Ramo A troca dano por território; ramo B troca área por punição.

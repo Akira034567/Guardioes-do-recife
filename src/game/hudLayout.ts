@@ -39,9 +39,15 @@ export const HUD_LAYOUT = {
   topButtonY: TOP_CENTER,
   topButtonSize: 46,
   topButtonHeight: 42,
-  /** Velocidade da partida: 1× e 2× abrem a fila. */
-  speedButtonXs: [1029, 1083] as const,
-  speedButtonWidth: 46,
+  /**
+   * Velocidade da partida: UM botão que alterna.
+   *
+   * Eram dois (1× e 2×) lado a lado, e um deles estava sempre apagado sem fazer nada — metade do
+   * espaço servia só para mostrar a opção que não estava valendo. O botão único mostra a velocidade
+   * ATUAL e troca ao toque, que é como o resto do HUD já se comporta.
+   */
+  speedButtonX: 1056,
+  speedButtonWidth: 52,
   pauseButtonX: 1137,
   fullscreenButtonX: 1191,
   muteButtonX: 1245,

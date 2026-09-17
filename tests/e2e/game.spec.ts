@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { CARD_X, CARD_Y, MENU, NEXT_WAVE, openGame, OPTION_A, OPTION_B, PAUSE, RESTART, SELL, SPEED_1X, SPEED_2X } from "./helpers";
+import { CARD_X, CARD_Y, levelsViaPause, NEXT_WAVE, openGame, OPTION_A, OPTION_B, PAUSE, restartViaPause, SELL, SPEED } from "./helpers";
 
 test("loads a level directly and places a shrimp on a platform", async ({ page }) => {
   const { canvas, clickGame, pageErrors } = await openGame(page);
@@ -84,7 +84,7 @@ test("locks a unit into one upgrade branch, pauses and restarts without stale st
   await page.getByTestId("pause-resume").click();
   await expect(canvas).toHaveAttribute("data-paused", "false");
 
-  await clickGame(RESTART.x, RESTART.y);
+  await restartViaPause(page, clickGame);
   await expect(canvas).toHaveAttribute("data-guardians", "0");
   await expect(canvas).toHaveAttribute("data-pearls", "180");
   await expect(canvas).toHaveAttribute("data-level", "recife-1");
@@ -203,7 +203,7 @@ test("skips wave preparation by keyboard and button", async ({ page }) => {
   await expect(canvas).toHaveAttribute("data-game-state", "countdown");
   await page.keyboard.press("Space");
   await expect(canvas).toHaveAttribute("data-game-state", /spawning|active/);
-  await clickGame(RESTART.x, RESTART.y);
+  await restartViaPause(page, clickGame);
   await expect(canvas).toHaveAttribute("data-game-state", "countdown");
   await page.waitForTimeout(250);
   await clickGame(NEXT_WAVE.x, NEXT_WAVE.y);
@@ -243,7 +243,7 @@ test("level select only opens unlocked levels", async ({ page }) => {
   await expect(canvas).toHaveAttribute("data-screen", "game");
   await expect(canvas).toHaveAttribute("data-level", "recife-1");
 
-  await clickGame(MENU.x, MENU.y);
+  await levelsViaPause(page, clickGame);
   await expect(canvas).toHaveAttribute("data-screen", "menu");
   expect(pageErrors).toEqual([]);
 });
@@ -254,14 +254,15 @@ test("switches match speed, pauses and previews the next wave", async ({ page })
   // A prévia lista a composição da onda que está por vir (item 9).
   await expect(canvas).toHaveAttribute("data-next-wave", /swimmer:\d+/);
 
-  await clickGame(SPEED_2X.x, SPEED_2X.y);
+  // Um botão só: cada toque alterna entre 1× e 2×.
+  await clickGame(SPEED.x, SPEED.y);
   await expect(canvas).toHaveAttribute("data-speed", "2");
   await clickGame(PAUSE.x, PAUSE.y);
   await expect(canvas).toHaveAttribute("data-paused", "true");
   await expect(page.getByTestId("pause-panel")).toBeVisible();
   await page.getByTestId("pause-resume").click();
   await expect(canvas).toHaveAttribute("data-paused", "false");
-  await clickGame(SPEED_1X.x, SPEED_1X.y);
+  await clickGame(SPEED.x, SPEED.y);
   await expect(canvas).toHaveAttribute("data-speed", "1");
   expect(pageErrors).toEqual([]);
 });
@@ -408,7 +409,7 @@ test("guides the first match with hints that never block the game", async ({ pag
   const { canvas, clickGame, pageErrors } = await openGame(page, "level=recife-1");
   // O registro do HUD publica cada controle por nome: os testes não dependem de coordenadas soltas.
   const names = await page.evaluate(() => window.__grUi?.names() ?? []);
-  expect(names).toEqual(expect.arrayContaining(["pause", "speed:2", "nextWave", "sell", "card:first", "tutorial:skip"]));
+  expect(names).toEqual(expect.arrayContaining(["pause", "speed", "nextWave", "sell", "card:first", "tutorial:skip"]));
 
   await expect(canvas).toHaveAttribute("data-tutorial", "pick-card");
   await clickGame(CARD_X.shrimp, CARD_Y);

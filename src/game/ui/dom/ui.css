@@ -4438,3 +4438,133 @@
     align-items: flex-start;
   }
 }
+
+/* ==========================================================================
+   Pausa — gaveta ao lado do mapa.
+   Era um painel centralizado com véu escuro: o jogador pausava para ESTUDAR o
+   campo e o jogo escondia o campo. Aqui a partida congela, o mapa continua à
+   vista e tudo mora numa coluna encostada no lado por onde a rota não passa.
+   ========================================================================== */
+
+/* Anula o véu e a centralização que `.gr-screen` impõe às telas cheias. */
+.gr-screen.gr-pause {
+  display: flex;
+  align-items: stretch;
+  padding: calc(10px * var(--gr-scale));
+  background: none;
+  backdrop-filter: none;
+}
+
+.gr-pause--left {
+  justify-content: flex-start;
+}
+
+.gr-pause--right {
+  justify-content: flex-end;
+}
+
+.gr-pause__drawer {
+  width: min(40%, calc(330px * var(--gr-scale)));
+  display: flex;
+  flex-direction: column;
+  gap: calc(12px * var(--gr-scale));
+  overflow-y: auto;
+  padding: calc(14px * var(--gr-scale)) calc(16px * var(--gr-scale));
+  /*
+   * Translúcida de propósito. Em fases como o Recife 1 a rota atravessa a tela inteira e não existe
+   * lado livre: a escolha do lado ajuda, mas não resolve. Com o fundo semitransparente e o desfoque,
+   * o trecho coberto continua legível por baixo — o jogador pausou para olhar o campo, e o campo
+   * continua lá.
+   */
+  background: linear-gradient(180deg, rgba(8, 52, 74, 0.86), rgba(3, 26, 41, 0.9));
+  backdrop-filter: blur(6px);
+  border: calc(2px * var(--gr-scale)) solid var(--gr-line);
+  border-radius: calc(16px * var(--gr-scale));
+  box-shadow: 0 calc(14px * var(--gr-scale)) calc(40px * var(--gr-scale)) rgba(0, 10, 18, 0.55);
+}
+
+/* Alto contraste desfaz a transparência: ali a leitura do texto vem antes da do mapa. */
+#ui-layer[data-contrast="high"] .gr-pause__drawer {
+  background: linear-gradient(180deg, rgba(10, 60, 83, 0.98), rgba(3, 29, 45, 0.99));
+  backdrop-filter: none;
+}
+
+.gr-pause__title {
+  margin: 0;
+  font-family: "Arial Black", "Arial", sans-serif;
+  font-size: calc(22px * var(--gr-scale));
+  line-height: 1.1;
+  color: #f2fbff;
+}
+
+.gr-pause__head {
+  display: flex;
+  flex-direction: column;
+  gap: calc(8px * var(--gr-scale));
+}
+
+.gr-pause__stats {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: calc(8px * var(--gr-scale));
+}
+
+.gr-pause__actions {
+  display: flex;
+  flex-direction: column;
+  gap: calc(6px * var(--gr-scale));
+}
+
+.gr-pause__action {
+  display: flex;
+  align-items: center;
+  gap: calc(9px * var(--gr-scale));
+  font: inherit;
+  font-size: calc(12px * var(--gr-scale));
+  font-weight: bold;
+  letter-spacing: calc(0.5px * var(--gr-scale));
+  text-align: left;
+  color: var(--gr-shell);
+  background: rgba(3, 30, 47, 0.72);
+  border: calc(1px * var(--gr-scale)) solid rgba(21, 129, 163, 0.45);
+  border-radius: calc(10px * var(--gr-scale));
+  padding: calc(10px * var(--gr-scale)) calc(12px * var(--gr-scale));
+  cursor: pointer;
+}
+
+.gr-pause__action:hover,
+.gr-pause__action:focus-visible {
+  border-color: var(--gr-cyan);
+  color: #f2fbff;
+}
+
+.gr-pause__action--primary {
+  border-color: var(--gr-cyan);
+  background: linear-gradient(90deg, rgba(23, 120, 158, 0.95), rgba(13, 74, 100, 0.8));
+  color: #f2fbff;
+}
+
+/* Armado: o próximo toque executa. A cor de perigo é o aviso. */
+.gr-pause__action--armed {
+  border-color: var(--gr-danger);
+  color: #fff0f1;
+  background: rgba(96, 22, 30, 0.75);
+}
+
+.gr-pause__settings {
+  display: flex;
+  flex-direction: column;
+  gap: calc(10px * var(--gr-scale));
+}
+
+/* Na gaveta as seções perdem a grade de duas colunas do menu cheio. */
+.gr-pause__settings .gr-config__section {
+  width: 100%;
+}
+
+/* Telas curtas: a gaveta ocupa a largura toda e rola, em vez de espremer. */
+@container (max-width: 620px) {
+  .gr-pause__drawer {
+    width: 100%;
+  }
+}
