@@ -83,3 +83,18 @@ export function orientationFor(art: EnemyArtRef, heading: number, previousFlipX 
   const tilt = spriteTilt(heading);
   return { flipX, rotation: flipX ? -tilt : tilt };
 }
+
+/**
+ * Como desenhar uma FRENTE DE ONDA que corre por um rumo (a Repulsa da Tartaruga).
+ *
+ * Difere de `orientationFor`: uma criatura só se inclina um pouco, porque a silhueta precisa
+ * continuar legível; a onda gira o rumo inteiro, porque ela é o próprio deslocamento desenhado.
+ *
+ * Por isso o espelho aqui é no eixo Y, não no X. `flipX` inverteria junto o sentido do desenho e a
+ * rotação teria de compensar — compensação que só fecha em trecho horizontal e joga a crista para o
+ * lado refletido em qualquer diagonal. `flipY` não mexe no rumo: serve só para a espuma não ficar de
+ * cabeça para baixo quando a correnteza corre para a esquerda.
+ */
+export function waveOrientation(heading: number): { flipY: boolean; rotation: number } {
+  return { flipY: Math.cos(heading) < 0, rotation: heading };
+}

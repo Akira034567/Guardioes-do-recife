@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { facesLeft, facesLeftToward, orientationFor, spriteTilt } from "../src/game/core/SpriteOrientation";
+import { facesLeft, facesLeftToward, orientationFor, spriteTilt, waveOrientation } from "../src/game/core/SpriteOrientation";
 import { ENEMIES, ENEMY_ORDER, resolveEnemy } from "../src/game/data/enemies";
 import type { EnemyArtRef } from "../src/game/types";
 
@@ -101,5 +101,29 @@ describe("orientação dos sprites", () => {
       expect(orientationFor(art, 0).flipX, `${enemyId} indo para a direita`).toBe(false);
       expect(orientationFor(art, Math.PI).flipX, `${enemyId} indo para a esquerda`).toBe(true);
     }
+  });
+});
+
+describe("frente de onda da Repulsa", () => {
+  it("aponta a crista exatamente para onde a onda empurra", () => {
+    // A regressão que isto tranca: espelhando em X, a rotação que compensava o espelho refletia o
+    // rumo na vertical. Horizontal fechava, diagonal não — a onda da Correnteza II nascia até 90°
+    // fora e só parecia acertar quando a rota endireitava.
+    for (const heading of HEADINGS.concat([-Math.PI / 4, (5 * Math.PI) / 6])) {
+      const { rotation } = waveOrientation(heading);
+      // A crista local é (1,0), e `flipY` espelha só o eixo vertical da textura: ela sai intacta do
+      // espelho, então o rumo desenhado é a rotação, sem compensação nenhuma.
+      const cristaX = Math.cos(rotation);
+      const cristaY = Math.sin(rotation);
+      expect(cristaX, `rumo ${heading.toFixed(2)} na horizontal`).toBeCloseTo(Math.cos(heading));
+      expect(cristaY, `rumo ${heading.toFixed(2)} na vertical`).toBeCloseTo(Math.sin(heading));
+    }
+  });
+
+  it("só espelha a espuma quando a correnteza corre para a esquerda", () => {
+    expect(waveOrientation(0).flipY).toBe(false);
+    expect(waveOrientation(Math.PI / 3).flipY).toBe(false);
+    expect(waveOrientation(Math.PI).flipY).toBe(true);
+    expect(waveOrientation((3 * Math.PI) / 4).flipY).toBe(true);
   });
 });

@@ -1,5 +1,6 @@
 import Phaser from "phaser";
 import { DEPTH } from "../constants";
+import { waveOrientation } from "../core/SpriteOrientation";
 
 export interface TravelOptions {
   durationMs?: number;
@@ -87,7 +88,6 @@ export class ArtEffects {
     return true;
   }
 
-  /** Imagem que fica no mapa (campo elétrico, nuvem de tinta): quem chama controla alpha e destroi. */
   /**
    * Uma imagem que PERCORRE um caminho, girando para acompanhá-lo, e some no fim.
    *
@@ -95,8 +95,15 @@ export class ArtEffects {
    * jogador via a unidade piscar e os inimigos saltarem para trás sem nada ligando as duas coisas. A
    * onda que caminha pela correnteza é a própria explicação do que aconteceu.
    *
-   * `points` vem em coordenadas de mundo, na ordem em que a frente deve passar. A imagem espelha
-   * quando o caminho vai para a esquerda, para a crista apontar sempre para onde a onda empurra.
+   * `points` vem em coordenadas de mundo, na ordem em que a frente deve passar. A crista aponta para
+   * onde a onda empurra desde o primeiro quadro: o rumo é medido ANTES de a imagem entrar em cena.
+   *
+   * O espelhamento é resolvido no eixo Y, não no X. Espelhar em X invertia junto o sentido do
+   * desenho, e a conta de ângulo que compensava isso só fechava quando o trecho era horizontal — em
+   * diagonal a onda nascia apontada para o lado refletido e só parecia acertar quando a rota
+   * endireitava. `flipY` mantém a crista no rumo certo e serve só para a espuma não ficar de cabeça
+   * para baixo quando a correnteza corre para a esquerda; ele é decidido uma vez, na largada, porque
+   * trocá-lo no meio do caminho faz a onda dar um salto de espelho numa curva.
    */
   travel(key: string | null, points: readonly { x: number; y: number }[], width: number, options: TravelOptions = {}): boolean {
     if (!this.has(key) || points.length < 2) return false;
@@ -105,9 +112,34 @@ export class ArtEffects {
     for (let index = 1; index < points.length; index += 1) path.lineTo(points[index].x, points[index].y);
     const frame = this.scene.textures.getFrame(key);
     const scale = width / frame.width;
-    const image = this.scene.add.image(points[0].x, points[0].y, key).setDepth(DEPTH.effects).setScale(scale).setAlpha(alpha);
     const head = new Phaser.Math.Vector2();
     const tail = new Phaser.Math.Vector2();
+    // Janela de medida do rumo: uma fatia fixa do caminho que desliza junto, mas nunca encolhe nas
+    // pontas. Medir de `t - 0.08` até `t` grudava o começo da janela na largada, e o primeiro quadro
+    // ficava sem rumo nenhum — era daí que vinha a onda tortona antes do primeiro acerto.
+    const LOOKBACK = 0.08;
+    const headingAt = (t: number): number | null => {
+      const from = Phaser.Math.Clamp(t - LOOKBACK, 0, 1 - LOOKBACK);
+      path.getPoint(from, tail);
+      path.getPoint(from + LOOKBACK, head);
+      const dx = head.x - tail.x;
+      const dy = head.y - tail.y;
+      return dx === 0 && dy === 0 ? null : Math.atan2(dy, dx);
+    };
+    const start = headingAt(0);
+    // Caminho de comprimento zero (Tartaruga no começo da rota): sem rumo não há onda que ande, e o
+    // chamador cai no anel de sempre.
+    if (start === null) return false;
+    // O espelho sai daqui e não muda mais: decidido a cada quadro, ele daria um salto quando a rota
+    // passasse pela vertical.
+    const { flipY, rotation } = waveOrientation(start);
+    const image = this.scene.add
+      .image(points[0].x, points[0].y, key)
+      .setDepth(DEPTH.effects)
+      .setScale(scale)
+      .setFlipY(flipY)
+      .setRotation(rotation)
+      .setAlpha(alpha * 0.2);
     this.scene.tweens.addCounter({
       from: 0,
       to: 1,
@@ -116,16 +148,9 @@ export class ArtEffects {
       onUpdate: (tween) => {
         const t = tween.getValue() ?? 0;
         path.getPoint(t, head);
-        // O rumo sai de um ponto logo atrás, para a frente da onda não tremer nas quinas da rota.
-        path.getPoint(Math.max(0, t - 0.08), tail);
         image.setPosition(head.x, head.y);
-        const dx = head.x - tail.x;
-        const dy = head.y - tail.y;
-        if (dx !== 0 || dy !== 0) {
-          const goingLeft = dx < 0;
-          image.setFlipX(goingLeft);
-          image.setRotation(Math.atan2(dy, goingLeft ? -dx : dx));
-        }
+        const heading = headingAt(t);
+        if (heading !== null) image.setRotation(waveOrientation(heading).rotation);
         // Entra rápido, atravessa cheia e só apaga no último terço: some antes disso e a onda parecia
         // desistir no meio do caminho.
         image.setAlpha(alpha * Math.min(1, (1 - t) * 3, t * 8 + 0.2));
@@ -135,6 +160,7 @@ export class ArtEffects {
     return true;
   }
 
+  /** Imagem que fica no mapa (campo elétrico, nuvem de tinta): quem chama controla alpha e destroi. */
   persistent(key: string | null, x: number, y: number, diameter: number): Phaser.GameObjects.Image | null {
     if (!this.has(key)) return null;
     const scale = diameter / this.scene.textures.getFrame(key).width;
