@@ -27,6 +27,14 @@ export interface ArtVariant {
   folder: string;
   ability: AbilityStyle;
   /**
+   * A Habilidade desta variante usa o desenho do Impacto.
+   *
+   * É o caso do Caçador da Corrente: a prancha dele traz uma mira como "habilidade" e uma explosão de
+   * espinhos como "impacto", e as duas saem no mesmo instante — a mira em cima da explosão virava
+   * sujeira. Uma imagem só diz a mesma coisa com metade do ruído.
+   */
+  abilityFromImpact?: boolean;
+  /**
    * A arte de Habilidade e de Impacto fica RESERVADA para a habilidade periódica: o golpe básico não
    * desenha nenhuma das duas, só o tranco vetorial.
    *
@@ -177,11 +185,14 @@ export const GUARDIAN_ART: Record<GuardianId, GuardianArtProfile> = {
     },
   },
   stonefish: {
-    scale: 0.72,
+    // Menor que os outros: ele mora na BORDA da correnteza e não pode competir com a rota. A 0,72 o
+    // monte de pedra cobria a faixa que ele deveria estar só espreitando.
+    scale: 0.62,
     effectScale: 0.55,
     assetFolder: "peixe_pedra",
     abilityFile: "ability",
-    // `idle` = enterrado (só olhos e espinhos), `attack` = emergido; `ability` = explosão/nuvem.
+    // `attack` = espinhos abertos; `ability`/`impact` = o bote. O repouso não usa `idle`: quem está
+    // camuflado ou recarregando vira a pedra de `STONEFISH_HIDDEN_KEY`.
     base: { folder: "base", ability: "ring" },
     branches: {
       a: [
@@ -190,7 +201,7 @@ export const GUARDIAN_ART: Record<GuardianId, GuardianArtProfile> = {
       ],
       b: [
         { folder: "emboscada_1", ability: "ring" },
-        { folder: "emboscada_2", ability: "ring" },
+        { folder: "emboscada_2", ability: "ring", abilityFromImpact: true },
       ],
     },
   },
@@ -273,6 +284,16 @@ export function artPath(guardianId: GuardianId, variant: ArtVariant, kind: ArtKi
   return `assets/guardians/${artFolder(guardianId)}/${variant.folder}/${artFileName(guardianId, kind)}.png`;
 }
 
+/**
+ * A pedra em que o Peixe-Pedra se transforma enquanto está camuflado ou se recuperando do bote.
+ *
+ * É UMA imagem para as cinco variantes, e é o ponto: camuflado, ele não deve parecer um Peixe-Pedra
+ * evoluído nem um Peixe-Pedra base — deve parecer pedra. Antes disso o jogo mostrava o peixe
+ * translúcido, que dizia "ele sumiu" com a silhueta de um peixe ainda na tela.
+ */
+export const STONEFISH_HIDDEN_KEY = "stonefish-oculto";
+export const STONEFISH_HIDDEN_PATH = "assets/guardians/peixe_pedra/oculto.png";
+
 export function allArtVariants(guardianId: GuardianId): ArtVariant[] {
   const profile = GUARDIAN_ART[guardianId];
   return [profile.base, ...profile.branches.a, ...profile.branches.b];
@@ -289,15 +310,19 @@ export const GUARDIAN_ART_ASSETS: ReadonlyArray<{ key: string; path: string; gua
 
 export function preloadGuardianArt(scene: Phaser.Scene): void {
   GUARDIAN_ART_ASSETS.forEach(({ key, path }) => scene.load.image(key, path));
+  if (!scene.textures.exists(STONEFISH_HIDDEN_KEY)) scene.load.image(STONEFISH_HIDDEN_KEY, STONEFISH_HIDDEN_PATH);
 }
 
 /**
  * Só as formas base dos nove Guardiões (item 45). É o que o menu, as cartas e o fantasma de
  * posicionamento precisam; as formas evoluídas entram quando a fase abre, pelo esquadrão escolhido.
  */
-export const GUARDIAN_BASE_ART_ASSETS: ReadonlyArray<{ key: string; path: string; guardianId: GuardianId }> = GUARDIAN_ART_ASSETS.filter(
-  ({ guardianId, key }) => key.startsWith(`${guardianId}-${GUARDIAN_ART[guardianId].base.folder}-`),
-);
+export const GUARDIAN_BASE_ART_ASSETS: ReadonlyArray<{ key: string; path: string; guardianId: GuardianId }> = [
+  ...GUARDIAN_ART_ASSETS.filter(({ guardianId, key }) => key.startsWith(`${guardianId}-${GUARDIAN_ART[guardianId].base.folder}-`)),
+  // A pedra do Peixe-Pedra entra no boot e não na dieta por esquadrão: ela é o REPOUSO das cinco
+  // variantes, então já faz falta na forma base. São 14 KB — não é ela que pesa na abertura.
+  { key: STONEFISH_HIDDEN_KEY, path: STONEFISH_HIDDEN_PATH, guardianId: "stonefish" as GuardianId },
+];
 
 /** Imagens das variantes evoluídas de um esquadrão: o que falta depois da dieta do boot. */
 export function guardianUpgradeArtAssets(guardianIds: readonly GuardianId[]): ReadonlyArray<{ key: string; path: string }> {

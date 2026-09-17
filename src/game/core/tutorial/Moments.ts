@@ -82,7 +82,7 @@ const GUARDIAN_MOMENTS: Record<GuardianId, { text: string; lessonId: string }> =
     lessonId: "guardiao-tartaruga",
   },
   stonefish: {
-    text: "Peixe-Pedra encaixa sozinho na borda e embosca sem parar. Você escolhe onde, não quando.",
+    text: "Peixe-Pedra vira pedra na borda e embosca quem passar. Você escolhe onde, não quando.",
     lessonId: "guardiao-peixe-pedra",
   },
   dolphin: {

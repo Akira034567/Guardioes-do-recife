@@ -42,7 +42,15 @@ export class CloudGfx {
   private readonly image: Phaser.GameObjects.Image | null;
 
   constructor(scene: Phaser.Scene, effects: ArtEffects, artKey: string | null, readonly state: CloudState) {
-    this.image = effects.persistent(artKey, state.x, state.y, state.radius * 2);
+    /**
+     * A ARTE cobre menos que a zona; quem marca a borda de verdade é o anel desenhado abaixo.
+     *
+     * Com a arte no diâmetro inteiro, a névoa do Peixe-Pedra (raio 108) virava um disco de 216 px em
+     * cima da rota e escondia os inimigos que ela estava envenenando — o jogador perdia de vista
+     * exatamente o que precisava acompanhar. Agora o desenho lê como o NÚCLEO denso e o anel continua
+     * dizendo, com honestidade, até onde a zona pega.
+     */
+    this.image = effects.persistent(artKey, state.x, state.y, state.radius * (state.kind === "ink" ? 2 : 1.5));
     const graphic = scene.add.graphics().setDepth(DEPTH.effects - 1);
     if (state.kind === "ink") {
       graphic.fillStyle(0x2a1a4a, this.image ? 0.2 : 0.45);
@@ -67,7 +75,10 @@ export class CloudGfx {
   sync(now: number): void {
     const remaining = (this.state.expiresAt - now) / this.state.durationMs;
     this.graphic.setAlpha(Math.max(0.25, Math.min(1, remaining + 0.2)));
-    this.image?.setAlpha(Math.max(0.25, Math.min(0.85, remaining + 0.15)));
+    // Teto de opacidade menor na névoa tóxica: ela fica por cima de quem está sofrendo o veneno, e
+    // opaca demais ela apagava a criatura e os ícones de status dela.
+    const cap = this.state.kind === "ink" ? 0.85 : 0.5;
+    this.image?.setAlpha(Math.max(0.18, Math.min(cap, remaining * cap)));
   }
 
   destroy(): void {

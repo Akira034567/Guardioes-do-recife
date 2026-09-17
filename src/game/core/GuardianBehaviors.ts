@@ -62,7 +62,7 @@ export type BehaviorEvent =
   | { type: "trapPhase"; guardianId: string; phase: AmbushPhase }
   | { type: "trapTrigger"; guardianId: string; x: number; y: number; radius: number; targetIds: string[]; focusedId: string | null }
   | { type: "mark"; guardianId: string; enemyId: string }
-  | { type: "pushWave"; guardianId: string; x: number; y: number; radius: number; pushedIds: string[]; visualMs: number }
+  | { type: "pushWave"; guardianId: string; x: number; y: number; radius: number; distance: number; pushedIds: string[]; visualMs: number }
   | { type: "sonarWave"; guardianId: string; x: number; y: number; radius: number; wave: SonarWave; priorityId: string | null }
   | { type: "coordinate"; guardianId: string; targetId: string; guardianIds: string[] }
   | { type: "chorusStart"; guardianId: string; radius: number; durationMs: number }
@@ -201,7 +201,8 @@ export function updatePushWave<E extends BehaviorEnemy>(guardian: BehaviorGuardi
       if (blocker) hooks.onEscaped?.(blocker, enemy.id);
     }
   }
-  hooks.emit?.({ type: "pushWave", guardianId: guardian.id, x: guardian.x, y: guardian.y, radius, pushedIds: pushed, visualMs: wave.visualMs });
+  // A apresentação usa `distance` para a onda percorrer exatamente o que ela empurra.
+  hooks.emit?.({ type: "pushWave", guardianId: guardian.id, x: guardian.x, y: guardian.y, radius, distance: wave.distance, pushedIds: pushed, visualMs: wave.visualMs });
 }
 
 // ----------------------------------------------------------- Peixe-Pedra

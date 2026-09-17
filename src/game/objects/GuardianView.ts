@@ -1,5 +1,5 @@
 import Phaser from "phaser";
-import { artTextureFor, artVariant, GUARDIAN_ART, hasGuardianArt, type ArtKind } from "../assets/guardianArt";
+import { artTextureFor, artVariant, GUARDIAN_ART, hasGuardianArt, STONEFISH_HIDDEN_KEY, type ArtKind } from "../assets/guardianArt";
 import { DEPTH } from "../constants";
 import { NEUTRAL_AURA, sameAura } from "../core/Auras";
 import type { MatchGuardian } from "../core/match/MatchGuardian";
@@ -82,7 +82,7 @@ export class GuardianView extends Phaser.GameObjects.Container {
   }
 
   get currentVisualKey(): string {
-    return this.artSprite ? this.artTexture(this.artVisualState) : this.visualState;
+    return this.artSprite ? this.textureNow() : this.visualState;
   }
 
   get currentTextureKey(): string | null {
@@ -100,10 +100,28 @@ export class GuardianView extends Phaser.GameObjects.Container {
   }
 
   /**
-   * Lê o estado do motor e atualiza o desenho. `enemyPosition` localiza o alvo da investida;
-   * `blockedPosition` diz quem esta unidade está SEGURANDO, para um bloqueador puro virar de frente.
+   * A textura que deve estar na tela agora.
+   *
+   * Quase sempre é a da variante. A exceção é o emboscador em repouso: camuflado, se acomodando ou
+   * recarregando, ele É uma pedra — a mesma pedra nas cinco variantes, porque a graça é justamente
+   * não dar para saber qual Peixe-Pedra está ali até os espinhos abrirem.
    */
-  sync(now: number, enemyPosition: (id: string) => Vec2 | null, blockedPosition?: (guardianId: string) => Vec2 | null): void {
+  private textureNow(): string {
+    if (this.hiddenAsRock && this.scene.textures.exists(STONEFISH_HIDDEN_KEY)) return STONEFISH_HIDDEN_KEY;
+    return this.artTexture(this.artVisualState);
+  }
+
+  /** Está em repouso de emboscada? (camuflado, acomodando ou recarregando) */
+  private get hiddenAsRock(): boolean {
+    return this.trapPhase !== null && this.trapPhase !== "arming" && this.trapPhase !== "striking";
+  }
+
+  /**
+   * Lê o estado do motor e atualiza o desenho. `enemyPosition` localiza o alvo da investida;
+   * `facingPosition` diz para onde uma unidade SEM ALVO deve olhar — quem o bloqueador está segurando
+   * ou a presa que fez o emboscador abrir os espinhos.
+   */
+  sync(now: number, enemyPosition: (id: string) => Vec2 | null, facingPosition?: (guardianId: string) => Vec2 | null): void {
     const guardian = this.guardian;
     const state = guardian.state;
     if (state !== this.engineState) {
@@ -127,10 +145,10 @@ export class GuardianView extends Phaser.GameObjects.Container {
         this.aimTarget = { x: target.x, y: target.y };
         if (Math.hypot(target.x - guardian.x, target.y - guardian.y) <= guardian.range) this.dashTarget = { x: target.x, y: target.y };
       }
-    } else if (blockedPosition?.(guardian.id)) {
+    } else if (facingPosition?.(guardian.id)) {
       // O Baiacu base tem dano 0, então nunca adquire `targetId` e ficava de costas para quem prendia.
-      // Quem segura olha para o que está segurando; vale para qualquer bloqueador (Baiacu, Tartaruga).
-      this.aimTarget = blockedPosition(guardian.id);
+      // Vale para qualquer um sem alvo: o bloqueador olha para quem segura, o emboscador para a presa.
+      this.aimTarget = facingPosition(guardian.id);
     } else if (state === "idle") {
       // Sem alvo o lado congela no último: girar de volta sozinho no fim da onda é solavanco à toa.
       this.aimTarget = null;
@@ -138,6 +156,8 @@ export class GuardianView extends Phaser.GameObjects.Container {
     if (guardian.trapPhase !== this.trapPhase) {
       this.trapPhase = guardian.trapPhase;
       this.drawBody();
+      // A pedra entra e sai por aqui: sem isto a troca só aconteceria na próxima mudança de upgrade.
+      this.syncArtTexture();
     }
     const progressKey = this.currentProgressKey();
     if (progressKey !== this.progressKey) {
@@ -241,16 +261,23 @@ export class GuardianView extends Phaser.GameObjects.Container {
     this.updateAimFacing();
     // V3.2: "escondido" é camuflado/acomodando. Abrir os espinhos já é estar à mostra.
     const buried = this.trapPhase === "camouflaged" || this.trapPhase === "settling";
-    // Camuflado ele fica translúcido, como pedra à deriva; o bote traz o corpo inteiro de volta.
-    const trapAlpha = buried ? 0.62 : this.trapPhase === "cooldown" ? 0.8 : 1;
+    /**
+     * V3.3: a pedra é OPACA. A translucidez existia para dizer "ele sumiu" com a silhueta de um peixe
+     * ainda na tela; agora quem está na tela é uma pedra, e pedra translúcida seria o único objeto
+     * fantasma do cenário. Só o `settling` mantém um véu, porque ali ele ainda está se acomodando.
+     */
+    const asRock = this.hiddenAsRock && this.artSprite?.texture.key === STONEFISH_HIDDEN_KEY;
+    const trapAlpha = asRock ? (this.trapPhase === "settling" ? 0.8 : 1) : buried ? 0.62 : this.trapPhase === "cooldown" ? 0.8 : 1;
     if (this.artSprite) {
       // O recuo do golpe acompanha o lado para o qual a criatura está virada.
       const mirror = this.facingLeft ? -1 : 1;
       const nudge = this.visualState === "attack" ? -4 : this.visualState === "recovery" || this.visualState === "returning" ? -2 : 0;
-      this.artSprite.y = this.artBaselineY + bob + dash.y + (buried ? 6 : 0);
-      this.artSprite.x = dash.x + nudge * mirror;
-      this.artSprite.setFlipX(this.facingLeft);
-      this.artSprite.setAngle(dash.angle ?? (this.visualState === "attack" ? -2 * mirror : 0));
+      // Pedra não boia e nem espelha: o balanço e o lado são do bicho, e aplicá-los à pedra
+      // entregaria o disfarce (uma pedra que respira no ritmo de um peixe).
+      this.artSprite.y = this.artBaselineY + (asRock ? 0 : bob + dash.y + (buried ? 6 : 0));
+      this.artSprite.x = asRock ? 0 : dash.x + nudge * mirror;
+      this.artSprite.setFlipX(asRock ? false : this.facingLeft);
+      this.artSprite.setAngle(asRock ? 0 : (dash.angle ?? (this.visualState === "attack" ? -2 * mirror : 0)));
       this.artSprite.setAlpha(trapAlpha);
     } else {
       this.bodyGraphic.x = dash.x;
@@ -319,7 +346,7 @@ export class GuardianView extends Phaser.GameObjects.Container {
 
   private syncArtTexture(): void {
     if (!this.artSprite) return;
-    const texture = this.artTexture(this.artVisualState);
+    const texture = this.textureNow();
     if (this.artSprite.texture.key !== texture && this.scene.textures.exists(texture)) this.artSprite.setTexture(texture);
   }
 

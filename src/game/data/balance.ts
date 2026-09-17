@@ -267,13 +267,18 @@ export const GUARDIAN_BALANCE = {
     range: 70,
     /** Não ataca pela FSM: tudo acontece na emboscada. */
     damage: 0,
-    cooldownMs: 3000,
+    cooldownMs: 4500,
     ambush: {
       /** Só na colocação: ele se acomoda e some no cenário. */
       settleMs: 1600,
       /** Abertura dos espinhos depois que alguém entra. Curto, mas visível — é o aviso. */
       armMs: 420,
-      cooldownMs: 3000,
+      /**
+       * V3.3: 3s → 4,5s. A 3s ele emboscava quase sem parar e a fantasia caía: um emboscador que
+       * ataca a cada três segundos não está emboscando, está atirando devagar. A espera é o que dá
+       * peso ao bote — e o que faz a escolha do LUGAR importar mais que a do momento.
+       */
+      cooldownMs: 4500,
       triggerRadius: 70,
       damage: 46,
       poison: { damagePerTick: 9, tickMs: 1000, durationMs: 4000, maxStacks: 2 },

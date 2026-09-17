@@ -113,7 +113,7 @@ describe("Recife 1 content contracts", () => {
 
     const stonefish = GUARDIANS.stonefish;
     // V3.2: emboscador recorrente. `settleMs` é a acomodação inicial; `armMs`, a abertura dos espinhos.
-    expect(stonefish.trap).toMatchObject({ settleMs: 1600, armMs: 420, cooldownMs: 3000 });
+    expect(stonefish.trap).toMatchObject({ settleMs: 1600, armMs: 420, cooldownMs: 4500 });
     // Ramo A: os dois níveis soltam nuvem, e o II ainda contamina na morte.
     expect(stonefish.branches[0].upgrades.every((upgrade) => upgrade.trap?.cloud !== undefined)).toBe(true);
     expect(stonefish.branches[0].upgrades[1].trap?.spreadOnDeath).toBeDefined();

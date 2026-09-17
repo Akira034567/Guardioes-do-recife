@@ -1,6 +1,11 @@
 import Phaser from "phaser";
 import { DEPTH } from "../constants";
 
+export interface TravelOptions {
+  durationMs?: number;
+  alpha?: number;
+}
+
 export interface BurstOptions {
   /** Escala final da imagem. */
   scale: number;
@@ -83,6 +88,53 @@ export class ArtEffects {
   }
 
   /** Imagem que fica no mapa (campo elétrico, nuvem de tinta): quem chama controla alpha e destroi. */
+  /**
+   * Uma imagem que PERCORRE um caminho, girando para acompanhá-lo, e some no fim.
+   *
+   * Existe para a Repulsa da Tartaruga. Antes ela era um anel que crescia no lugar da Tartaruga, e o
+   * jogador via a unidade piscar e os inimigos saltarem para trás sem nada ligando as duas coisas. A
+   * onda que caminha pela correnteza é a própria explicação do que aconteceu.
+   *
+   * `points` vem em coordenadas de mundo, na ordem em que a frente deve passar. A imagem espelha
+   * quando o caminho vai para a esquerda, para a crista apontar sempre para onde a onda empurra.
+   */
+  travel(key: string | null, points: readonly { x: number; y: number }[], width: number, options: TravelOptions = {}): boolean {
+    if (!this.has(key) || points.length < 2) return false;
+    const { durationMs = 700, alpha = 0.85 } = options;
+    const path = new Phaser.Curves.Path(points[0].x, points[0].y);
+    for (let index = 1; index < points.length; index += 1) path.lineTo(points[index].x, points[index].y);
+    const frame = this.scene.textures.getFrame(key);
+    const scale = width / frame.width;
+    const image = this.scene.add.image(points[0].x, points[0].y, key).setDepth(DEPTH.effects).setScale(scale).setAlpha(alpha);
+    const head = new Phaser.Math.Vector2();
+    const tail = new Phaser.Math.Vector2();
+    this.scene.tweens.addCounter({
+      from: 0,
+      to: 1,
+      duration: durationMs,
+      ease: "Sine.Out",
+      onUpdate: (tween) => {
+        const t = tween.getValue() ?? 0;
+        path.getPoint(t, head);
+        // O rumo sai de um ponto logo atrás, para a frente da onda não tremer nas quinas da rota.
+        path.getPoint(Math.max(0, t - 0.08), tail);
+        image.setPosition(head.x, head.y);
+        const dx = head.x - tail.x;
+        const dy = head.y - tail.y;
+        if (dx !== 0 || dy !== 0) {
+          const goingLeft = dx < 0;
+          image.setFlipX(goingLeft);
+          image.setRotation(Math.atan2(dy, goingLeft ? -dx : dx));
+        }
+        // Entra rápido, atravessa cheia e só apaga no último terço: some antes disso e a onda parecia
+        // desistir no meio do caminho.
+        image.setAlpha(alpha * Math.min(1, (1 - t) * 3, t * 8 + 0.2));
+      },
+      onComplete: () => image.destroy(),
+    });
+    return true;
+  }
+
   persistent(key: string | null, x: number, y: number, diameter: number): Phaser.GameObjects.Image | null {
     if (!this.has(key)) return null;
     const scale = diameter / this.scene.textures.getFrame(key).width;

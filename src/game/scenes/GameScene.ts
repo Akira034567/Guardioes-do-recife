@@ -525,16 +525,38 @@ export class GameScene extends Phaser.Scene {
       const enemy = this.match.enemy(id);
       return enemy ? { x: enemy.x, y: enemy.y } : null;
     };
-    // Quem cada bloqueador está segurando: o primeiro preso serve para decidir o lado do sprite.
-    const blocked = new Map<string, Vec2>();
+    /**
+     * Para onde cada Guardião SEM ALVO está olhando.
+     *
+     * Duas famílias caem aqui, pelo mesmo motivo: elas têm dano 0 na ficha, nunca adquirem `targetId`
+     * e por isso ficavam de costas para o que estavam fazendo.
+     *  - bloqueadores (Baiacu, Tartaruga) olham para quem estão segurando;
+     *  - o emboscador (Peixe-Pedra) olha para a presa que fez os espinhos abrirem.
+     */
+    const facing = new Map<string, Vec2>();
     for (const enemy of this.match.enemies) {
-      if (!enemy.blockedById || enemy.dead || blocked.has(enemy.blockedById)) continue;
-      blocked.set(enemy.blockedById, { x: enemy.x, y: enemy.y });
+      if (!enemy.blockedById || enemy.dead || facing.has(enemy.blockedById)) continue;
+      facing.set(enemy.blockedById, { x: enemy.x, y: enemy.y });
     }
-    const blockedPosition = (guardianId: string): Vec2 | null => blocked.get(guardianId) ?? null;
+    for (const guardian of this.match.guardians) {
+      // Só enquanto ele está à mostra: virar a PEDRA para a presa entregaria o disfarce.
+      if (guardian.trapPhase !== "arming" && guardian.trapPhase !== "striking") continue;
+      let prey: Vec2 | null = null;
+      let best = Number.POSITIVE_INFINITY;
+      for (const enemy of this.match.enemies) {
+        if (enemy.dead) continue;
+        const distance = Math.hypot(enemy.x - guardian.x, enemy.y - guardian.y);
+        if (distance < best) {
+          best = distance;
+          prey = { x: enemy.x, y: enemy.y };
+        }
+      }
+      if (prey) facing.set(guardian.id, prey);
+    }
+    const facingPosition = (guardianId: string): Vec2 | null => facing.get(guardianId) ?? null;
     for (const view of this.enemyViews.values()) view.sync(now, deltaMs);
     for (const view of this.weakPointViews.values()) view.sync(deltaMs);
-    for (const view of this.guardianViews.values()) view.sync(now, enemyPosition, blockedPosition);
+    for (const view of this.guardianViews.values()) view.sync(now, enemyPosition, facingPosition);
     this.goldenBadge?.sync(deltaMs);
     if (this.crownView) {
       const crowned = this.match.crownedGuardianId ? this.match.guardian(this.match.crownedGuardianId) : null;

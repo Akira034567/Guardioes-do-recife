@@ -3,6 +3,7 @@ import { artTextureKey, artVariant, GUARDIAN_ART, type AbilityStyle } from "../a
 import { DEPTH } from "../constants";
 import type { BehaviorEvent } from "../core/GuardianBehaviors";
 import type { Match } from "../core/match/Match";
+import type { RoutePath } from "../core/RoutePath";
 import type { MatchEvent } from "../core/match/MatchEvents";
 import type { MatchGuardian } from "../core/match/MatchGuardian";
 import type { GuardianView } from "../objects/GuardianView";
@@ -54,6 +55,9 @@ const TONE_FOR_CAUSE: Partial<Record<DamageCause, DamageTone>> = {
  * Quanto tempo o pulso do sonar leva para atravessar o alcance. Número de APRESENTAÇÃO: o efeito de
  * jogo (revelar, marcar, aplicar vulnerabilidade) já aconteceu no instante do evento.
  */
+/** Longe disto da rota a repulsa não tem correnteza para percorrer e volta ao anel antigo. */
+const ROUTE_WAVE_REACH = 220;
+
 const SONAR_TRAVEL_MS = 1150;
 
 export class MatchEffects {
@@ -376,7 +380,25 @@ export class MatchEffects {
       }
       case "pushWave": {
         if (!guardian) return;
-        effects.ring(this.abilityKeyFor(guardian, "ring"), event.x, event.y + 6, event.radius * 2, { durationMs: event.visualMs, alpha: 0.8 });
+        /**
+         * A onda ANDA pela correnteza, no sentido em que ela empurra.
+         *
+         * Antes era um anel que crescia em cima da Tartaruga: o jogador via a unidade piscar e os
+         * inimigos saltarem para trás, sem nada ligando as duas coisas. Agora a frente percorre a
+         * mesma distância que o empurrão aplica, pelo traçado real da rota — a animação passou a ser
+         * a explicação do efeito em vez de um enfeite ao lado dele.
+         */
+        const lane = this.routeNear(event.x, event.y);
+        const travelled = lane
+          ? effects.travel(this.abilityKeyFor(guardian, "ring"), lane.pathBackFrom(event.x, event.y, event.distance), event.radius * 1.15, {
+              durationMs: event.visualMs,
+              alpha: 0.8,
+            })
+          : false;
+        // Sem rota por perto (ou sem a arte carregada), o anel antigo continua valendo como recurso.
+        if (!travelled) {
+          effects.ring(this.abilityKeyFor(guardian, "ring"), event.x, event.y + 6, event.radius * 2, { durationMs: event.visualMs, alpha: 0.8 });
+        }
         // A frente da repulsa acompanha o deslize dos inimigos (ver `EnemyView.applyPosition`): ela
         // acelera para fora com `Back.easeOut`, que é o gesto de empurrar — a antiga `Quad.Out`
         // desacelerava logo e a onda parecia frear justo quando as criaturas saíam voando.
@@ -411,7 +433,12 @@ export class MatchEffects {
           ease: "Sine.Out",
           onComplete: () => echo.destroy(),
         });
-        if (guardian) effects.ring(this.abilityKeyFor(guardian, "ring"), event.x, event.y + 6, event.radius * 2, { alpha: 0.45, durationMs: travelMs });
+        // O sonar sai em TRÊS ondas seguidas. Desenhar a arte da habilidade nas três empilhava três
+        // discos grandes no mesmo lugar e a tela virava sopa; as cristas vetoriais acima já contam a
+        // repetição. A arte entra só na primeira, que é a que anuncia "o Golfinho fez alguma coisa".
+        if (guardian && event.wave.index === 0) {
+          effects.ring(this.abilityKeyFor(guardian, "ring"), event.x, event.y + 6, event.radius * 2, { alpha: 0.45, durationMs: travelMs });
+        }
         if (event.wave.index === 0) audio.play("zap");
         return;
       }
@@ -490,6 +517,38 @@ export class MatchEffects {
     targets.forEach((target, index) => this.impactBurst(view, target.x, target.y, index === 0 ? 1 : 0.7));
   }
 
+  /**
+   * A rota mais próxima de um ponto, já com o traçado que a repulsa deve percorrer.
+   *
+   * Fases com mais de uma rota existem, então não dá para assumir a principal: a onda tem de andar
+   * pela correnteza em que a Tartaruga está, não pela do outro lado do mapa.
+   */
+  private routeNear(x: number, y: number): { pathBackFrom(fromX: number, fromY: number, distance: number): Array<{ x: number; y: number }> } | null {
+    let chosen: RoutePath | null = null;
+    let best = Number.POSITIVE_INFINITY;
+    for (const route of this.host.match.routes.values()) {
+      const closest = route.getClosestPoint({ x, y });
+      if (closest.distance < best) {
+        best = closest.distance;
+        chosen = route;
+      }
+    }
+    if (!chosen || best > ROUTE_WAVE_REACH) return null;
+    const route = chosen;
+    return {
+      pathBackFrom(fromX, fromY, distance) {
+        const start = route.getClosestPoint({ x: fromX, y: fromY }).routeDistance;
+        const steps = 12;
+        const points: Array<{ x: number; y: number }> = [];
+        for (let index = 0; index <= steps; index += 1) {
+          // Para TRÁS na rota: é o sentido em que os inimigos são empurrados.
+          points.push(route.getPointAtDistance(Math.max(0, start - (distance * index) / steps)));
+        }
+        return points;
+      },
+    };
+  }
+
   shockwave(x: number, y: number, color: number, radius: number): void {
     if (this.reduced) return;
     const circle = this.host.scene.add.circle(x, y, 10).setStrokeStyle(4, color, 0.9).setDepth(DEPTH.effects);
@@ -545,7 +604,10 @@ export class MatchEffects {
 export function abilityKeyForProgress(guardianId: GuardianId, branchId: "a" | "b" | null, upgradeLevel: number, style: AbilityStyle): string | null {
   for (let level = upgradeLevel; level >= 0; level -= 1) {
     const variant = artVariant(guardianId, { branchId, upgradeLevel: level });
-    if (variant.ability === style) return artTextureKey(guardianId, variant, "projectile");
+    // `abilityFromImpact`: a variante empresta o desenho do Impacto em vez de ter arte de Habilidade
+    // própria. Resolve-se aqui, na CHAVE — carregar o mesmo arquivo sob dois nomes seria pagar duas
+    // vezes por uma imagem no boot.
+    if (variant.ability === style) return artTextureKey(guardianId, variant, variant.abilityFromImpact ? "impact" : "projectile");
   }
   return null;
 }

@@ -164,11 +164,11 @@ const GUARDIAN_LESSONS: readonly Lesson[] = [
     art: { kind: "guardian", id: "stonefish" },
     points: [
       "Ele encaixa sozinho na borda da rota, camuflado de pedra, com a zona de emboscada invadindo a correnteza.",
-      "Quando alguém entra na zona ele abre os espinhos, dá o bote em área com veneno, recolhe e se camufla de novo. Para sempre.",
+      "Quando alguém entra na zona ele abre os espinhos, dá o bote em área com veneno, recolhe e VIRA PEDRA de novo. Para sempre.",
       "O bote é COMPROMETIDO: depois que os espinhos começam a abrir ele sai, mesmo que o alvo escape. Acertar é leitura sua.",
       "Ramo Jardim Tóxico: névoa que envenena e atrasa quem atravessa. Ramo Predador: zona menor, bote que ignora armadura.",
     ],
-    rule: "95 pérolas · zona 70 · bote de 46 + veneno de 9/s por 4s, a cada 3s. Encaixa a até 130 px da rota.",
+    rule: "95 pérolas · zona 70 · bote de 46 + veneno de 9/s por 4s, a cada 4,5s. Encaixa a até 130 px da rota.",
   },
   {
     id: "guardiao-golfinho",

@@ -57,9 +57,11 @@ export function guardianVisualState(input: VisualInput): GuardianVisualState {
   if (input.engineState === "disabled") return "disabled";
   if (input.now < input.abilityUntilMs) return "ability";
   if (input.trapPhase) {
-    // Emboscada: camuflado e acomodando são repouso; abrir os espinhos é a pose de ataque, e ela
-    // começa no `arming` — é o aviso que o jogador precisa ver antes do bote.
-    return input.trapPhase === "camouflaged" || input.trapPhase === "settling" ? "idle" : "attack";
+    // Emboscada: só `arming` e `striking` mostram o bicho. Camuflado, acomodando e RECARREGANDO são
+    // repouso — e repouso, para ele, é a pedra. O `cooldown` entrou nesta lista na V3.3: ele recolhe
+    // os espinhos junto com o bote, e ficar de espinhos abertos durante a recarga inteira contava uma
+    // mentira sobre quando ele está perigoso.
+    return input.trapPhase === "arming" || input.trapPhase === "striking" ? "attack" : "idle";
   }
   if (input.strikeAt === null) return "idle";
   const since = input.now - input.strikeAt;
