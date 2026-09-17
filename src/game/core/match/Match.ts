@@ -25,7 +25,7 @@ import {
   type BehaviorHooks,
   type DamageOptions,
 } from "../GuardianBehaviors";
-import { validatePlacement, type PlacementContext } from "../PlacementRules";
+import { freeModesOf, placementModesOf, validateAnyPlacement, type PlacementContext } from "../PlacementRules";
 import { createRng, type Rng } from "../Rng";
 import { RoutePath } from "../RoutePath";
 import { MAIN_PATH_ID, resolveLevelPaths } from "../WaveDefinitions";
@@ -506,23 +506,30 @@ export class Match {
     if (!this.walletOf(playerId).canAfford(definition.cost)) {
       return { ok: false, reason: "insufficientPearls", message: `Faltam pérolas para ${definition.name}.` };
     }
+    // V3.1: um Guardião pode aceitar mais de um lugar (o Polvo em pedra OU água; o Golfinho em água
+    // OU margem). A plataforma tem prioridade quando ele a aceita e o toque caiu perto de uma livre;
+    // fora disso, tenta cada modo de toque livre na ordem declarada.
+    const modes = placementModesOf(definition);
+    const freeModes = freeModesOf(definition);
     let placement: GuardianPlacement;
-    if (definition.placementMode === "platform") {
-      const platform = command.platformId
+    const platform = modes.includes("platform")
+      ? command.platformId
         ? this.level.placements.find((candidate) => candidate.id === command.platformId)
         : this.level.placements.find(
             (candidate) => !this.platformOccupants.has(candidate.id) && Math.hypot(candidate.x - command.x, candidate.y - command.y) <= PLACEMENT.platformHitRadius,
-          );
-      if (!platform) {
-        return command.platformId
-          ? { ok: false, reason: "notFound", message: "Plataforma desconhecida." }
-          : { ok: false, reason: "noPlatformNear", message: `${definition.name} precisa de uma plataforma de pedra.` };
-      }
+          )
+      : undefined;
+    if (platform) {
       if (this.platformOccupants.has(platform.id)) return { ok: false, reason: "platformOccupied", message: "Plataforma ocupada." };
       placement = { x: platform.x, y: platform.y, routeDistance: null, platformId: platform.id };
+    } else if (command.platformId) {
+      return modes.includes("platform")
+        ? { ok: false, reason: "notFound", message: "Plataforma desconhecida." }
+        : { ok: false, reason: "needsPlatform", message: `${definition.name} não fica em plataformas.` };
+    } else if (freeModes.length === 0) {
+      return { ok: false, reason: "noPlatformNear", message: `${definition.name} precisa de uma plataforma de pedra.` };
     } else {
-      if (command.platformId) return { ok: false, reason: "needsPlatform", message: `${definition.name} não fica em plataformas.` };
-      const validation = validatePlacement(definition.placementMode, this.placementContext(), { x: command.x, y: command.y });
+      const validation = validateAnyPlacement(freeModes, this.placementContext(), { x: command.x, y: command.y });
       if (!validation.valid) return { ok: false, reason: "invalidPlacement", message: validation.reason };
       placement = { x: validation.x, y: validation.y, routeDistance: validation.routeDistance, platformId: null };
     }

@@ -43,9 +43,9 @@ describe("Recife 1 content contracts", () => {
     expect(GUARDIANS.shark.placementMode).toBe("margin");
     expect(GUARDIANS.shark.dash).toBe(true);
     expect(GUARDIANS["sea-turtle"].placementMode).toBe("route");
-    expect(GUARDIANS["sea-turtle"].blocks).toBe(false);
-    expect(GUARDIANS["sea-turtle"].branches[0].upgrades.every((upgrade) => upgrade.blocks)).toBe(true);
-    expect(GUARDIANS["sea-turtle"].branches[1].upgrades.every((upgrade) => !upgrade.blocks)).toBe(true);
+    // V3.1: ela bloqueia desde a base e os DOIS ramos seguram — o que separa os ramos é a água.
+    expect(GUARDIANS["sea-turtle"].blocks).toBe(true);
+    expect(GUARDIANS["sea-turtle"].branches.every((branch) => branch.upgrades.every((upgrade) => upgrade.blocks))).toBe(true);
     expect(GUARDIANS.stonefish.placementMode).toBe("route");
     expect(GUARDIANS.stonefish.attackKind).toBe("trap");
     expect(GUARDIANS.stonefish.damage).toBe(0);
@@ -114,7 +114,7 @@ describe("Recife 1 content contracts", () => {
     expect(stonefish.branches[0].upgrades[0].trap?.poison).toMatchObject({ durationMs: 5000, tickMs: 1000 });
     expect(stonefish.branches[0].upgrades[1].trap?.cloud).toBeDefined();
     expect(stonefish.branches[1].upgrades[0].trap?.stun?.durationMs).toBe(1100);
-    expect(stonefish.branches[1].upgrades[1].trap).toMatchObject({ stun: { durationMs: 1600 }, waitFor: { windowMs: 500, detonateAt: 2 } });
+    expect(stonefish.branches[1].upgrades[1].trap).toMatchObject({ stun: { durationMs: 1600 }, exitTrigger: { exitMargin: 12, maxHoldMs: 2000 } });
     expect(stonefish.branches[1].upgrades.every((upgrade) => upgrade.trap?.charge.applyTo === "control")).toBe(true);
     expect(stonefish.branches[0].upgrades.every((upgrade) => upgrade.trap?.charge.applyTo === "damage")).toBe(true);
 

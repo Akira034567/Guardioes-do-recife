@@ -118,7 +118,8 @@ describe("stonefish trap", () => {
   it("poisons on Veneno I and spawns the toxic cloud on Veneno II", () => {
     const fish = new FakeGuardian("P", "stonefish", 300, 0, "a", 1, 0);
     const trap = fish.stats.trap!;
-    const victim = new FakeEnemy("A", "swimmer", 310);
+    // V3.1: ela segura o tiro até alguém chegar na borda de saída — 53 px depois dela (raio 65 − 12).
+    const victim = new FakeEnemy("A", "swimmer", 355);
     const damaged: Array<{ id: string; amount: number }> = [];
     updateTrap(fish, [victim], hooks(trap.armMs, [], damaged));
     updateTrap(fish, [victim], hooks(trap.armMs + 1, [], damaged));
@@ -136,7 +137,8 @@ describe("stonefish trap", () => {
   it("stuns and knocks back on Emboscada II, sparing the boss from the push", () => {
     const fish = new FakeGuardian("P", "stonefish", 300, 0, "b", 2, 0);
     const trap = fish.stats.trap!;
-    const first = new FakeEnemy("A", "swimmer", 305);
+    // O da frente já está na borda de saída: é ele que puxa o gatilho, e os de trás entram junto.
+    const first = new FakeEnemy("A", "swimmer", 355);
     const second = new FakeEnemy("B", "swimmer", 310);
     const boss = new FakeEnemy("Z", "tidebreaker", 315);
     const events: BehaviorEvent[] = [];
@@ -145,7 +147,7 @@ describe("stonefish trap", () => {
     updateTrap(fish, [first, second, boss], hooks(fireAt, events));
     expect(events.some((event) => event.type === "trapTrigger")).toBe(true);
     expect(first.status.isStunned(fireAt + 1)).toBe(true);
-    expect(first.pathDistance).toBe(305 - trap.knockback!.distance);
+    expect(first.pathDistance).toBe(355 - trap.knockback!.distance);
     expect(boss.pathDistance).toBe(315);
     expect(boss.status.isStunned(fireAt + 1)).toBe(true);
     expect(boss.status.isStunned(fireAt + trap.stun!.durationMs * trap.stun!.bossFactor + 5)).toBe(false);

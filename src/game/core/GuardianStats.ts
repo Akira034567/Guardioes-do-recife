@@ -143,7 +143,7 @@ export function resolveGuardianStats(
     dash: Boolean(definition.dash),
     frenzy: resolveLast(applied, "frenzy") ?? null,
     mark: resolveLast(applied, "mark") ?? null,
-    blockHold: blocks ? (resolveLast(applied, "blockHold") ?? null) : null,
+    blockHold: blocks ? (resolveLast(applied, "blockHold") ?? definition.blockHold ?? null) : null,
     flowField: resolveLast(applied, "flowField") ?? null,
     pushWave: (() => {
       const wave = resolveLast(applied, "pushWave") ?? null;

@@ -232,13 +232,14 @@ export interface TrapEffect {
   stun?: TrapStun;
   knockback?: { distance: number; eliteFactor: number };
   /**
-   * Emboscada II: janela curta aberta quando o PRIMEIRO inimigo pisa na armadilha.
+   * Quando disparar: a armadilha segura o tiro enquanto o grupo se forma e solta pouco antes de o
+   * primeiro inimigo escapar do raio — o instante com mais gente dentro.
    *
-   * Se a contagem chegar a `detonateAt` dentro da janela, detona na hora — não espera o resto dela.
-   * Se a janela fechar e ninguém mais tiver entrado, detona no primeiro mesmo. Era uma espera longa
-   * (2 inimigos ou 2s) que na prática comia o tempo de armadilha sem nunca juntar o grupo.
+   * `exitMargin` é a folga em pixels: com raio 65 e margem 12, ela dispara quando o mais avançado
+   * está a 53 px dela, faltando 12 para sair. `maxHoldMs` evita a espera eterna quando ninguém anda
+   * (um bloqueador segurando a fila em cima da armadilha).
    */
-  waitFor?: { windowMs: number; detonateAt: number };
+  exitTrigger?: { exitMargin: number; maxHoldMs: number };
   /** Quanto mais tempo armado, maior o próximo efeito: `+bonus` a cada `everyMs`, até `max`. */
   charge: { everyMs: number; bonus: number; max: number; applyTo: "damage" | "control" };
 }
@@ -356,9 +357,16 @@ export interface GuardianDefinition {
   cooldownMs: number;
   attackKind: AttackKind;
   placementMode: PlacementMode;
+  /**
+   * Modos ACEITOS além do principal. O Golfinho aceita água e margem; o Polvo, plataforma e água.
+   * A ordem importa: `placementMode` é o que o HUD sugere e o que o fantasma desenha por padrão.
+   */
+  altPlacementModes?: readonly PlacementMode[];
   /** Apenas para placementMode "route": se a unidade segura inimigos. */
   blocks?: boolean;
   blockCapacity?: number;
+  /** Bloqueio com prazo já na versão base (Baiacu e Tartaruga, desde a V3.1). */
+  blockHold?: BlockHoldEffect;
   contactDamagePerSecond?: number;
   projectileSpeed?: number;
   slowFactor?: number;

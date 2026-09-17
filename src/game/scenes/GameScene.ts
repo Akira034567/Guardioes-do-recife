@@ -10,7 +10,7 @@ import { Match } from "../core/match/Match";
 import { MatchClock, type MatchSpeed } from "../core/match/MatchClock";
 import type { CommandResult, MatchCommand } from "../core/match/MatchCommands";
 import type { MatchEvent } from "../core/match/MatchEvents";
-import { PLACEMENT_HINTS, validatePlacement } from "../core/PlacementRules";
+import { freeModesOf, PLACEMENT_HINTS, placementModesOf, validateAnyPlacement } from "../core/PlacementRules";
 import { BOSS_CURRENT, ECONOMY, PLACEMENT } from "../data/balance";
 import { difficultyOf, resolveLevelForDifficulty, type DifficultyDefinition } from "../data/difficulty";
 import type { MatchResult } from "../core/progression/MatchResult";
@@ -621,7 +621,7 @@ export class GameScene extends Phaser.Scene {
     this.ghost.setGuardian(this.selectedGuardianId ? GUARDIANS[this.selectedGuardianId] : null);
     if (this.selectedGuardianId) {
       const definition = GUARDIANS[id];
-      this.showMessage(`Toque em ${PLACEMENT_HINTS[definition.placementMode]} para posicionar ${definition.name}.`, 2200);
+      this.showMessage(`Toque em ${placementModesOf(definition).map((mode) => PLACEMENT_HINTS[mode]).join(" ou ")} para posicionar ${definition.name}.`, 2200);
     }
     this.emitHud();
     this.renderPlacementState();
@@ -667,8 +667,8 @@ export class GameScene extends Phaser.Scene {
       return;
     }
     const definition = GUARDIANS[this.selectedGuardianId];
-    if (definition.placementMode !== "platform") {
-      this.showMessage(`${definition.name} precisa de ${PLACEMENT_HINTS[definition.placementMode]}.`, 1900);
+    if (!placementModesOf(definition).includes("platform")) {
+      this.showMessage(`${definition.name} precisa de ${placementModesOf(definition).map((mode) => PLACEMENT_HINTS[mode]).join(" ou ")}.`, 1900);
       return;
     }
     const result = this.place(definition.id, platform.definition.x, platform.definition.y, platform.definition.id);
@@ -735,7 +735,7 @@ export class GameScene extends Phaser.Scene {
       return;
     }
     const definition = GUARDIANS[this.selectedGuardianId];
-    if (definition.placementMode === "platform") return;
+    if (freeModesOf(definition).length === 0) return;
     this.dropOnField(definition, pointer.worldX, pointer.worldY);
   }
 
@@ -754,12 +754,15 @@ export class GameScene extends Phaser.Scene {
     if (!this.selectedGuardianId || this.match.status !== "running") return;
     if (pointer.y <= HUD_TOP || pointer.y >= GAME_HEIGHT - HUD_BOTTOM) return;
     const definition = GUARDIANS[this.selectedGuardianId];
-    if (definition.placementMode === "platform") {
-      // Fora de qualquer plataforma o arraste simplesmente não vale — e a carta continua na mão,
-      // para o jogador tentar de novo sem ter de escolher tudo outra vez.
+    if (placementModesOf(definition).includes("platform")) {
       const platform = this.platformNear(pointer.worldX, pointer.worldY);
-      if (platform) this.handlePlatform(platform);
-      return;
+      if (platform) {
+        this.handlePlatform(platform);
+        return;
+      }
+      // Fora de qualquer plataforma o arraste só vale para quem TAMBÉM aceita toque livre (o Polvo);
+      // para os demais a carta continua na mão, sem obrigar a escolher tudo de novo.
+      if (freeModesOf(definition).length === 0) return;
     }
     this.dropOnField(definition, pointer.worldX, pointer.worldY);
   }
@@ -769,6 +772,10 @@ export class GameScene extends Phaser.Scene {
     const result = this.place(definition.id, x, y);
     if (!result.ok) return;
     const guardian = this.match.guardian(result.instanceId ?? "");
+    if (guardian?.platformId) {
+      this.showMessage(`${definition.name} na plataforma de pedra.`, 1500);
+      return;
+    }
     if (definition.placementMode === "route") {
       const verb = guardian?.stats.trap ? "enterrado na correnteza!" : guardian?.stats.blocks ? "bloqueando a correnteza!" : "de guarda na correnteza!";
       this.showMessage(`${definition.name} ${verb}`, 1500);
@@ -790,21 +797,24 @@ export class GameScene extends Phaser.Scene {
     const affordable = this.match.pearls() >= definition.cost;
     const cost = `◉ ${definition.cost}`;
 
-    if (definition.placementMode === "platform") {
+    const freeModes = freeModesOf(definition);
+    if (placementModesOf(definition).includes("platform")) {
       // Na plataforma o fantasma encaixa no centro dela; longe de qualquer uma, segue o cursor em recusa.
       const platform = this.platformNear(pointer.worldX, pointer.worldY);
       const occupied = platform ? this.match.platformOccupant(platform.definition.id) !== null : false;
-      this.ghost.show({
-        x: platform?.definition.x ?? pointer.worldX,
-        y: platform?.definition.y ?? pointer.worldY,
-        valid: Boolean(platform) && !occupied,
-        affordable,
-        label: !platform ? "Precisa de uma plataforma" : occupied ? "Plataforma ocupada" : affordable ? cost : "Pérolas insuficientes",
-      });
-      return;
+      if (platform || freeModes.length === 0) {
+        this.ghost.show({
+          x: platform?.definition.x ?? pointer.worldX,
+          y: platform?.definition.y ?? pointer.worldY,
+          valid: Boolean(platform) && !occupied,
+          affordable,
+          label: !platform ? "Precisa de uma plataforma" : occupied ? "Plataforma ocupada" : affordable ? cost : "Pérolas insuficientes",
+        });
+        return;
+      }
     }
 
-    const validation = validatePlacement(definition.placementMode, this.match.placementContext(), { x: pointer.worldX, y: pointer.worldY });
+    const validation = validateAnyPlacement(freeModes, this.match.placementContext(), { x: pointer.worldX, y: pointer.worldY });
     this.ghost.show({
       x: validation.x,
       y: validation.y,
@@ -1322,17 +1332,20 @@ export class GameScene extends Phaser.Scene {
       this.selectionGraphic.strokeCircle(selected.x, selected.y, selected.range);
     }
 
-    const placementMode = this.selectedGuardianId ? GUARDIANS[this.selectedGuardianId].placementMode : null;
-    if (placementMode === "platform") {
-      this.platforms.forEach((platform) => {
-        const occupied = this.match.platformOccupant(platform.definition.id) !== null;
-        this.placementGuideGraphic.lineStyle(2, occupied ? 0xff8290 : 0xa5f6d2, occupied ? 0.42 : 0.72);
-        this.placementGuideGraphic.strokeCircle(platform.definition.x, platform.definition.y, 38);
-      });
-    } else if (placementMode === "margin") {
-      this.marginBand().setVisible(true);
-    } else if (placementMode === null) {
+    // V3.1: o guia mostra TODOS os lugares aceitos ao mesmo tempo — o Polvo acende as pedras e a
+    // água, o Golfinho acende a faixa da margem. Quem aceita um lugar só continua exatamente igual.
+    const modes = this.selectedGuardianId ? placementModesOf(GUARDIANS[this.selectedGuardianId]) : null;
+    if (modes === null) {
       this.ghost.hide();
+    } else {
+      if (modes.includes("platform")) {
+        this.platforms.forEach((platform) => {
+          const occupied = this.match.platformOccupant(platform.definition.id) !== null;
+          this.placementGuideGraphic.lineStyle(2, occupied ? 0xff8290 : 0xa5f6d2, occupied ? 0.42 : 0.72);
+          this.placementGuideGraphic.strokeCircle(platform.definition.x, platform.definition.y, 38);
+        });
+      }
+      if (modes.includes("margin")) this.marginBand().setVisible(true);
     }
     // Nada de `renderDebug()` aqui. São três camadas diferentes e elas não podem se misturar:
     //

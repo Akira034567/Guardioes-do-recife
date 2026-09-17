@@ -1,4 +1,4 @@
-import type { GuardianId, ToxicCloudEffect, Vec2 } from "../types";
+import type { GuardianId, ToxicCloudEffect, TrapEffect, Vec2 } from "../types";
 import type { AuraSource } from "./Auras";
 import type { BlockableEnemy } from "./Blocking";
 import { distinctSpeciesInRange } from "./Chorus";
@@ -25,6 +25,8 @@ export interface BehaviorGuardian extends Vec2 {
   guardianId: GuardianId;
   stats: GuardianStats;
   range: number;
+  /** Posição ao longo da rota; `null` para quem não está em cima dela. A armadilha usa para saber quem já passou. */
+  routeDistance?: number | null;
   runtime: GuardianRuntime;
   /** Alvo atual da FSM (para o Frenesi). */
   targetId: string | null;
@@ -204,6 +206,21 @@ export function updatePushWave<E extends BehaviorEnemy>(guardian: BehaviorGuardi
 
 // ----------------------------------------------------------- Peixe-Pedra
 
+/**
+ * Alguém dentro do raio está a ponto de escapar?
+ *
+ * Medido ao longo da ROTA, não em linha reta: o que interessa é quem já passou da armadilha e está
+ * chegando na borda de saída. Quem acabou de entrar também está longe do centro, mas está do lado de
+ * ANTES — e disparar nele seria exatamente o tiro precipitado que a V3.1 veio corrigir.
+ */
+function someoneLeaving<E extends BehaviorEnemy>(guardian: BehaviorGuardian, inRadius: readonly E[], trap: TrapEffect): boolean {
+  const exit = trap.exitTrigger;
+  const anchor = guardian.routeDistance;
+  if (!exit || anchor === null || anchor === undefined) return false;
+  const limit = trap.triggerRadius - exit.exitMargin;
+  return inRadius.some((enemy) => enemy.pathDistance - anchor >= limit);
+}
+
 /** Armadilha: avança a máquina de estados e resolve o disparo. */
 export function updateTrap<E extends BehaviorEnemy>(guardian: BehaviorGuardian, enemies: readonly E[], hooks: BehaviorHooks<E>): void {
   const trap = guardian.stats.trap;
@@ -211,7 +228,7 @@ export function updateTrap<E extends BehaviorEnemy>(guardian: BehaviorGuardian, 
   if (!trap || !core) return;
   const now = hooks.now;
   const inRadius = aliveInRange(enemies, guardian, trap.triggerRadius);
-  for (const event of core.update(now, inRadius.length, guardian.stats.rearmMultiplier)) {
+  for (const event of core.update(now, inRadius.length, { leaving: someoneLeaving(guardian, inRadius, trap), rearmMultiplier: guardian.stats.rearmMultiplier })) {
     if (event.type === "phase") {
       hooks.emit?.({ type: "trapPhase", guardianId: guardian.id, phase: event.phase });
       continue;

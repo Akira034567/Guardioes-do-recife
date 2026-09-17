@@ -97,6 +97,9 @@ describe("balance sheet", () => {
     // Baiacu: ramo A segura mais, ramo B pulsa.
     expect(GUARDIANS.pufferfish.contactDamagePerSecond).toBe(11);
     expect(GUARDIANS.pufferfish.branches[0].upgrades.map((upgrade) => upgrade.blockCapacity)).toEqual([3, 5]);
+    // V3.1: o agarrão do Baiacu deixou de ser permanente em todos os níveis.
+    expect(GUARDIANS.pufferfish.blockHold?.durationMs).toBe(3500);
+    expect(GUARDIANS.pufferfish.branches[0].upgrades.map((upgrade) => upgrade.blockHold?.durationMs)).toEqual([4500, 5500]);
     expect(GUARDIANS.pufferfish.branches[0].upgrades.map((upgrade) => upgrade.contactDamagePerSecond)).toEqual([15, 19]);
     expect(GUARDIANS.pufferfish.branches[1].upgrades.map((upgrade) => upgrade.damage)).toEqual([34, 58]);
     // Caranguejo: brawler de alcance curtíssimo.
@@ -118,13 +121,21 @@ describe("balance sheet", () => {
     // Tartaruga: controle em área, dano irrelevante de propósito.
     expect(GUARDIANS["sea-turtle"]).toMatchObject({ damage: 11, cooldownMs: 1500, slowFactor: 0.75 });
     expect(GUARDIANS["sea-turtle"].branches[0].upgrades.map((upgrade) => upgrade.blockCapacity)).toEqual([4, 6]);
+    // V3.1: ela bloqueia desde a base, e a Correnteza também segura — menos, mas segura.
+    expect(GUARDIANS["sea-turtle"]).toMatchObject({ blocks: true, blockCapacity: 2 });
+    expect(GUARDIANS["sea-turtle"].branches[1].upgrades.map((upgrade) => upgrade.blockCapacity)).toEqual([3, 5]);
+    // A turbulência é EXCLUSIVA do ramo Correnteza: o Casco não mexe na água.
+    expect(GUARDIANS["sea-turtle"].branches[0].upgrades.every((upgrade) => upgrade.flowField === undefined)).toBe(true);
+    expect(GUARDIANS["sea-turtle"].branches[1].upgrades.every((upgrade) => upgrade.flowField !== undefined)).toBe(true);
     expect(GUARDIANS["sea-turtle"].branches[1].upgrades.map((upgrade) => upgrade.flowField?.speedFactor)).toEqual([0.62, 0.55]);
     expect(GUARDIANS["sea-turtle"].branches[1].upgrades[1].pushWave?.distance).toBe(170);
     // Peixe-Pedra: a armadilha cobra caro no instante em que ativa.
-    expect(GUARDIANS.stonefish.trap).toMatchObject({ damage: 40, armMs: 2600, cooldownMs: 5000, charge: { everyMs: 2000, bonus: 0.06, max: 0.36 } });
+    expect(GUARDIANS.stonefish.trap).toMatchObject({ damage: 40, armMs: 2600, cooldownMs: 2500, charge: { everyMs: 2000, bonus: 0.06, max: 0.36 } });
     expect(GUARDIANS.stonefish.branches[1].upgrades.map((upgrade) => upgrade.trap?.damage)).toEqual([58, 96]);
-    // V3: a espera longa (2 inimigos ou 2s) virou janela curta com detonação antecipada.
-    expect(GUARDIANS.stonefish.branches[1].upgrades[1].trap?.waitFor).toEqual({ windowMs: 500, detonateAt: 2 });
+    // V3.1: o gatilho é do Peixe-Pedra inteiro, não só da Fúria — ele sai pouco antes de o primeiro escapar.
+    expect(GUARDIANS.stonefish.trap?.exitTrigger).toEqual({ exitMargin: 12, maxHoldMs: 2000 });
+    expect(GUARDIANS.stonefish.trap?.cooldownMs).toBe(2500);
+    expect(GUARDIANS.stonefish.branches[1].upgrades.every((upgrade) => upgrade.trap?.exitTrigger !== undefined)).toBe(true);
     // Golfinho: suporte puro; base com 10% de vulnerabilidade.
     expect(GUARDIANS.dolphin).toMatchObject({ damage: 11, cooldownMs: 1400 });
     expect(GUARDIANS.dolphin.sonar?.vulnerability.multiplier).toBe(1.1);

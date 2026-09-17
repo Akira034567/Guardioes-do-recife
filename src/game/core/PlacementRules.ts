@@ -1,6 +1,6 @@
 import { GAME_HEIGHT, GAME_WIDTH, HUD_BOTTOM, HUD_TOP } from "../constants";
 import { PLACEMENT } from "../data/balance";
-import type { PlacementMode, Vec2 } from "../types";
+import type { GuardianDefinition, PlacementMode, Vec2 } from "../types";
 import type { RoutePath } from "./RoutePath";
 
 /** Área jogável para unidades de água e margem. */
@@ -89,6 +89,38 @@ export function validateMarginPlacement(context: PlacementContext, point: Vec2):
   if (near(point, context.platforms, PLACEMENT.separation)) return { ...result, valid: false, reason: "Plataforma ocupa este espaço" };
   if (near(point, context.guardians, PLACEMENT.separation)) return { ...result, valid: false, reason: "Muito perto de outro Guardião" };
   return result;
+}
+
+/** Todos os modos que um Guardião aceita, o principal primeiro. */
+export function placementModesOf(definition: Pick<GuardianDefinition, "placementMode" | "altPlacementModes">): readonly PlacementMode[] {
+  return definition.altPlacementModes?.length ? [definition.placementMode, ...definition.altPlacementModes] : [definition.placementMode];
+}
+
+/** Os modos de toque livre que este Guardião aceita (plataforma tem alvo de clique próprio). */
+export function freeModesOf(definition: Pick<GuardianDefinition, "placementMode" | "altPlacementModes">): Array<Exclude<PlacementMode, "platform">> {
+  return placementModesOf(definition).filter((mode): mode is Exclude<PlacementMode, "platform"> => mode !== "platform");
+}
+
+export interface ModeValidation extends PlacementValidation {
+  mode: Exclude<PlacementMode, "platform">;
+}
+
+/**
+ * Tenta cada modo aceito e devolve o PRIMEIRO válido. Não havendo nenhum, devolve a recusa do modo
+ * principal — que é a que o jogador precisa ler: "este aqui é de água" vale mais que "não é margem".
+ */
+export function validateAnyPlacement(
+  modes: ReadonlyArray<Exclude<PlacementMode, "platform">>,
+  context: PlacementContext,
+  point: Vec2,
+): ModeValidation {
+  let first: ModeValidation | null = null;
+  for (const mode of modes) {
+    const result = { ...validatePlacement(mode, context, point), mode };
+    if (result.valid) return result;
+    first ??= result;
+  }
+  return first ?? { ...validateWaterPlacement(context, point), mode: "water" };
 }
 
 /** Validação para os modos de toque livre (plataformas são tratadas pelos seus próprios alvos de clique). */

@@ -57,14 +57,17 @@ describe("blocking system", () => {
     expect(boss.status.slowFactor(10)).toBeLessThan(1);
   });
 
-  it("does not block before the Casco upgrade and forgets sold blockers", () => {
+  it("blocks from the base tier, grows with the branch and forgets sold blockers", () => {
     const system = new BlockingSystem();
     const base = new FakeGuardian("T", "sea-turtle", 400, 0);
     const enemy = new FakeEnemy("A", "swimmer", 380);
+    // V3.1: a Tartaruga crua já segura 2; o Casco leva a 4 e depois a 6.
+    expect(base.stats.blocks).toBe(true);
+    expect(base.stats.blockCapacity).toBe(2);
     system.update([base], [enemy], 0, 16, noop);
-    expect(base.stats.blocks).toBe(false);
-    expect(enemy.blockedById).toBeNull();
+    expect(enemy.blockedById).toBe("T");
     base.upgrade("a", 1);
+    expect(base.stats.blockCapacity).toBe(4);
     system.update([base], [enemy], 16, 16, noop);
     expect(enemy.blockedById).toBe("T");
     system.update([], [enemy], 32, 16, noop);

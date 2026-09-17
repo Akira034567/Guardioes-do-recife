@@ -10,8 +10,12 @@ export const TRAP_TRIGGER_MS = 450;
 /**
  * Máquina de estados da armadilha do Peixe-Pedra, sem Phaser:
  * arming (exposto, enterrando) → armed → triggered (emergido) → cooldown → arming.
- * Dispara quando há inimigos no raio; com `waitFor`, o primeiro inimigo abre uma janela curta:
- * chegando a `detonateAt` dentro dela, detona na hora; fechando a janela sozinho, detona no primeiro.
+ *
+ * Com `exitTrigger` (o padrão do Peixe-Pedra desde a V3.1), ela NÃO dispara no primeiro contato: segura
+ * o tiro enquanto o grupo se forma e solta quando alguém está prestes a escapar do raio (`leaving`) —
+ * o instante em que há mais gente dentro. `maxHoldMs` é a rede de segurança para a fila que não anda.
+ * Sem `exitTrigger`, volta ao comportamento simples: dispara assim que há qualquer inimigo no raio.
+ *
  * Quanto mais tempo armada sem disparar, maior o bônus (`charge`), até o teto.
  */
 export class TrapCore {
@@ -47,7 +51,12 @@ export class TrapCore {
     return Math.min(this.config.charge.max, steps * this.config.charge.bonus);
   }
 
-  update(now: number, enemiesInRadius: number, rearmMultiplier = 1): TrapEvent[] {
+  /**
+   * `leaving`: algum inimigo dentro do raio está a ponto de sair. Quem calcula é o comportamento, que
+   * é quem enxerga as posições; a máquina de estados só decide o que fazer com a informação.
+   */
+  update(now: number, enemiesInRadius: number, options: { leaving?: boolean; rearmMultiplier?: number } = {}): TrapEvent[] {
+    const rearmMultiplier = options.rearmMultiplier ?? 1;
     const events: TrapEvent[] = [];
     switch (this.currentPhase) {
       case "arming":
@@ -62,11 +71,11 @@ export class TrapCore {
           this.firstSeenAt = null;
           break;
         }
-        if (this.config.waitFor) {
+        if (this.config.exitTrigger) {
           if (this.firstSeenAt === null) this.firstSeenAt = now;
-          const waited = now - this.firstSeenAt;
-          // Sai da espera por qualquer um dos dois lados: juntou gente, ou a janela acabou.
-          if (enemiesInRadius < this.config.waitFor.detonateAt && waited < this.config.waitFor.windowMs) break;
+          const held = now - this.firstSeenAt;
+          // Segura enquanto ninguém está saindo E a rede de segurança não estourou.
+          if (!options.leaving && held < this.config.exitTrigger.maxHoldMs) break;
         }
         events.push({ type: "trigger", chargeBonus: this.chargeBonus(now) });
         events.push(this.enter("triggered", now + TRAP_TRIGGER_MS));

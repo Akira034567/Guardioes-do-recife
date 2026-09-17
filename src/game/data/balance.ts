@@ -97,7 +97,14 @@ export const GUARDIAN_BALANCE = {
       level2: { damage: 18, stun: { durationMs: 900, immunityMs: 3000 } },
     },
   },
-  /** Baiacu — bloqueio. Ramo A segura mais gente; ramo B troca a contenção por pulsos de área. */
+  /**
+   * Baiacu — bloqueio. Ramo A segura mais gente; ramo B troca a contenção por pulsos de área.
+   *
+   * V3.1: o agarrão deixou de ser PERMANENTE. Antes, um Baiacu bem posto prendia a fila inteira até o
+   * fim da onda e o jogador não precisava mais pensar nela; agora cada inimigo fica preso por um
+   * tempo, é solto, e leva `releaseCooldownMs` até poder ser pego de novo. A capacidade (1/3/5) não
+   * mudou: o que mudou é que segurar virou um ciclo, não um estado.
+   */
   pufferfish: {
     cost: 105,
     upgradeCosts: [85, 145] as const,
@@ -107,11 +114,17 @@ export const GUARDIAN_BALANCE = {
     cooldownMs: 3600,
     blockCapacity: 1,
     contactDamagePerSecond: 11,
+    blockHold: { durationMs: 3500, releaseCooldownMs: 1500, eliteSlots: 2, bossSlow: { factor: 0.65, durationMs: 1200 } },
     fortress: {
-      level1: { blockCapacity: 3, contactDamagePerSecond: 15 },
+      level1: {
+        blockCapacity: 3,
+        contactDamagePerSecond: 15,
+        blockHold: { durationMs: 4500, releaseCooldownMs: 1500, eliteSlots: 2, bossSlow: { factor: 0.6, durationMs: 1400 } },
+      },
       level2: {
         blockCapacity: 5,
         contactDamagePerSecond: 19,
+        blockHold: { durationMs: 5500, releaseCooldownMs: 1400, eliteSlots: 2, bossSlow: { factor: 0.55, durationMs: 1600 } },
         bossHold: { durationMs: 1600, immunityMs: 8000 },
       },
     },
@@ -183,7 +196,16 @@ export const GUARDIAN_BALANCE = {
       },
     },
   },
-  /** Tartaruga-Marinha — controle em área. O dano é acessório; o valor é a zona e o bloqueio temporário. */
+  /**
+   * Tartaruga-Marinha — controle em área. O dano é acessório; o valor é a zona e o bloqueio.
+   *
+   * V3.1, duas mudanças de fundo:
+   *
+   * 1. Ela BLOQUEIA desde a base (2 vagas) e os DOIS ramos sobem a capacidade: Casco 4 → 6, que é a
+   *    barreira de verdade, e Correnteza 3 → 5, que segura menos mas compensa com a zona.
+   * 2. A turbulência saiu do Casco. Antes os dois ramos empurravam água, o que apagava a escolha;
+   *    agora `flowField` é EXCLUSIVO do ramo Correnteza — quem quer mexer na água escolhe a água.
+   */
   "sea-turtle": {
     cost: 85,
     upgradeCosts: [75, 130] as const,
@@ -193,43 +215,62 @@ export const GUARDIAN_BALANCE = {
     /** Batida base: slow leve no alvo. */
     slowFactor: 0.75,
     slowDurationMs: 1400,
+    blockCapacity: 2,
+    blockHold: { durationMs: 3000, releaseCooldownMs: 2500, eliteSlots: 2, bossSlow: { factor: 0.7, durationMs: 1200 } },
     shell: {
       level1: {
         blockCapacity: 4,
         blockHold: { durationMs: 4000, releaseCooldownMs: 3000, eliteSlots: 2, bossSlow: { factor: 0.6, durationMs: 1400 } },
-        /** Turbulência: slow ambiental em volta. */
-        flowField: { radiusMultiplier: 1.5, speedFactor: 0.8 },
       },
       level2: {
         blockCapacity: 6,
         blockHold: { durationMs: 5000, releaseCooldownMs: 3000, eliteSlots: 2, bossSlow: { factor: 0.5, durationMs: 1600 } },
-        flowField: { radiusMultiplier: 1.5, speedFactor: 0.78 },
         /** Repulsa Ancestral. */
         pushWave: { cooldownMs: 9000, distance: 110, eliteFactor: 0.6, bossSlow: { factor: 0.5, durationMs: 1600 }, visualMs: 700 },
       },
     },
     current: {
-      level1: { flowField: { radiusMultiplier: 1.8, speedFactor: 0.62 } },
+      level1: {
+        blockCapacity: 3,
+        blockHold: { durationMs: 3000, releaseCooldownMs: 2800, eliteSlots: 2, bossSlow: { factor: 0.65, durationMs: 1200 } },
+        flowField: { radiusMultiplier: 1.8, speedFactor: 0.62 },
+      },
       level2: {
+        blockCapacity: 5,
+        blockHold: { durationMs: 3500, releaseCooldownMs: 2800, eliteSlots: 2, bossSlow: { factor: 0.6, durationMs: 1400 } },
         flowField: { radiusMultiplier: 1.9, speedFactor: 0.55 },
         /** Controle pesado periódico: a corrente devolve a onda inteira 170px rota abaixo. */
         pushWave: { cooldownMs: 9000, distance: 170, eliteFactor: 0.6, bossSlow: { factor: 0.45, durationMs: 2000 }, visualMs: 1500 },
       },
     },
   },
-  /** Peixe-Pedra — armadilha. Espera muito e cobra caro: o valor está no instante em que ativa. */
+  /**
+   * Peixe-Pedra — armadilha.
+   *
+   * V3.1: o gatilho mudou de ideia. A regra antiga (esperar 2 inimigos, ou estourar um timeout) era
+   * uma aposta que costumava sair errada — ou ele segurava esperando companhia que não vinha, ou
+   * disparava com um alvo só. Agora ele espera o grupo se formar e dispara POUCO ANTES de o primeiro
+   * escapar do raio (`exitTrigger`), que é o instante em que há mais gente dentro. A recarga caiu pela
+   * metade (5s → 2,5s) porque uma armadilha que mira o momento certo precisa ter mais momentos.
+   */
   stonefish: {
     cost: 95,
     upgradeCosts: [80, 140] as const,
     range: 65,
     /** Não ataca pela FSM: tudo acontece na armadilha. */
     damage: 0,
-    cooldownMs: 5000,
+    cooldownMs: 2500,
     trap: {
       armMs: 2600,
-      cooldownMs: 5000,
+      cooldownMs: 2500,
       triggerRadius: 65,
       damage: 40,
+      /**
+       * Dispara quando o inimigo mais avançado chega a `triggerRadius − exitMargin` depois da
+       * armadilha — ou seja, a `exitMargin` px de escapar. `maxHoldMs` é a rede de segurança: se
+       * ninguém avança (preso por um bloqueador em cima da armadilha), ela dispara assim mesmo.
+       */
+      exitTrigger: { exitMargin: 12, maxHoldMs: 2000 },
       charge: { everyMs: 2000, bonus: 0.06, max: 0.36, applyTo: "damage" as const },
     },
     venom: {
@@ -250,7 +291,6 @@ export const GUARDIAN_BALANCE = {
         damage: 96,
         stun: { durationMs: 1600, eliteFactor: 0.6, bossFactor: 0.25 },
         knockback: { distance: 90, eliteFactor: 0.5 },
-        waitFor: { windowMs: 500, detonateAt: 2 },
         charge: { everyMs: 2000, bonus: 0.06, max: 0.36, applyTo: "control" as const },
       },
     },
