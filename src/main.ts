@@ -7,6 +7,8 @@ import { HubScene } from "./game/scenes/HubScene";
 import { LevelSelectScene } from "./game/scenes/LevelSelectScene";
 import { UIScene } from "./game/scenes/UIScene";
 import { DIAGNOSTICS_ON, dumpLifecycle } from "./game/systems/devLog";
+import { flushSaveSync } from "./game/systems/accountSync";
+import { restoreSession } from "./game/systems/session";
 
 const game = new Phaser.Game({
   type: Phaser.AUTO,
@@ -30,7 +32,18 @@ const game = new Phaser.Game({
   },
 });
 
-window.addEventListener("beforeunload", () => game.destroy(true));
+/*
+ * Quem já estava logado volta logado: a sessão guardada é conferida com o servidor e o progresso da
+ * conta desce antes de a primeira cena precisar dele. Sem rede, o jogo abre com o save local desta
+ * conta e tenta de novo na próxima abertura — ninguém é deslogado por causa de internet ruim.
+ */
+void restoreSession();
+
+window.addEventListener("beforeunload", () => {
+  // Última chance de subir o que acabou de ser gravado; se não der, sobe na próxima abertura.
+  void flushSaveSync();
+  game.destroy(true);
+});
 
 /**
  * O laço do Phaser reagenda o próximo quadro DEPOIS de chamar o `update()` das cenas

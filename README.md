@@ -11,7 +11,9 @@ Tower defense 2D subaquático com seis fases, construído com TypeScript, Phaser
 
 ```bash
 npm install
-npm run dev
+npm run dev            # o jogo (Vite) em http://localhost:5173
+npm run server         # o servidor de contas em http://localhost:4000
+npm run users          # as contas que existem no banco
 npm test
 npm run build
 npx playwright install chromium
@@ -20,6 +22,8 @@ npm run test:balance
 ```
 
 Abra `http://localhost:5173`. O jogo usa mouse e touch em layout horizontal 16:9.
+
+Para criar conta, entrar e levar o progresso de um aparelho para outro, o servidor precisa estar rodando ao lado (`npm run server`) — veja [Contas, e-mail e saves](#contas-e-mail-e-saves). Sem ele, o jogo roda no modo convidado e guarda o progresso só no navegador.
 
 ## Fases e progressão
 
@@ -30,18 +34,53 @@ Abra `http://localhost:5173`. O jogo usa mouse e touch em layout horizontal 16:9
 - A carta da fase abre a história de abertura (na primeira vez) e depois a preparação: objetivos, dificuldade, ameaças conhecidas e as cinco vagas do esquadrão.
 - Concluir objetivos rende estrelas e Conchas, a moeda permanente gasta fora da partida.
 
-## Contas e saves
+## Contas, e-mail e saves
 
-O jogo roda inteiro no navegador, sem servidor. "Conta" aqui é uma conta **deste aparelho**, com nome e senha, e serve para duas coisas concretas: separar saves e levar o progresso para outro lugar.
+O progresso deixou de morar só no navegador: existe um **servidor de contas** (`server/`) com banco de dados de verdade, e o jogo fala com ele.
 
-- **Um save por conta.** Quem joga sem entrar continua no save do aparelho (`guardioes-do-recife.save`); cada conta tem o seu (`guardioes-do-recife.save:<id>`). Entrar é só trocar a chave que o `SaveManager` abre, então dois irmãos no mesmo computador nunca jogam por cima um do outro.
-- **Nome é único.** A comparação ignora maiúsculas, acentos e espaço sobrando ("Ana", "ana" e " aNa " são a mesma pessoa), então não existem dois usuários com o mesmo nome.
-- **A senha não é guardada.** Fica só a derivação PBKDF2-SHA-256 com sal por conta (`core/account/passwords.ts`). Em contexto sem `crypto.subtle` (http puro, `file://`) o esquema cai para um plano B fraco, **marcado como tal** no registro — nunca é senha em texto puro.
-- **Progresso já salvo vira conta.** Criar conta pergunta se o progresso do aparelho vem junto; vindo, ele é copiado (o save do convidado fica intacto) e carimbado com o `profileId` da conta nova.
-- **Jogar em outro aparelho.** `exportCode()` empacota conta e save num "código do Recife" (`GR1.…`) para colar no outro aparelho, onde a mesma senha o abre. Se a conta já existir lá, o código só substitui o progresso dela quando a senha for a mesma. É a ponte honesta enquanto não houver servidor: **ninguém guarda o progresso por você** — sem o código, o save fica no navegador onde foi jogado.
-- **Trocar de conta reabre tudo.** `systems/session.ts` derruba os serviços únicos da página (`ProgressStore`, `progression`) e a cena se refaz (`router.reboot()`), senão a conta nova continuaria mexendo no documento da anterior.
-- As contas ficam em `guardioes-do-recife.accounts`; apagar uma conta apaga o save dela e devolve o jogador ao modo convidado.
+- **Banco**: SQLite em arquivo (`data/guardioes.sqlite`), pelo módulo `node:sqlite` que já vem no Node — nenhuma dependência nova, e o banco é um arquivo que dá para copiar ou abrir com qualquer ferramenta de SQLite. Tabelas: `users`, `sessions`, `email_tokens`, `saves`.
+- **E-mail e nome são únicos, e quem garante é o banco**: dois índices `UNIQUE` (`email_key`, `name_key`), sobre as versões normalizadas (sem caixa, sem acento, sem espaço sobrando). Não é um `SELECT` antes do `INSERT` — dois cadastros no mesmo instante não passam os dois.
+- **A senha nunca é guardada**: fica a derivação PBKDF2-SHA-256, 210 mil iterações, sal por usuário, no formato `pbkdf2$sha256$<iterações>$<sal>$<hash>`. O custo vai gravado junto, então subir as iterações amanhã não tranca ninguém para fora.
+- **Confirmação por e-mail**: o cadastro manda um link de uso único (24h). Enquanto o endereço não for confirmado, a conta não entra — é o que separa "digitou um e-mail" de "tem esse e-mail".
+- **Recuperar a senha**: "esqueci minha senha" manda um link (2h, uso único) que abre um formulário no próprio servidor. Trocar a senha derruba todas as sessões da conta.
+- **O progresso viaja**: ao entrar, o save que está no servidor manda (a conta sem save ainda ganha o progresso deste aparelho — é assim que o progresso de convidado vira o da conta). Depois disso, cada gravação sobe sozinha, com uma pausa curta para não mandar um pedido por tecla apertada. Falhou? Fica pendente, tenta de novo, e nada se perde: o save continua gravado no navegador do mesmo jeito.
+- **Sem conta dá para jogar**: o modo convidado continua guardando tudo em `localStorage`, e o servidor fora do ar nunca desloga ninguém nem trava o jogo — a tela Minha Conta diz o que está acontecendo.
+- Quem não responde nada sobre quem tem cadastro: "esqueci a senha" e "reenviar confirmação" respondem igual exista ou não o e-mail, e login errado responde a mesma coisa para senha errada e e-mail inexistente.
 
+### Rodar o servidor
+
+```bash
+npm run build          # gera dist/ (o servidor também serve o jogo, se existir)
+npm run server         # http://localhost:4000 — API em /api e o jogo na raiz
+npm run users          # lista o que existe no banco, sem senha nenhuma
+```
+
+Sem `SMTP_HOST` configurado, o servidor **não finge que mandou e-mail**: grava cada mensagem em `data/mail/*.eml` e imprime o link no terminal. É o bastante para confirmar conta e recuperar senha de ponta a ponta antes de existir provedor. Para mandar de verdade, copie `.env.example` para `.env` e preencha o SMTP (no Gmail, use uma senha de app).
+
+No desenvolvimento com `npm run dev` (Vite na 5173), o jogo procura a API em `http://localhost:4000` sozinho. Em outra hospedagem, aponte com `VITE_API_URL` no build.
+
+### A API
+
+| Método | Rota | O que faz |
+|---|---|---|
+| `GET` | `/api/health` | servidor no ar e como o e-mail está saindo |
+| `POST` | `/api/accounts` | cadastra e manda a confirmação (não entra) |
+| `DELETE` | `/api/accounts` | apaga a conta (pede a senha) |
+| `GET` | `/api/verify?token=` | página que confirma a conta (é o link do e-mail) |
+| `POST` | `/api/verify/resend` | reenvia a confirmação |
+| `POST` | `/api/sessions` | entra; devolve usuário, token e o save da conta |
+| `DELETE` | `/api/sessions` | sai e invalida o token |
+| `GET` | `/api/me` | quem é o dono do token |
+| `GET`/`PUT` | `/api/save` | lê e grava o progresso da conta |
+| `POST` | `/api/password/change` | troca a senha estando logado |
+| `POST` | `/api/password/forgot` | manda o link de recuperação |
+| `GET`/`POST` | `/api/password/reset` | formulário e troca pelo link do e-mail |
+
+Sessão por token (`Authorization: Bearer …`), 60 dias. Login, cadastro e envio de e-mail têm limite por IP (10 por minuto) para segurar tentativa em série.
+
+### Onde isso roda
+
+O GitHub Pages é estático: ele serve o jogo, mas **não roda o servidor**. Enquanto a API não estiver hospedada em algum lugar (Render, Fly, Railway, uma VM — qualquer coisa que rode Node), o jogo publicado continua funcionando no modo convidado e a tela Minha Conta avisa que o servidor está fora do ar. Hospedando o servidor, ele pode servir o jogo TAMBÉM (basta o `dist/` ao lado), e aí o endereço é um só e nem CORS existe.
 
 ## Encontros do Recife
 
@@ -97,7 +136,7 @@ Menus são HTML por cima do canvas (`src/game/ui/dom`), alinhados ao jogo e esca
 - **Mapa do Recife**: as seis fases em sequência, com estrelas, e os nós de Encontro pendurados nelas. Deixou de ser a tela inicial: agora é uma seção como as outras, com VOLTAR para o Meu Recife.
 - **Menu de pause**: o botão Ⅱ pausa e abre continuar, configurações, reiniciar e sair para o mapa.
 - **Conquistas do Recife**: a lista com barra de progresso, o que já caiu e o que falta.
-- **Minha Conta**: entrar, criar conta, trocar senha, apagar conta e o código do Recife para jogar em outro aparelho. O letreiro do Meu Recife mostra quem está jogando ("Convidado" quando ninguém entrou). Ver [Contas e saves](#contas-e-saves).
+- **Minha Conta**: criar conta com e-mail, entrar, reenviar a confirmação, recuperar a senha esquecida, trocar a senha, apagar a conta e acompanhar se o progresso já subiu para o servidor. O letreiro do Meu Recife mostra quem está jogando ("Convidado" quando ninguém entrou). Ver [Contas, e-mail e saves](#contas-e-mail-e-saves).
 
 ## UX da partida
 
@@ -185,7 +224,8 @@ Uma partida inteira vive em `src/game/core/match/Match.ts`, sem Phaser:
 - `src/game/data`: balanceamento, catálogo de Guardiões e inimigos, registro de fases.
 - `src/game/core`: regras puras e testáveis (rota, correntes, economia com razão de fontes, ondas, árvore de upgrades, projétil, status, auras, alvo e formas de alcance, habilidades de inimigo, encontro de chefe).
 - `src/game/core/match`: o motor único da partida (`Match`): estado, `tick()` de passo fixo, comandos (`placeGuardian`, `upgradeGuardian`, `sellGuardian`, `startNextWave`), eventos de domínio, `MatchStats`, `MatchClock` (pause e velocidade). Cena e simulação de balanceamento rodam o mesmo motor.
-- `src/game/core/account`: contas locais (`AccountStore`, `passwords`) — nome único, senha derivada, um save por conta e o código de transferência. Puro: o armazenamento entra por injeção.
+- `server/`: o servidor de contas — `db.ts` (SQLite e schema), `accounts.ts` (as regras), `router.ts` (a API como função pura, do pedido à resposta), `mailer.ts`/`emails.ts` (envio e texto das mensagens), `pages.ts` (as páginas que o link do e-mail abre), `index.ts` (o processo, que também serve o jogo) e `cli/users.ts` (`npm run users`).
+- `src/game/core/account`: o lado do jogo — `rules.ts` (validação, a MESMA nos dois lados), `AccountApi.ts` (cliente HTTP) e `SessionStore.ts` (o crachá guardado no aparelho).
 - `src/game/core/save`: progressão permanente versionada (`PlayerProgress`, `SaveManager`, migrações); nunca se mistura com o estado da partida.
 - `src/game/objects`: views Phaser (`EnemyView`, `GuardianView`, `ProjectileView`, áreas) que só desenham o que o motor diz.
 - `src/game/scenes`: carregamento, hub (`HubScene`), menu de fases, apresentação da partida (`GameScene`) e HUD.
@@ -193,7 +233,7 @@ Uma partida inteira vive em `src/game/core/match/Match.ts`, sem Phaser:
 - `src/game/data/reef`: catálogo de decoração, layout do Recife (lugares, canteiros, zonas — tudo em % 0–100) e o comportamento de hub de cada Guardião.
 - `src/game/assets/reefArt.ts`: chaves e caminhos da arte do Recife. Nada disso entra no boot — a cena pede o fundo e só as peças que estão plantadas.
 - `public/assets/reef/`: o fundo pintado e as 18 decorações, fatiadas das folhas por `scripts/slice-reef-sheet.py`.
-- `src/game/systems`: `MatchEffects` (evento → efeito/som/mensagem), áudio provisório, overlay de debug, fundo procedural, `ProgressStore`, `accounts` (registro de contas da página), `session` (entrar/sair reabre o save), `settings` e `story`.
+- `src/game/systems`: `MatchEffects` (evento → efeito/som/mensagem), áudio provisório, overlay de debug, fundo procedural, `ProgressStore`, `accounts` (sessão e cliente da API), `session` (entrar/sair reabre o save), `accountSync` (desce e sobe o progresso), `settings` e `story`.
 - `src/game/ui/dom`: camada de telas em HTML (`ScreenHost`, `h`, `ui.css`) e as telas de preparação, resultado, coleção, bestiário, histórias, conta, configurações e pause.
 - `src/game/core/progression`: objetivos, estrelas, recompensas, desbloqueios e o `ProgressionService` que aplica o resultado de uma partida.
 

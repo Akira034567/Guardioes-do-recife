@@ -8,20 +8,24 @@
   },
   "scripts": {
     "dev": "vite",
+    "server": "node --experimental-strip-types --env-file-if-exists=.env server/index.ts",
+    "users": "node --experimental-strip-types --env-file-if-exists=.env server/cli/users.ts",
     "build": "tsc -b && vite build",
     "typecheck": "tsc -b --pretty false",
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:e2e": "npm run build && playwright test --grep-invert @balance",
+    "test:e2e": "VITE_API_URL=http://127.0.0.1:4001 npm run build && playwright test --grep-invert @balance",
     "preview": "vite preview",
     "test:balance": "npm run build && playwright test --grep @balance --project=desktop-chromium --workers=3"
   },
   "dependencies": {
+    "nodemailer": "^10.0.10",
     "phaser": "^3.90.0"
   },
   "devDependencies": {
     "@playwright/test": "^1.55.0",
     "@types/node": "^22.20.2",
+    "@types/nodemailer": "^8.0.2",
     "typescript": "^5.9.2",
     "vite": "^7.1.5",
     "vitest": "^3.2.4"

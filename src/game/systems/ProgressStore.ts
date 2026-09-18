@@ -6,24 +6,24 @@ import { DECORATION_IDS } from "../data/reef/decorations";
 import { DEFAULT_UNLOCKED_GUARDIANS } from "../data/unlocks";
 import { LEVEL_IDS } from "../data/levels";
 import { DIFFICULTY_IDS } from "../data/difficulty";
-import { browserStorage, getAccounts } from "./accounts";
+import { browserStorage, getSession } from "./accounts";
 
 let manager: SaveManager | null = null;
 
 /**
  * Único `SaveManager` da página; cai para memória quando não há localStorage.
  *
- * A chave vem da conta ativa: entrar numa conta é abrir OUTRO documento de save, e quem joga sem
- * conta continua no save do aparelho. Por isso `resetSaveManager()` existe — trocar de conta precisa
+ * A chave vem da sessão: entrar numa conta é abrir OUTRO documento de save, e quem joga sem conta
+ * continua no save do aparelho. Por isso `resetSaveManager()` existe — entrar ou sair precisa
  * derrubar este singleton para o próximo acesso abrir o save certo.
  */
 export function getSaveManager(): SaveManager {
   if (!manager) {
-    const accounts = getAccounts();
+    const session = getSession();
     manager = new SaveManager(browserStorage(), {
-      key: accounts.activeSaveKey(),
+      key: session.saveKey(),
       // O save pré-versionamento é do APARELHO: só o convidado o herda, uma conta nova começa limpa.
-      legacyKey: accounts.active ? null : undefined,
+      legacyKey: session.current ? null : undefined,
       registry: {
         levelIds: LEVEL_IDS,
         guardianIds: GUARDIAN_ORDER,

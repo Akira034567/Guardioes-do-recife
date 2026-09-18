@@ -1,34 +1,39 @@
-import type { AccountRecord, AccountResult } from "../../../core/account/AccountStore";
-import { ACCOUNT_NAME_MAX, ACCOUNT_NAME_MIN, PASSWORD_MIN } from "../../../core/account/AccountStore";
-import { getAccounts } from "../../../systems/accounts";
-import { changePassword, deleteAccount, importAccountCode, signIn, signOut, signUp } from "../../../systems/session";
+import type { ApiFailure, ApiResult, ApiUser } from "../../../core/account/AccountApi";
+import { NAME_MAX, PASSWORD_MIN } from "../../../core/account/rules";
+import { getAccountApi, getSession } from "../../../systems/accounts";
+import { onSyncChanged, syncState } from "../../../systems/accountSync";
+import { changePassword, deleteAccount, forgotPassword, register, resendVerification, signIn, signOut } from "../../../systems/session";
 import { fill, h } from "../h";
 import { ICONS } from "../icons";
 import type { Screen } from "../ScreenHost";
 import { shellSidebar, type ShellNav } from "../shell";
 
 /**
- * Minha Conta: entrar, criar conta e levar o progresso para outro aparelho.
+ * Minha Conta: entrar, criar conta, confirmar o e-mail e recuperar a senha.
  *
- * O jogo é uma página estática, sem servidor. Então "conta" aqui quer dizer duas coisas concretas:
- * cada jogador tem o SEU save neste aparelho (e ninguém joga por cima do progresso do outro), e o
- * progresso cabe num código que se cola no outro aparelho. É honesto dizer isso na tela, e a tela
- * diz — ninguém deve achar que o progresso está guardado num servidor que não existe.
+ * As contas vivem num servidor com banco de dados — é ele que garante e-mail único, nome único e
+ * senha conferida. Esta tela nunca decide nada disso: ela pergunta, mostra a resposta e conta o que
+ * está acontecendo com o progresso (baixando, subindo, pendente).
  *
- * Toda operação que troca de save termina em `onAccountChanged()`, que refaz a cena: o Recife, as
- * Conchas e os Guardiões que aparecem depois já são os da conta que acabou de entrar.
+ * Duas coisas que a tela faz questão de dizer em voz alta, porque são a diferença entre confiar e
+ * não confiar no jogo: se o servidor está no ar, e se o seu progresso já subiu.
  */
 export function accountScreen(onBack: () => void, nav?: ShellNav, embedded = false, onAccountChanged: () => void = () => {}): Screen {
+  let stopWatchingSync: (() => void) | null = null;
+
   return {
     id: "account",
+    onClose() {
+      stopWatchingSync?.();
+      stopWatchingSync = null;
+    },
     render() {
       const root = h("div", { class: `gr-album gr-config${embedded ? " gr-album--embedded" : ""}`, testId: "account-panel" });
       const layout = h("div", { class: "gr-album__layout" });
       root.append(layout);
 
       const draw = (): void => {
-        const store = getAccounts();
-        const active = store.active;
+        const user = getSession().user;
         fill(
           layout,
           embedded || !nav
@@ -42,25 +47,35 @@ export function accountScreen(onBack: () => void, nav?: ShellNav, embedded = fal
           h(
             "div",
             { class: "gr-album__main" },
-            header(active),
+            header(user),
             h(
               "div",
               { class: "gr-config__body" },
-              h("div", { class: "gr-config__column" }, currentCard(active, draw, onAccountChanged), accessCard(active, store.list(), draw, onAccountChanged)),
-              h("div", { class: "gr-config__column" }, transferCard(active, draw, onAccountChanged)),
+              h("div", { class: "gr-config__column" }, user ? currentCard(user, draw, onAccountChanged) : signInCard(draw, onAccountChanged)),
+              h("div", { class: "gr-config__column" }, user ? syncCard() : createCard(), serverCard()),
             ),
-            h("p", { class: "gr-album__foot", text: "As contas ficam neste aparelho. Para jogar em outro, leve o código do Recife." }),
+            h("p", {
+              class: "gr-album__foot",
+              text: user
+                ? "O progresso desta conta fica no servidor: entre com o mesmo e-mail em qualquer aparelho e continue de onde parou."
+                : "Sem conta, o progresso fica só neste navegador. Com conta, ele viaja com você.",
+            }),
           ),
         );
       };
 
+      // A sincronização acontece sozinha, em segundo plano: a tela acompanha em vez de perguntar.
+      stopWatchingSync?.();
+      stopWatchingSync = onSyncChanged(() => {
+        if (getSession().user) draw();
+      });
       draw();
       return root;
     },
   };
 }
 
-function header(active: AccountRecord | null): HTMLElement {
+function header(user: ApiUser | null): HTMLElement {
   return h(
     "header",
     { class: "gr-album__top" },
@@ -71,84 +86,84 @@ function header(active: AccountRecord | null): HTMLElement {
       h("p", {
         class: "gr-subtitle",
         testId: "account-subtitle",
-        text: active ? `Você está jogando como ${active.name}.` : "Você está jogando como convidado, neste aparelho.",
+        text: user ? `Você está jogando como ${user.name}.` : "Você está jogando como convidado, só neste navegador.",
       }),
     ),
     h("p", { class: "gr-album__quote", text: "“Todo Guardião tem um nome.”" }),
   );
 }
 
-// ------------------------------------------------------------------------------- cartões
+// ------------------------------------------------------------------------------- com sessão
 
-/** A conta de agora: quem é, desde quando, e como sair ou trocar a senha. */
-function currentCard(active: AccountRecord | null, redraw: () => void, onAccountChanged: () => void): HTMLElement {
-  if (!active) {
-    return card(
-      ICONS.fish,
-      "Jogando como convidado",
-      "O progresso fica só neste aparelho.",
-      "account-current",
-      h("p", {
-        class: "gr-hint gr-config__note",
-        testId: "account-guest-note",
-        text: "Crie uma conta para guardar o progresso com um nome e uma senha. O que você já jogou aqui pode vir junto.",
-      }),
-    );
-  }
-
+function currentCard(user: ApiUser, redraw: () => void, onAccountChanged: () => void): HTMLElement {
   const status = statusLine("account-password-status");
   const current = passwordInput("account-password-current", "Senha atual", "current-password");
   const next = passwordInput("account-password-next", "Senha nova", "new-password");
-  const confirm = passwordInput("account-password-confirm", "Repita a senha nova", "new-password");
-  const form = h("div", { class: "gr-field__group", testId: "account-password-form", hidden: "" }, current.row, next.row, confirm.row);
-
-  const change = actionButton("account-password-save", ICONS.lock, "SALVAR SENHA", async () => {
-    show(status, await changePassword(current.input.value, next.input.value, confirm.input.value), "Senha trocada.");
+  const form = h("div", { class: "gr-field__group", testId: "account-password-form", hidden: "" }, current.row, next.row);
+  const save = actionButton("account-password-save", ICONS.lock, "SALVAR SENHA", async () => {
+    show(status, await changePassword(current.input.value, next.input.value), "Senha trocada.");
     current.input.value = "";
     next.input.value = "";
-    confirm.input.value = "";
   });
-  change.hidden = true;
+  save.hidden = true;
 
   return card(
-    ICONS.squad,
-    active.name,
-    `No Recife desde ${shortDate(active.createdAt)}.`,
+    ICONS.account,
+    user.name,
+    `No Recife desde ${shortDate(user.createdAt)}.`,
     "account-current",
-    row(ICONS.pearl, "Nome", h("span", { class: "gr-config__value gr-field__name", testId: "account-current-name", text: active.name })),
-    row(ICONS.timer, "Último acesso", h("span", { class: "gr-config__value", text: active.lastLoginAt ? shortDate(active.lastLoginAt) : "—" })),
+    row(ICONS.pearl, "E-mail", h("span", { class: "gr-config__value gr-field__name", testId: "account-current-email", text: user.email })),
+    user.verified ? null : verificationWarning(user.email),
+    row(ICONS.timer, "Último acesso", h("span", { class: "gr-config__value", text: user.lastLoginAt ? shortDate(user.lastLoginAt) : "—" })),
     row(
       ICONS.lock,
       "Senha",
       actionButton("account-password-toggle", ICONS.gear, "TROCAR SENHA", () => {
         form.hidden = !form.hidden;
-        change.hidden = form.hidden;
+        save.hidden = form.hidden;
         if (!form.hidden) current.input.focus();
       }),
     ),
     form,
-    change,
+    save,
     status,
     row(
       ICONS.chevronLeft,
       "Sair da conta",
-      actionButton("account-signout", ICONS.chevronLeft, "SAIR", () => {
-        signOut();
+      actionButton("account-signout", ICONS.chevronLeft, "SAIR", async () => {
+        await signOut();
         onAccountChanged();
         redraw();
       }),
     ),
-    deleteRow(active, redraw, onAccountChanged),
+    deleteBlock(redraw, onAccountChanged),
   );
 }
 
-/** Apagar a conta some com o save dela: a senha é a confirmação. */
-function deleteRow(active: AccountRecord, redraw: () => void, onAccountChanged: () => void): HTMLElement {
+/** Conta criada mas e-mail ainda não confirmado: o aviso vem com o botão que resolve. */
+function verificationWarning(email: string): HTMLElement {
+  const status = statusLine("account-verify-status");
+  return h(
+    "div",
+    { class: "gr-field__block", testId: "account-unverified" },
+    row(
+      ICONS.skull,
+      "E-mail não confirmado",
+      actionButton("account-resend", ICONS.book, "REENVIAR", async () => {
+        show(status, await resendVerification(email), "Mensagem reenviada. Procure na caixa de entrada e no spam.");
+      }),
+    ),
+    status,
+    h("p", { class: "gr-hint gr-config__note", text: "Enquanto o e-mail não for confirmado, esta conta não entra em outro aparelho." }),
+  );
+}
+
+function deleteBlock(redraw: () => void, onAccountChanged: () => void): HTMLElement {
   const status = statusLine("account-delete-status");
   const password = passwordInput("account-delete-password", "Senha para confirmar", "current-password");
   const form = h("div", { class: "gr-field__group", testId: "account-delete-form", hidden: "" }, password.row, status);
   const confirm = actionButton("account-delete-confirm", ICONS.skull, "APAGAR PARA SEMPRE", async () => {
-    const result = await deleteAccount(active.name, password.input.value);
+    const result = await deleteAccount(password.input.value);
     show(status, result, "Conta apagada.");
     password.input.value = "";
     if (!result.ok) return;
@@ -170,156 +185,164 @@ function deleteRow(active: AccountRecord, redraw: () => void, onAccountChanged: 
     ),
     form,
     confirm,
-    h("p", { class: "gr-hint gr-config__note", text: "Apagar a conta apaga o progresso dela neste aparelho. Não dá para desfazer." }),
+    h("p", { class: "gr-hint gr-config__note", text: "Apagar a conta apaga o progresso dela no servidor. Não dá para desfazer." }),
   );
 }
 
-/** Entrar numa conta que já existe, ou criar uma nova. */
-function accessCard(active: AccountRecord | null, accounts: readonly AccountRecord[], redraw: () => void, onAccountChanged: () => void): HTMLElement {
-  const signInStatus = statusLine("account-signin-status");
-  const name = textInput("account-name", "Nome", "username");
+/** O estado do progresso: subiu, está subindo, ou falhou e vai tentar de novo. */
+function syncCard(): HTMLElement {
+  const state = syncState();
+  const tone = state.error ? "erro" : state.pending ? "pendente" : "ok";
+  const text = state.error
+    ? `Não consegui subir agora: ${state.error} Vou tentar de novo — o progresso está salvo aqui do mesmo jeito.`
+    : state.pending
+      ? "Subindo o progresso…"
+      : state.lastPushAt
+        ? `Progresso salvo no servidor às ${shortTime(state.lastPushAt)}.`
+        : "Progresso em dia com o servidor.";
+  return card(
+    ICONS.waves,
+    "Progresso",
+    "Salvo aqui e no servidor.",
+    "account-sync",
+    h("p", { class: "gr-field__status", testId: "account-sync-status", dataValue: tone, dataTone: state.error ? "error" : "ok", text }),
+    h("p", {
+      class: "gr-hint gr-config__note",
+      text: "Ao entrar, o que está no servidor manda. Depois disso, cada partida que você termina sobe sozinha.",
+    }),
+  );
+}
+
+// ------------------------------------------------------------------------------- sem sessão
+
+function signInCard(redraw: () => void, onAccountChanged: () => void): HTMLElement {
+  const status = statusLine("account-signin-status");
+  const email = textInput("account-email", "E-mail", "username", "email");
   const password = passwordInput("account-password", "Senha", "current-password");
-  const enter = actionButton("account-signin", ICONS.play, active ? "TROCAR DE CONTA" : "ENTRAR", async () => {
-    const result = await signIn(name.input.value, password.input.value);
-    show(signInStatus, result, result.ok ? `Bem-vindo de volta, ${result.account.name}!` : "");
+
+  const enter = actionButton("account-signin", ICONS.play, "ENTRAR", async () => {
+    const result = await signIn(email.input.value, password.input.value);
+    show(status, result, "Entrando…");
     password.input.value = "";
-    if (!result.ok) return;
-    onAccountChanged();
-    redraw();
+    if (result.ok) {
+      onAccountChanged();
+      redraw();
+      return;
+    }
+    // Conta existe mas falta confirmar: o caminho de volta fica ali mesmo, sem procurar em menu.
+    if (result.reason === "unverified") {
+      status.append(
+        document.createTextNode(" "),
+        h("button", {
+          class: "gr-field__link",
+          testId: "account-resend",
+          type: "button",
+          text: "Reenviar confirmação",
+          onClick: async () => {
+            show(status, await resendVerification(email.input.value), "Mensagem reenviada. Procure na caixa de entrada e no spam.");
+          },
+        }),
+      );
+    }
   });
-  // Enter no teclado é o que qualquer um espera de um campo de senha.
   password.input.addEventListener("keydown", (event) => {
     if ((event as KeyboardEvent).key === "Enter") enter.click();
   });
 
-  const createStatus = statusLine("account-create-status");
-  const newName = textInput("account-new-name", "Nome novo", "username");
-  const newPassword = passwordInput("account-new-password", "Senha", "new-password");
-  const newConfirm = passwordInput("account-new-confirm", "Repita a senha", "new-password");
-  const carry = checkbox("account-carry", "Trazer para a conta o progresso deste aparelho", !active);
-  const create = actionButton("account-create", ICONS.plus, "CRIAR CONTA", async () => {
-    const result = await signUp({
-      name: newName.input.value,
-      password: newPassword.input.value,
-      confirmPassword: newConfirm.input.value,
-      carryDeviceProgress: carry.input.checked,
-    });
-    show(createStatus, result, result.ok && result.carried ? "Conta criada com o progresso deste aparelho." : "Conta criada.");
-    newPassword.input.value = "";
-    newConfirm.input.value = "";
-    if (!result.ok) return;
-    onAccountChanged();
-    redraw();
-  });
-
   return card(
-    ICONS.chest,
-    "Contas deste aparelho",
-    accounts.length > 0 ? "Entre na sua ou crie outra." : "Nenhuma conta ainda — crie a primeira.",
-    "account-access",
-    accounts.length > 0
-      ? h(
-          "div",
-          { class: "gr-field__chips", testId: "account-list" },
-          ...accounts.map((account) =>
-            h("button", {
-              class: `gr-field__chip${account.id === active?.id ? " gr-field__chip--on" : ""}`,
-              testId: `account-chip-${account.nameKey.replace(/\s+/g, "-")}`,
-              type: "button",
-              text: account.name,
-              title: `Entrar como ${account.name}`,
-              onClick: () => {
-                name.input.value = account.name;
-                password.input.focus();
-              },
-            }),
-          ),
-        )
-      : null,
-    name.row,
+    ICONS.account,
+    "Entrar",
+    "Com o e-mail e a senha da sua conta.",
+    "account-signin-card",
+    email.row,
     password.row,
     enter,
-    signInStatus,
-    h("p", { class: "gr-hint gr-config__note", text: `Conta nova: de ${ACCOUNT_NAME_MIN} a ${ACCOUNT_NAME_MAX} letras no nome e ao menos ${PASSWORD_MIN} caracteres na senha. Dois jogadores não podem usar o mesmo nome.` }),
-    newName.row,
-    newPassword.row,
-    newConfirm.row,
-    carry.row,
-    create,
-    createStatus,
+    status,
+    h(
+      "div",
+      { class: "gr-field__links" },
+      h("button", {
+        class: "gr-field__link",
+        testId: "account-forgot",
+        type: "button",
+        text: "Esqueci minha senha",
+        onClick: async () => {
+          show(status, await forgotPassword(email.input.value), "Se existir uma conta com esse e-mail, o link para trocar a senha já está a caminho.");
+        },
+      }),
+      h("button", {
+        class: "gr-field__link",
+        testId: "account-resend-standalone",
+        type: "button",
+        text: "Reenviar confirmação",
+        onClick: async () => {
+          show(status, await resendVerification(email.input.value), "Se essa conta existir e ainda não estiver confirmada, a mensagem já está a caminho.");
+        },
+      }),
+    ),
   );
 }
 
-/** O código do Recife: a ponte entre dois aparelhos enquanto não existe servidor. */
-function transferCard(active: AccountRecord | null, redraw: () => void, onAccountChanged: () => void): HTMLElement {
-  const exportStatus = statusLine("account-code-status");
-  const code = active ? getAccounts().exportCode() : null;
-  const codeBox = h("textarea", {
-    class: "gr-field__code",
-    testId: "account-code",
-    readonly: "",
-    rows: "4",
-    spellcheck: "false",
-    "aria-label": "Código do Recife desta conta",
-  }) as HTMLTextAreaElement;
-  codeBox.value = code ?? "";
-
-  const importStatus = statusLine("account-import-status");
-  const importBox = h("textarea", {
-    class: "gr-field__code",
-    testId: "account-import-code",
-    rows: "4",
-    spellcheck: "false",
-    placeholder: "Cole aqui o código do outro aparelho",
-    "aria-label": "Código do Recife para trazer",
-  }) as HTMLTextAreaElement;
-  const importPassword = passwordInput("account-import-password", "Senha da conta", "current-password");
+/*
+ * Sem `redraw` de propósito: cadastrar não muda quem está logado, e redesenhar aqui trocaria o
+ * elemento da mensagem recém-escrita por um vazio — a pessoa clicaria em "criar conta" e não veria
+ * resposta nenhuma.
+ */
+function createCard(): HTMLElement {
+  const status = statusLine("account-create-status");
+  const email = textInput("account-new-email", "E-mail", "email", "email");
+  const name = textInput("account-new-name", "Nome no Recife", "nickname", "text");
+  const password = passwordInput("account-new-password", "Senha", "new-password");
 
   return card(
-    ICONS.compass,
-    "Jogar em outro lugar",
-    "Leve a conta e o progresso num código.",
-    "account-transfer",
+    ICONS.plus,
+    "Criar conta",
+    "Leva o seu progresso para qualquer aparelho.",
+    "account-create-card",
+    email.row,
+    name.row,
+    password.row,
+    actionButton("account-create", ICONS.plus, "CRIAR CONTA", async () => {
+      const result = await register(email.input.value, name.input.value, password.input.value);
+      password.input.value = "";
+      if (!result.ok) {
+        show(status, result, "");
+        return;
+      }
+      status.dataset.tone = "ok";
+      status.textContent = `Conta criada. Enviamos uma mensagem para ${result.user.email}: confirme o e-mail e volte aqui para entrar.`;
+      if (result.mailer === "file") {
+        // Servidor sem SMTP: quem está testando precisa saber onde o "e-mail" foi parar.
+        status.append(h("span", { class: "gr-hint", text: " (servidor sem e-mail configurado: a mensagem está em data/mail/ e o link saiu no terminal)" }));
+      }
+    }),
+    status,
     h("p", {
       class: "gr-hint gr-config__note",
-      text: "O jogo roda inteiro no seu navegador, sem servidor: ninguém guarda o progresso por você. O código abaixo é a sua conta inteira — copie, abra o jogo no outro aparelho e cole em “Trazer progresso”.",
-    }),
-    active
-      ? codeBox
-      : h("p", { class: "gr-hint", testId: "account-code-empty", text: "Entre numa conta para gerar o código dela." }),
-    active
-      ? actionButton("account-code-copy", ICONS.chest, "COPIAR CÓDIGO", async () => {
-          codeBox.select();
-          try {
-            await navigator.clipboard.writeText(codeBox.value);
-            exportStatus.dataset.tone = "ok";
-            exportStatus.textContent = "Código copiado. Guarde num lugar seguro.";
-          } catch {
-            // Sem permissão da área de transferência (é comum): o texto já está selecionado.
-            exportStatus.dataset.tone = "warn";
-            exportStatus.textContent = "Não consegui copiar sozinho — o código está selecionado, use Ctrl+C.";
-          }
-        })
-      : null,
-    exportStatus,
-    h("p", { class: "gr-hint gr-config__note", text: "Trazer progresso de outro aparelho:" }),
-    importBox,
-    importPassword.row,
-    actionButton("account-import", ICONS.play, "TRAZER PROGRESSO", async () => {
-      const result = await importAccountCode(importBox.value, importPassword.input.value);
-      show(importStatus, result, "Progresso trazido para este aparelho.");
-      importPassword.input.value = "";
-      if (!result.ok) return;
-      importBox.value = "";
-      onAccountChanged();
-      redraw();
-    }),
-    importStatus,
-    h("p", {
-      class: "gr-hint gr-config__note",
-      text: "Se a conta já existir aqui, o código substitui o progresso dela neste aparelho — e a senha precisa ser a mesma.",
+      text: `O progresso que você já tem neste navegador vira o progresso da conta no primeiro acesso. Nome de até ${NAME_MAX} letras, senha de pelo menos ${PASSWORD_MIN} caracteres — e nenhum e-mail ou nome se repete.`,
     }),
   );
+}
+
+/** O servidor está no ar? A tela pergunta uma vez e mostra a resposta sem enfeite. */
+function serverCard(): HTMLElement {
+  const line = h("p", { class: "gr-field__status", testId: "account-server-status", text: "Falando com o servidor…" });
+  void getAccountApi()
+    .health()
+    .then((result) => {
+      if (!line.isConnected) return;
+      if (result.ok) {
+        line.dataset.tone = "ok";
+        line.textContent =
+          result.mailer === "smtp"
+            ? "Servidor de contas no ar, com envio de e-mail configurado."
+            : "Servidor de contas no ar. O envio de e-mail ainda não está configurado: as mensagens ficam gravadas no servidor, em data/mail/.";
+        return;
+      }
+      line.dataset.tone = "error";
+      line.textContent = "Servidor de contas fora do ar. Dá para jogar como convidado — o progresso fica neste navegador.";
+    });
+  return card(ICONS.compass, "Servidor", "De onde vêm as contas.", "account-server", line);
 }
 
 // ------------------------------------------------------------------------------- peças
@@ -353,35 +376,29 @@ function row(icon: string, label: string, control: HTMLElement): HTMLElement {
   );
 }
 
-function textInput(testId: string, label: string, autocomplete: string): { row: HTMLElement; input: HTMLInputElement } {
-  return inputRow(testId, label, "text", autocomplete);
+function textInput(testId: string, label: string, autocomplete: string, type: "text" | "email"): { row: HTMLElement; input: HTMLInputElement } {
+  return inputRow(testId, label, type, autocomplete);
 }
 
 function passwordInput(testId: string, label: string, autocomplete: string): { row: HTMLElement; input: HTMLInputElement } {
   return inputRow(testId, label, "password", autocomplete);
 }
 
-function inputRow(testId: string, label: string, type: "text" | "password", autocomplete: string): { row: HTMLElement; input: HTMLInputElement } {
+function inputRow(testId: string, label: string, type: "text" | "email" | "password", autocomplete: string): { row: HTMLElement; input: HTMLInputElement } {
   const input = h("input", {
     class: "gr-field__input",
     testId,
     type,
     autocomplete,
-    maxlength: type === "text" ? String(ACCOUNT_NAME_MAX) : "64",
+    maxlength: type === "text" ? String(NAME_MAX) : "254",
     "aria-label": label,
   }) as HTMLInputElement;
   return { input, row: h("label", { class: "gr-field" }, h("span", { class: "gr-field__label", text: label }), input) };
 }
 
-function checkbox(testId: string, label: string, checked: boolean): { row: HTMLElement; input: HTMLInputElement } {
-  const input = h("input", { class: "gr-field__check", testId, type: "checkbox" }) as HTMLInputElement;
-  input.checked = checked;
-  return { input, row: h("label", { class: "gr-field gr-field--check" }, input, h("span", { class: "gr-field__label", text: label })) };
-}
-
 /**
- * Um botão de ação que sabe esperar. Enquanto a promessa não volta ele fica desligado: derivar a
- * senha leva um tempinho, e sem isso um clique repetido criaria duas contas com o mesmo nome.
+ * Um botão de ação que sabe esperar. Enquanto a promessa não volta ele fica desligado: pedido de
+ * rede demora, e sem isso um clique repetido viraria duas contas ou dois e-mails.
  */
 function actionButton(testId: string, icon: string, label: string, run: () => void | Promise<void>): HTMLButtonElement {
   const text = h("span", { text: label });
@@ -413,13 +430,17 @@ function statusLine(testId: string): HTMLElement {
   return h("p", { class: "gr-field__status", testId, role: "status", "aria-live": "polite" });
 }
 
-function show(status: HTMLElement, result: AccountResult, successMessage: string): void {
+function show(status: HTMLElement, result: ApiResult<unknown>, successMessage: string): void {
   status.dataset.tone = result.ok ? "ok" : "error";
-  status.textContent = result.ok ? successMessage : result.message;
+  status.textContent = result.ok ? successMessage : (result as ApiFailure).message;
 }
 
 function shortDate(iso: string): string {
   const date = new Date(iso);
-  if (Number.isNaN(date.getTime())) return "—";
-  return date.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric" });
+  return Number.isNaN(date.getTime()) ? "—" : date.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric" });
+}
+
+function shortTime(iso: string): string {
+  const date = new Date(iso);
+  return Number.isNaN(date.getTime()) ? "—" : date.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
 }

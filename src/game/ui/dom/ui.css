@@ -4069,3 +4069,27 @@
   background: #01161f;
   border-color: var(--gr-cyan);
 }
+
+/* Ações discretas da tela de conta ("esqueci minha senha", "reenviar confirmação"). */
+.gr-field__links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: calc(12px * var(--gr-scale));
+  padding-top: calc(4px * var(--gr-scale));
+}
+
+.gr-field__link {
+  background: none;
+  border: 0;
+  padding: 0;
+  color: var(--gr-cyan);
+  font: inherit;
+  font-size: calc(11px * var(--gr-scale));
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.gr-field__link:hover,
+.gr-field__link:focus-visible {
+  color: var(--gr-pearl);
+}

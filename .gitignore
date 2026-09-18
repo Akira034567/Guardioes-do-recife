@@ -7,3 +7,9 @@ test-results/
 *.log
 *.tsbuildinfo
 .DS_Store
+
+# Banco de dados e e-mails gravados em disco pelo servidor de contas.
+data/
+
+# Segredos do servidor (SMTP, endereços). O modelo fica em .env.example.
+.env

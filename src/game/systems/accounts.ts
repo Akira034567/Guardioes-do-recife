@@ -1,7 +1,10 @@
-import { AccountStore } from "../core/account/AccountStore";
+import { AccountApi } from "../core/account/AccountApi";
+import { SessionStore } from "../core/account/SessionStore";
+import type { ApiUser } from "../core/account/AccountApi";
 import type { SaveStorage } from "../core/save/SaveManager";
 
-let store: AccountStore | null = null;
+let sessionStore: SessionStore | null = null;
+let api: AccountApi | null = null;
 
 /** O `localStorage` da página, ou `null` quando ele não existe (aba anônima, testes headless). */
 export function browserStorage(): SaveStorage | null {
@@ -13,15 +16,21 @@ export function browserStorage(): SaveStorage | null {
 }
 
 /**
- * Único registro de contas da página. Fica aqui, e não no `ProgressStore`, porque ele é quem decide
- * QUAL save o `ProgressStore` vai abrir — a dependência precisa apontar numa direção só.
+ * A sessão da página. Fica aqui, e não no `ProgressStore`, porque é ela quem decide QUAL save o
+ * `ProgressStore` vai abrir — a dependência precisa apontar numa direção só.
  */
-export function getAccounts(): AccountStore {
-  if (!store) store = new AccountStore(browserStorage());
-  return store;
+export function getSession(): SessionStore {
+  if (!sessionStore) sessionStore = new SessionStore(browserStorage());
+  return sessionStore;
 }
 
-/** A conta em uso, ou `null` para quem joga como convidado (o save do aparelho). */
-export function currentAccount(): ReturnType<AccountStore["list"]>[number] | null {
-  return getAccounts().active;
+/** O cliente da API de contas desta página. */
+export function getAccountApi(): AccountApi {
+  if (!api) api = new AccountApi();
+  return api;
+}
+
+/** O usuário logado, ou `null` para quem joga como convidado. */
+export function currentAccount(): ApiUser | null {
+  return getSession().user;
 }
