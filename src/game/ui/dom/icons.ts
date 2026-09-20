@@ -177,6 +177,7 @@ export const ICONS = {
 
   chevronLeft: svg(`<path d="M15 4.5 7.5 12 15 19.5" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>`),
   chevronRight: svg(`<path d="M9 4.5 16.5 12 9 19.5" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>`),
+  chevronDown: svg(`<path d="M4.5 9 12 16.5 19.5 9" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>`),
   close: svg(`<path d="M6.4 6.4l11.2 11.2M17.6 6.4L6.4 17.6" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"/>`),
   menu: svg(`<path d="M4.5 7h15M4.5 12h15M4.5 17h15" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/>`),
   plus: svg(`<path d="M12 5.6v12.8M5.6 12h12.8" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"/>`),

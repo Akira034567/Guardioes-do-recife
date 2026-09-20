@@ -53,14 +53,17 @@ test("o mapa abre na dificuldade mais alta que o jogador liberou e mostra a tril
   await expect(page.getByTestId("map-track-abissal")).toHaveAttribute("data-state", "locked");
 
   // No Difícil ninguém venceu nada ainda: as estrelas voltam a zero, e os nós voltam a "por fazer".
-  await expect(page.getByTestId("map-track-dificil")).toContainText("0/6 fases");
+  // A pílula é enxuta de propósito — a contagem de fases vive no `data-cleared` e no `title`.
+  await expect(page.getByTestId("map-track-dificil")).toHaveAttribute("data-cleared", "0");
+  await expect(page.getByTestId("map-track-dificil")).toContainText("0/18");
   await expect(page.getByTestId("map-node-recife-1")).toHaveAttribute("data-state", "available");
 
   // Voltando ao Normal, a campanha aparece como o jogador a deixou.
   await page.getByTestId("map-track-normal").click();
   await expect(panel).toHaveAttribute("data-difficulty", "normal");
   await expect(page.getByTestId("map-node-recife-1")).toHaveAttribute("data-state", "perfect");
-  await expect(page.getByTestId("map-track-normal")).toContainText("6/6 fases");
+  await expect(page.getByTestId("map-track-normal")).toHaveAttribute("data-cleared", "6");
+  await expect(page.getByTestId("map-track-normal")).toContainText("18/18");
 });
 
 test("cada dificuldade mostra os próprios objetivos, no mapa e na preparação", async ({ page }) => {

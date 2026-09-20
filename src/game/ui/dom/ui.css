@@ -1184,69 +1184,63 @@
   border-color: color-mix(in srgb, var(--gr-accent, #5fe0b4) 55%, #03131e);
 }
 
-/* ---- trilhas de dificuldade */
+/* ---- trilhas de dificuldade: uma fileira fina, não três cartões */
 
 .gr-world__tracks {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: calc(8px * var(--gr-scale));
+  display: flex;
+  align-items: center;
+  gap: calc(6px * var(--gr-scale));
+  flex-wrap: wrap;
+}
+
+.gr-world__tracks-label {
+  font-size: calc(9px * var(--gr-scale));
+  font-weight: bold;
+  letter-spacing: calc(1px * var(--gr-scale));
+  color: var(--gr-shell);
+  opacity: 0.55;
+  margin-right: calc(2px * var(--gr-scale));
 }
 
 .gr-world__track {
-  display: flex;
-  flex-direction: column;
-  gap: calc(3px * var(--gr-scale));
-  text-align: left;
+  display: inline-flex;
+  align-items: center;
+  gap: calc(6px * var(--gr-scale));
   font: inherit;
+  font-size: calc(12px * var(--gr-scale));
   color: var(--gr-shell);
-  background: rgba(3, 30, 47, 0.8);
+  background: rgba(3, 30, 47, 0.75);
   border: calc(1px * var(--gr-scale)) solid rgba(21, 129, 163, 0.4);
-  border-left: calc(4px * var(--gr-scale)) solid var(--gr-accent, #5fe0b4);
-  border-radius: calc(12px * var(--gr-scale));
-  padding: calc(8px * var(--gr-scale)) calc(11px * var(--gr-scale));
+  border-radius: 999px;
+  padding: calc(5px * var(--gr-scale)) calc(11px * var(--gr-scale));
   cursor: pointer;
-  min-width: 0;
+  white-space: nowrap;
 }
 
-/* A trilha aberta é a única acesa: é ela que manda no mapa inteiro. */
+/* A trilha aberta é a única acesa — e é a cor dela que aparece no mapa e no HUD da partida. */
 .gr-world__track--on {
-  background: color-mix(in srgb, var(--gr-accent, #5fe0b4) 18%, rgba(3, 30, 47, 0.9));
+  color: #f2fbff;
+  background: color-mix(in srgb, var(--gr-accent, #5fe0b4) 24%, rgba(3, 30, 47, 0.9));
   border-color: var(--gr-accent, #5fe0b4);
-  box-shadow: 0 0 calc(14px * var(--gr-scale)) color-mix(in srgb, var(--gr-accent, #5fe0b4) 35%, transparent);
 }
 
 .gr-world__track--locked {
   cursor: not-allowed;
-  opacity: 0.55;
-  border-left-color: rgba(21, 129, 163, 0.4);
-}
-
-.gr-world__track-head {
-  display: flex;
-  align-items: center;
-  gap: calc(7px * var(--gr-scale));
+  opacity: 0.45;
 }
 
 .gr-world__track-name {
   font-weight: bold;
-  font-size: calc(13px * var(--gr-scale));
-  letter-spacing: calc(0.5px * var(--gr-scale));
+  letter-spacing: calc(0.3px * var(--gr-scale));
 }
 
 .gr-world__track-score {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: calc(8px * var(--gr-scale));
-  font-size: calc(12px * var(--gr-scale));
-  font-weight: bold;
-}
-
-.gr-world__track-stars {
   display: inline-flex;
   align-items: center;
-  gap: calc(4px * var(--gr-scale));
+  gap: calc(3px * var(--gr-scale));
   color: var(--gr-pearl);
+  font-size: calc(11px * var(--gr-scale));
+  font-weight: bold;
 }
 
 /* Os objetivos da trilha, dentro da ficha da fase: compactos, sem prêmio (isso é da preparação). */
@@ -1260,8 +1254,17 @@
 .gr-world__objectives .gr-world__detail-title {
   display: flex;
   align-items: baseline;
-  gap: calc(6px * var(--gr-scale));
+  /* Sem o `wrap`, a coluna estreita transformava o título e a etiqueta em duas colunas de uma
+     palavra cada, lidas de cima para baixo. */
+  flex-wrap: wrap;
+  gap: calc(2px * var(--gr-scale)) calc(6px * var(--gr-scale));
   color: var(--gr-accent, var(--gr-cyan));
+}
+
+.gr-world__objectives .gr-world__detail-title .gr-hint {
+  text-transform: none;
+  letter-spacing: 0;
+  font-size: calc(10px * var(--gr-scale));
 }
 
 .gr-objectives--compact .gr-objective {
@@ -1284,12 +1287,9 @@
 }
 
 /* Em tela estreita as três trilhas viram uma coluna rolável na horizontal. */
+/* Em tela estreita some a palavra "DIFICULDADE": as três pílulas já dizem o que são. */
 @container (max-width: 720px) {
-  .gr-world__tracks {
-    grid-template-columns: repeat(3, minmax(calc(120px * var(--gr-scale)), 1fr));
-  }
-
-  .gr-world__track .gr-hint {
+  .gr-world__tracks-label {
     display: none;
   }
 }
@@ -4573,6 +4573,126 @@
 }
 
 /* ==========================================================================
+   Escola do Recife — a aba com silhueta própria.
+   As outras abas são uma grade de retratos; esta é uma LISTA agrupada pelos
+   quatro cursos, que é a forma de um manual. Sem isto, trocar de aba parecia
+   não ter acontecido: os mesmos três retratos grandes, outro conteúdo.
+   ========================================================================== */
+
+.gr-album__grid--lessons {
+  grid-template-columns: minmax(0, 1fr);
+  gap: calc(4px * var(--gr-scale));
+}
+
+.gr-album__group {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: calc(8px * var(--gr-scale));
+  margin: calc(10px * var(--gr-scale)) 0 calc(2px * var(--gr-scale));
+  font-size: calc(11px * var(--gr-scale));
+  font-weight: bold;
+  letter-spacing: calc(1px * var(--gr-scale));
+  text-transform: uppercase;
+  color: var(--gr-cyan);
+  border-bottom: calc(1px * var(--gr-scale)) solid rgba(21, 129, 163, 0.35);
+  padding-bottom: calc(4px * var(--gr-scale));
+}
+
+/* O primeiro curso não precisa de respiro acima: ele encosta na fileira de abas. */
+.gr-album__group:first-child {
+  margin-top: 0;
+}
+
+.gr-album__group-count {
+  font-size: calc(10px * var(--gr-scale));
+  color: var(--gr-shell);
+  opacity: 0.7;
+  letter-spacing: 0;
+}
+
+.gr-album__lesson {
+  display: flex;
+  align-items: center;
+  gap: calc(9px * var(--gr-scale));
+  width: 100%;
+  text-align: left;
+  font: inherit;
+  color: inherit;
+  background: rgba(3, 30, 47, 0.62);
+  border: calc(1px * var(--gr-scale)) solid transparent;
+  border-left: calc(3px * var(--gr-scale)) solid rgba(21, 129, 163, 0.5);
+  border-radius: calc(8px * var(--gr-scale));
+  padding: calc(6px * var(--gr-scale)) calc(9px * var(--gr-scale));
+  cursor: pointer;
+  transition: border-color 120ms ease, background 120ms ease;
+}
+
+.gr-album__lesson:hover {
+  background: rgba(13, 74, 100, 0.6);
+  border-left-color: var(--gr-cyan);
+}
+
+.gr-album__lesson--on {
+  background: rgba(13, 74, 100, 0.85);
+  border-color: rgba(117, 223, 244, 0.5);
+  border-left-color: var(--gr-cyan);
+}
+
+/* Aula por ler: a barra da esquerda fica dourada, igual ao selo. */
+.gr-album__lesson[data-state="new"] {
+  border-left-color: var(--gr-gold, #ffd86a);
+}
+
+.gr-album__lesson-art {
+  display: grid;
+  place-items: center;
+  width: calc(34px * var(--gr-scale));
+  height: calc(34px * var(--gr-scale));
+  flex: none;
+}
+
+.gr-album__lesson-img {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+}
+
+.gr-album__lesson-copy {
+  display: flex;
+  flex-direction: column;
+  gap: calc(1px * var(--gr-scale));
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.gr-album__lesson-name {
+  font-size: calc(12px * var(--gr-scale));
+  font-weight: bold;
+  color: #eafaff;
+}
+
+/* O resumo fica numa linha só: a lista existe para varrer, não para ler por inteiro. */
+.gr-album__lesson-copy .gr-hint {
+  font-size: calc(10px * var(--gr-scale));
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.gr-album__lesson-new {
+  flex: none;
+  font-size: calc(9px * var(--gr-scale));
+  font-weight: bold;
+  letter-spacing: calc(0.6px * var(--gr-scale));
+  color: #fff3cf;
+  background: rgba(92, 70, 16, 0.6);
+  border: calc(1px * var(--gr-scale)) solid rgba(255, 216, 106, 0.6);
+  border-radius: 999px;
+  padding: calc(2px * var(--gr-scale)) calc(7px * var(--gr-scale));
+}
+
+/* ==========================================================================
    Escola do Recife — o manual, hoje uma ABA do álbum.
    A lista de texto virou a mesma grade ilustrada das outras abas; o que
    sobrou de próprio daqui é a caixa da REGRA, que fecha cada aula.
@@ -4595,6 +4715,108 @@
   font-size: calc(9px * var(--gr-scale));
   letter-spacing: calc(1.2px * var(--gr-scale));
   color: var(--gr-gold, #ffd86a);
+}
+
+/* ==========================================================================
+   Minha Conta — uma pergunta por vez.
+   O seletor Entrar/Criar, o bloco "Mais opções" e a coluna única. A tela
+   mostrava seis formulários ao mesmo tempo; agora mostra um.
+   ========================================================================== */
+
+/* Uma coluna, centrada e estreita: é um formulário, não um painel de controle. */
+.gr-config__body--single {
+  grid-template-columns: minmax(0, 1fr);
+  max-width: calc(560px * var(--gr-scale));
+  width: 100%;
+  margin: 0 auto;
+}
+
+.gr-config__modes {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: calc(6px * var(--gr-scale));
+  padding: calc(4px * var(--gr-scale));
+  background: rgba(2, 20, 34, 0.6);
+  border-radius: calc(12px * var(--gr-scale));
+}
+
+.gr-config__mode {
+  font: inherit;
+  font-size: calc(12px * var(--gr-scale));
+  font-weight: bold;
+  letter-spacing: calc(0.6px * var(--gr-scale));
+  color: var(--gr-shell);
+  background: none;
+  border: none;
+  border-radius: calc(9px * var(--gr-scale));
+  padding: calc(9px * var(--gr-scale)) calc(10px * var(--gr-scale));
+  cursor: pointer;
+}
+
+.gr-config__mode--on {
+  color: #eafaff;
+  background: #13728a;
+  box-shadow: 0 0 calc(10px * var(--gr-scale)) rgba(95, 216, 247, 0.3);
+}
+
+.gr-field__form {
+  display: flex;
+  flex-direction: column;
+  gap: calc(9px * var(--gr-scale));
+}
+
+/* "Esqueci minha senha" e "voltar": texto que age, sem peso de botão. */
+.gr-config__link {
+  align-self: flex-start;
+  font: inherit;
+  font-size: calc(12px * var(--gr-scale));
+  color: var(--gr-cyan);
+  background: none;
+  border: none;
+  padding: calc(2px * var(--gr-scale)) 0;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: calc(3px * var(--gr-scale));
+}
+
+.gr-config__link:hover {
+  color: #b6f2ff;
+}
+
+/* ---- "Mais opções": fechado por padrão, e sem peso visual quando fechado. */
+
+.gr-config__more {
+  display: flex;
+  flex-direction: column;
+  gap: calc(8px * var(--gr-scale));
+}
+
+.gr-config__more-head {
+  display: flex;
+  align-items: center;
+  gap: calc(7px * var(--gr-scale));
+  align-self: flex-start;
+  font: inherit;
+  font-size: calc(12px * var(--gr-scale));
+  font-weight: bold;
+  letter-spacing: calc(0.4px * var(--gr-scale));
+  color: var(--gr-shell);
+  background: none;
+  border: none;
+  padding: calc(6px * var(--gr-scale)) 0;
+  cursor: pointer;
+  opacity: 0.8;
+}
+
+.gr-config__more-head:hover {
+  opacity: 1;
+  color: var(--gr-cyan);
+}
+
+.gr-config__more-body {
+  display: flex;
+  flex-direction: column;
+  gap: calc(10px * var(--gr-scale));
 }
 
 /* ==========================================================================

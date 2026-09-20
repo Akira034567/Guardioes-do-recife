@@ -60,6 +60,7 @@ export function schoolEntries(): AlbumEntry[] {
       icon: lesson.art.kind === "icon" ? glyph(lesson.art.name) : ICONS.book,
       hint: lesson.summary,
       progress: null,
+      group: course?.title ?? "Aulas avulsas",
       state: read ? "read" : "new",
       chip: read ? { label: "Lida", icon: ICONS.book, tone: "read" } : { label: "Nova", icon: ICONS.star, tone: "new" },
       // Abrir a aula é ler a aula: é o mesmo gesto, e o contador do topo anda junto.

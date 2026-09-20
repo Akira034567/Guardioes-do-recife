@@ -217,6 +217,10 @@ export class UIScene extends Phaser.Scene {
   private skipBonus!: Phaser.GameObjects.Text;
   /** Botões de velocidade (1× e 2×) e o estado que eles representam. */
   private speedButton!: HudControl;
+  /** Fundo da pílula da onda: ele encolhe e cresce conforme o botão de chamar aparece ou some. */
+  private wavePod!: Phaser.GameObjects.Image;
+  /** `null` = ainda não desenhada nenhuma vez. */
+  private wavePodWide: boolean | null = null;
   /** Velocidade que o botão está mostrando; o clique alterna a partir dela. */
   private shownSpeed: 1 | 2 = 1;
   /** Prévia da próxima onda, encostada à direita abaixo da barra de cima. */
@@ -323,6 +327,7 @@ export class UIScene extends Phaser.Scene {
     this.debugPanelCollapsed = false;
     this.debugEnabled = false;
     this.pointerInDock = false;
+    this.wavePodWide = null;
     this.dockAbandoned = false;
     this.cardSelected = false;
     lifecycleLog("ui", "create");
@@ -397,7 +402,7 @@ export class UIScene extends Phaser.Scene {
     this.healthText = this.podValue(pods.reef.x + 116, "20/20", HUD_COLORS.text);
 
     // Pílula da onda: em que onda estou e quanto falta para a próxima, no mesmo lugar.
-    this.pod(pods.wave.x, pods.wave.width, "waves", 22);
+    this.wavePod = this.pod(pods.wave.x, pods.wave.width, "waves", 22);
     this.podCaption(pods.wave.x + 38, "ONDA");
     this.waveText = this.podValue(pods.wave.x + 80, "1/5", HUD_COLORS.text);
     this.add.image(pods.wave.x + 114, topCenterY, hudIcon(this, "hourglass", 16, HUD_COLORS.cyan));
@@ -428,11 +433,12 @@ export class UIScene extends Phaser.Scene {
       .setOrigin(0.5);
   }
 
-  /** Fundo de uma pílula de estado, com o pictograma encostado à esquerda. */
-  private pod(x: number, width: number, icon: HudIconName, iconSize: number): void {
+  /** Fundo de uma pílula de estado, com o pictograma encostado à esquerda. Devolve o fundo. */
+  private pod(x: number, width: number, icon: HudIconName, iconSize: number): Phaser.GameObjects.Image {
     const { topCenterY, podHeight } = HUD_LAYOUT;
-    this.add.image(x + width / 2, topCenterY, hudPanel(this, width, podHeight, SKIN.pod));
+    const background = this.add.image(x + width / 2, topCenterY, hudPanel(this, width, podHeight, SKIN.pod));
     this.add.image(x + 20, topCenterY, hudIcon(this, icon, iconSize, HUD_COLORS.cyan));
+    return background;
   }
 
   /** Palavra pequena dentro da pílula ("RECIFE", "ONDA"): explica o número que vem depois. */
@@ -772,11 +778,14 @@ export class UIScene extends Phaser.Scene {
       .text(textLeft, top + 11, "", { fontFamily: HUD_FONT.strong, fontSize: "11px", color: HUD_COLORS.cyan })
       .setOrigin(0, 0.5);
 
-    // Três medidas do Guardião em foco, como no resto do jogo: dano, alcance e cadência.
+    // Quatro medidas do Guardião em foco. As três de sempre — dano, alcance e cadência — mais o
+    // que já foi investido NAQUELA unidade, que é o número que decide entre evoluir e vender e que
+    // antes só aparecia em texto corrido quando o ramo estava completo.
     const cells: Array<[HudIconName, string, number]> = [
       ["blade", "Dano", textLeft],
-      ["target", "Alcance", textLeft + 96],
-      ["cadence", "Cadência", textLeft + 196],
+      ["target", "Alcance", textLeft + 106],
+      ["cadence", "Cadência", textLeft + 216],
+      ["pearl", "Investido", textLeft + 336],
     ];
     this.statCells = cells.map(([icon, caption, x]) => ({
       icon: this.add.image(x + 7, top + 30, hudIcon(this, icon, 14, HUD_COLORS.cyan)),
@@ -786,11 +795,11 @@ export class UIScene extends Phaser.Scene {
 
     this.upgradeDescription = this.add.text(textLeft, top + 38, "Toque em um Guardião no mapa para ver os ramos de upgrade e vender.", {
       fontFamily: HUD_FONT.body,
-      fontSize: "9px",
+      fontSize: "10px",
       color: HUD_COLORS.textSoft,
       wordWrap: { width: panelWidth - PANEL_ICON_COLUMN - 32 },
-      lineSpacing: -1,
-      maxLines: 2,
+      lineSpacing: 0,
+      maxLines: 3,
     });
 
     this.createPanelButtons();
@@ -959,6 +968,7 @@ export class UIScene extends Phaser.Scene {
     // Reiniciar não faz sentido com a partida já decidida: a tela de resultado tem o botão dela.
     this.restartButton.setVisible(snapshot.gameOver === null);
     const canCall = snapshot.canSkipCountdown && !snapshot.gameOver;
+    this.renderWavePod(canCall);
     this.skipButton.setVisible(canCall);
     const bonus = snapshot.earlyCallBonus > 0;
     this.skipBonus.setText(bonus ? `+ ${snapshot.earlyCallBonus} ◉` : "").setVisible(canCall && bonus);
@@ -1018,6 +1028,26 @@ export class UIScene extends Phaser.Scene {
         glowBlur: difficulty.id === "normal" ? 0 : 10,
       }),
     );
+  }
+
+  /**
+   * A pílula da onda toma emprestado o espaço do botão de chamar, enquanto ele não está lá.
+   *
+   * Com a onda em campo o texto vira "EM CURSO", que não cabia nos 182 px desenhados para "EM 10s"
+   * — e é exatamente nesse momento que o botão PRÓXIMA ONDA desaparece, liberando o espaço ao
+   * lado. Só redesenha quando o estado VIRA: a textura do painel é gerada sob demanda, e refazê-la
+   * a cada quadro seria jogar fora um cache que existe justamente para isso.
+   */
+  private renderWavePod(canCall: boolean): void {
+    const wide = !canCall;
+    if (this.wavePodWide === wide) return;
+    this.wavePodWide = wide;
+    const { pods, podHeight, wavePodWideWidth } = HUD_LAYOUT;
+    const width = wide ? wavePodWideWidth : pods.wave.width;
+    this.wavePod.setTexture(hudPanel(this, width, podHeight, SKIN.pod));
+    // A imagem é centrada: mudar a largura sem mover o centro deslocaria a pílula inteira.
+    this.wavePod.setX(pods.wave.x + width / 2);
+    this.timerText.setFontSize(wide ? 15 : 12);
   }
 
   /**
@@ -1146,7 +1176,7 @@ export class UIScene extends Phaser.Scene {
       .setColor(HUD_COLORS.cyan)
       .setX(this.upgradeTitle.x + this.upgradeTitle.width + 10)
       .setVisible(true);
-    this.renderStats(selected.damage, selected.range, selected.cooldownMs, GUARDIANS[selected.guardianId].placementMode === "route");
+    this.renderStats(selected.damage, selected.range, selected.cooldownMs, GUARDIANS[selected.guardianId].placementMode === "route", selected.invested);
 
     if (selected.options.length === 0) {
       this.upgradeDescription.setText(`Ramo ${selected.branchName ?? ""} completo. Investido: ◉ ${selected.invested}.`);
@@ -1224,8 +1254,18 @@ export class UIScene extends Phaser.Scene {
   }
 
   /** As três medidas do painel, cada valor encostado no fim do seu rótulo. */
-  private renderStats(damage: number, range: number, cooldownMs: number, melee: boolean): void {
-    const values = [damage > 0 ? `${Math.round(damage)}` : "—", melee ? "corpo a corpo" : `${Math.round(range)}`, `${(cooldownMs / 1000).toFixed(1)}s`];
+  /**
+   * As medidas da unidade em foco. `invested` é `null` quando não há unidade — na ficha de uma
+   * CARTA (antes de posicionar) não existe nada investido, e mostrar "◉ 0" ali seria uma resposta
+   * para uma pergunta que ninguém fez.
+   */
+  private renderStats(damage: number, range: number, cooldownMs: number, melee: boolean, invested: number | null = null): void {
+    const values = [
+      damage > 0 ? `${Math.round(damage)}` : "—",
+      melee ? "corpo a corpo" : `${Math.round(range)}`,
+      `${(cooldownMs / 1000).toFixed(1)}s`,
+      invested === null ? "—" : `${invested}`,
+    ];
     this.statCells.forEach((cell, index) => {
       cell.icon.setVisible(true);
       cell.label.setVisible(true);

@@ -133,12 +133,14 @@ export function mapScreen(progression: ProgressionService, isUnlocked: (levelId:
 // ------------------------------------------------------------------- trilhas de dificuldade
 
 /**
- * A barra das trilhas: Normal, Difícil e Abissal lado a lado, cada uma com a própria contagem de
- * fases vencidas e de estrelas.
+ * A barra das trilhas: uma fileira fina, e nada mais.
  *
- * Existe porque a dificuldade era invisível fora da tela de preparação: o jogador liberava o
- * Difícil ao fechar a campanha e nada no mapa mudava. Agora ela é o primeiro controle depois do
- * cabeçalho — e o mapa inteiro (nós, estrelas e ficha) responde a ela.
+ * A primeira versão eram três cartões grandes com nome, contagem, estrelas e uma frase de apoio
+ * cada — um bloco que comia um quinto da tela para responder algo que cabe numa linha. O mapa é o
+ * assunto; a dificuldade é um ajuste do mapa, e agora ocupa o tamanho de um ajuste.
+ *
+ * O que sobrou em cada pílula é o essencial para escolher: o nome, e quantas estrelas daquela
+ * trilha já estão em casa. O resto (a descrição, o que falta para destravar) vive no `title`.
  */
 function difficultyTrackBar(
   progression: ProgressionService,
@@ -150,11 +152,12 @@ function difficultyTrackBar(
   return h(
     "nav",
     { class: "gr-world__tracks", testId: "map-tracks", dataValue: current, "aria-label": "Dificuldade da campanha" },
-    ...DIFFICULTY_IDS.map((id) => trackCard(id, gates.find((gate) => gate.id === id), progression, isUnlocked, current, onPick)),
+    h("span", { class: "gr-world__tracks-label", text: "DIFICULDADE" }),
+    ...DIFFICULTY_IDS.map((id) => trackPill(id, gates.find((gate) => gate.id === id), progression, isUnlocked, current, onPick)),
   );
 }
 
-function trackCard(
+function trackPill(
   id: DifficultyId,
   gate: DifficultyGate | undefined,
   progression: ProgressionService,
@@ -164,36 +167,34 @@ function trackCard(
 ): HTMLElement {
   const definition = DIFFICULTIES[id];
   const open = gate?.unlocked ?? id === "normal";
-  const cleared = LEVEL_IDS.filter((levelId) => levelNodeState(levelId, progression, isUnlocked(levelId), id) !== "available" && progression.record(levelId)?.clearedDifficulties.includes(id)).length;
+  const cleared = LEVEL_IDS.filter((levelId) => progression.record(levelId)?.clearedDifficulties.includes(id)).length;
   const stars = LEVEL_IDS.reduce((total, levelId) => total + difficultyTrack(progression.record(levelId), id).stars, 0);
+  void isUnlocked;
   return h(
     "button",
     {
       class: `gr-world__track${id === current ? " gr-world__track--on" : ""}${open ? "" : " gr-world__track--locked"}`,
       testId: `map-track-${id}`,
       dataState: open ? (id === current ? "current" : "open") : "locked",
+      dataCleared: String(cleared),
       type: "button",
       disabled: !open,
       style: `--gr-accent:${definition.accent}`,
       "aria-pressed": String(id === current),
-      title: open ? definition.description : (gate?.requirement ?? ""),
+      // A frase de apoio e o requisito saíram da tela e ficaram aqui: quem quiser, pergunta.
+      title: open ? `${definition.name} — ${definition.pitch} (${cleared}/${LEVEL_IDS.length} fases vencidas)` : (gate?.requirement ?? ""),
       onClick: () => onPick(id),
     },
-    h(
-      "span",
-      { class: "gr-world__track-head" },
-      h("span", { class: "gr-icon gr-icon--lg", html: open ? ICONS.difficulty(difficultyWaves(id), definition.accent) : ICONS.lock }),
-      h("span", { class: "gr-world__track-name", text: definition.name.toUpperCase() }),
-    ),
+    h("span", { class: "gr-icon", html: open ? ICONS.difficulty(difficultyWaves(id), definition.accent) : ICONS.lock }),
+    h("span", { class: "gr-world__track-name", text: definition.name }),
     open
       ? h(
           "span",
           { class: "gr-world__track-score" },
-          h("span", { text: `${cleared}/${LEVEL_IDS.length} fases` }),
-          h("span", { class: "gr-world__track-stars" }, h("span", { class: "gr-icon", html: ICONS.star }), h("span", { text: `${stars}/${LEVEL_IDS.length * 3}` })),
+          h("span", { class: "gr-icon", html: ICONS.star }),
+          h("span", { text: `${stars}/${LEVEL_IDS.length * 3}` }),
         )
-      : h("span", { class: "gr-hint", text: gate?.requirement ?? "" }),
-    open ? h("span", { class: "gr-hint", text: definition.pitch }) : null,
+      : null,
   );
 }
 

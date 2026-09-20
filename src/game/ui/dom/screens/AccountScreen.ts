@@ -21,34 +21,50 @@ import type { Screen } from "../ScreenHost";
 import { shellSidebar, type ShellNav } from "../shell";
 
 /**
- * Minha Conta: entrar, criar conta e levar o progresso para onde o jogador estiver.
+ * Minha Conta — UMA pergunta por vez.
  *
- * A tela tem DOIS níveis, e diz claramente qual é qual:
+ * A primeira versão mostrava tudo ao mesmo tempo: entrar na nuvem, criar conta na nuvem, recuperar
+ * senha, entrar numa conta do aparelho, criar conta do aparelho e o código de transferência —
+ * seis formulários abertos, uns vinte campos, numa tela cujo trabalho é responder "quem está
+ * jogando?". Quem chegava aqui para entrar tinha que achar onde entrar.
  *
- * 1. **Conta na nuvem** — a conta de verdade: usuário único, e-mail, senha guardada com hash no
- *    servidor e progresso que aparece em qualquer aparelho. Só existe quando a instalação está
- *    configurada (`VITE_SUPABASE_URL`); sem isso, este bloco nem é desenhado.
- * 2. **Contas deste aparelho** — o que sempre existiu: saves separados aqui, e um código para
- *    levar o progresso na mão. Continua valendo para quem não quer dar e-mail nenhum.
+ * Agora a tela mostra um caminho só, e os outros ficam a um toque:
  *
- * A tela nunca promete o que não tem: sem nuvem configurada, ela diz que o progresso mora no
- * aparelho, e é verdade.
+ * 1. **Conta na nuvem** é o cartão único e aberto. Um seletor de dois botões — ENTRAR / CRIAR
+ *    CONTA — troca o formulário no lugar; "esqueci a senha" é um terceiro modo do mesmo cartão.
+ * 2. **Mais opções** guarda o que é de manutenção: as contas deste aparelho e, quando não há nuvem
+ *    configurada, o código de transferência.
+ *
+ * O código do Recife sai da frente, mas não sai do jogo: a conta na nuvem é opcional, e quem
+ * prefere não dar e-mail nenhum continua tendo só ele para levar o progresso a outro aparelho.
  *
  * Toda operação que troca de save termina em `onAccountChanged()`, que refaz a cena: o Recife, as
  * Conchas e os Guardiões que aparecem depois já são os da conta que acabou de entrar.
  */
+
+/** Qual formulário o cartão da nuvem está mostrando. */
+type CloudMode = "signin" | "signup" | "reset";
 export function accountScreen(onBack: () => void, nav?: ShellNav, embedded = false, onAccountChanged: () => void = () => {}): Screen {
+  /** O formulário aberto no cartão da nuvem. Entrar é o que 9 em cada 10 visitas querem. */
+  let mode: CloudMode = "signin";
+  /** "Mais opções" começa fechado: é manutenção, não é o caminho de quem veio entrar. */
+  let extrasOpen = false;
+
   return {
     id: "account",
     render() {
-      const root = h("div", { class: `gr-album gr-config${embedded ? " gr-album--embedded" : ""}`, testId: "account-panel" });
+      const root = h("div", { class: `gr-album gr-config gr-config--account${embedded ? " gr-album--embedded" : ""}`, testId: "account-panel" });
       const layout = h("div", { class: "gr-album__layout" });
       root.append(layout);
 
       const draw = (): void => {
         const store = getAccounts();
         const active = store.active;
-        const cloud = cloudCard(draw, onAccountChanged);
+        const cloudReady = getCloud().isConfigured;
+        const cloud = cloudCard(mode, (next) => {
+          mode = next;
+          draw();
+        }, draw, onAccountChanged);
         fill(
           layout,
           embedded || !nav
@@ -65,19 +81,26 @@ export function accountScreen(onBack: () => void, nav?: ShellNav, embedded = fal
             header(active),
             h(
               "div",
-              { class: "gr-config__body" },
-              // Com a nuvem ligada ela ocupa a coluna da esquerda junto com "quem está jogando", e o
-              // que é deste aparelho desce para a direita. Sem a nuvem, as duas colunas voltam ao
-              // arranjo de sempre — senão a da esquerda ficaria com um cartão só e um vazio enorme.
-              ...(cloud
-                ? [
-                    h("div", { class: "gr-config__column" }, cloud, currentCard(active, draw, onAccountChanged)),
-                    h("div", { class: "gr-config__column" }, accessCard(active, store.list(), draw, onAccountChanged), transferCard(active, draw, onAccountChanged)),
-                  ]
-                : [
-                    h("div", { class: "gr-config__column" }, currentCard(active, draw, onAccountChanged), accessCard(active, store.list(), draw, onAccountChanged)),
-                    h("div", { class: "gr-config__column" }, transferCard(active, draw, onAccountChanged)),
-                  ]),
+              { class: "gr-config__body gr-config__body--single" },
+              cloud,
+              // Sem nuvem, a conta do aparelho É a conta: ela sobe para o lugar principal.
+              cloudReady ? null : currentCard(active, draw, onAccountChanged),
+              disclosure(
+                "account-extras",
+                extrasOpen,
+                cloudReady ? "Mais opções" : "Outras contas deste aparelho",
+                () => {
+                  extrasOpen = !extrasOpen;
+                  draw();
+                },
+                ...(cloudReady ? [currentCard(active, draw, onAccountChanged)] : []),
+                accessCard(active, store.list(), draw, onAccountChanged),
+                // O código do Recife SAI da frente, mas não sai do jogo: a conta na nuvem é
+                // opcional, e quem joga sem dar e-mail nenhum continua tendo só ele para levar o
+                // progresso a outro aparelho. Tirá-lo porque existe nuvem seria tirar a saída de
+                // quem justamente não quer usá-la.
+                transferCard(active, draw, onAccountChanged),
+              ),
             ),
             h("p", {
               class: "gr-album__foot",
@@ -126,109 +149,147 @@ function header(active: AccountRecord | null): HTMLElement {
  * O e-mail é obrigatório porque é ele — e só ele — que devolve a senha quando o jogador a esquece.
  * O nome de usuário é o que ele digita para entrar e é único no servidor inteiro, não só aqui.
  */
-function cloudCard(redraw: () => void, onAccountChanged: () => void): HTMLElement | null {
+function cloudCard(mode: CloudMode, onMode: (next: CloudMode) => void, redraw: () => void, onAccountChanged: () => void): HTMLElement | null {
   const cloud = getCloud();
   if (!cloud.isConfigured) return null;
   const profile = cloud.profile;
-  return profile ? cloudSignedInCard(profile, redraw, onAccountChanged) : cloudSignedOutCard(redraw, onAccountChanged);
+  return profile ? cloudSignedInCard(profile, redraw, onAccountChanged) : cloudSignedOutCard(mode, onMode, redraw, onAccountChanged);
 }
 
-function cloudSignedOutCard(redraw: () => void, onAccountChanged: () => void): HTMLElement {
-  const signInStatus = statusLine("cloud-signin-status");
-  const identifier = textInput("cloud-identifier", "Usuário ou e-mail", "username");
+function cloudSignedOutCard(mode: CloudMode, onMode: (next: CloudMode) => void, redraw: () => void, onAccountChanged: () => void): HTMLElement {
+  return card(
+    ICONS.account,
+    "Conta na nuvem",
+    mode === "reset" ? "Mandamos um link para você criar uma senha nova." : "Um usuário, um e-mail e o Recife em qualquer aparelho.",
+    "cloud-card",
+    // O seletor some no modo "recuperar": ali a única saída é voltar, e ela está no rodapé.
+    mode === "reset" ? null : modePicker(mode, onMode),
+    mode === "signin" ? signInForm(redraw, onAccountChanged, onMode) : null,
+    mode === "signup" ? signUpForm(redraw, onAccountChanged) : null,
+    mode === "reset" ? resetForm(onMode) : null,
+  );
+}
+
+/** ENTRAR | CRIAR CONTA. Dois caminhos, um aberto por vez. */
+function modePicker(mode: CloudMode, onMode: (next: CloudMode) => void): HTMLElement {
+  const tab = (id: CloudMode, label: string): HTMLElement =>
+    h("button", {
+      class: `gr-config__mode${id === mode ? " gr-config__mode--on" : ""}`,
+      testId: `cloud-mode-${id}`,
+      type: "button",
+      text: label,
+      "aria-pressed": String(id === mode),
+      onClick: () => onMode(id),
+    });
+  return h("div", { class: "gr-config__modes", testId: "cloud-modes", dataValue: mode }, tab("signin", "ENTRAR"), tab("signup", "CRIAR CONTA"));
+}
+
+function signInForm(redraw: () => void, onAccountChanged: () => void, onMode: (next: CloudMode) => void): HTMLElement {
+  const status = statusLine("cloud-signin-status");
+  const identifier = textInput("cloud-identifier", "Usuário ou e-mail", "username", FIELD_MAX.email);
   const password = passwordInput("cloud-password", "Senha", "current-password");
-  const enter = actionButton("cloud-signin", ICONS.play, "ENTRAR NA NUVEM", async () => {
+  const enter = actionButton("cloud-signin", ICONS.play, "ENTRAR", async () => {
     const result = await cloudSignIn(identifier.input.value, password.input.value);
     password.input.value = "";
     if (!result.ok) {
-      showCloud(signInStatus, result, "");
+      showCloud(status, result, "");
       return;
     }
     // Dizer QUAL save venceu é o mínimo: o jogador acabou de arriscar o progresso dele.
-    const note =
+    status.dataset.tone = "ok";
+    status.textContent =
       result.value.source === "cloud"
         ? `Bem-vindo, ${result.value.profile.username}! Trouxemos o progresso mais recente da nuvem.`
         : `Bem-vindo, ${result.value.profile.username}! O progresso deste aparelho era o mais novo e subiu para a nuvem.`;
-    signInStatus.dataset.tone = "ok";
-    signInStatus.textContent = note;
     onAccountChanged();
     redraw();
   });
-  password.input.addEventListener("keydown", (event) => {
-    if ((event as KeyboardEvent).key === "Enter") enter.click();
-  });
+  submitOnEnter(enter, identifier.input, password.input);
 
-  const resetStatus = statusLine("cloud-reset-status");
-  const resetEmail = textInput("cloud-reset-email", "E-mail da conta", "email");
-  const resetForm = h("div", { class: "gr-field__group", testId: "cloud-reset-form", hidden: "" }, resetEmail.row, resetStatus);
-  const resetSend = actionButton("cloud-reset-send", ICONS.book, "ENVIAR E-MAIL", async () => {
-    const result = await getCloud().requestPasswordReset(resetEmail.input.value);
-    // A mensagem é a mesma exista ou não a conta: dizer "esse e-mail não tem conta" entregaria,
-    // para quem estivesse chutando endereços, quem joga aqui.
-    showCloud(resetStatus, result, "Se existir conta com esse e-mail, o link para trocar a senha já está a caminho.");
-  });
-  resetSend.hidden = true;
+  return h(
+    "div",
+    { class: "gr-field__form", testId: "cloud-signin-form" },
+    identifier.row,
+    password.row,
+    enter,
+    status,
+    h("button", {
+      class: "gr-config__link",
+      testId: "cloud-reset-toggle",
+      type: "button",
+      text: "Esqueci minha senha",
+      onClick: () => onMode("reset"),
+    }),
+  );
+}
 
-  const createStatus = statusLine("cloud-create-status");
+function signUpForm(redraw: () => void, onAccountChanged: () => void): HTMLElement {
+  const status = statusLine("cloud-create-status");
   const username = textInput("cloud-new-username", "Nome de usuário", "username");
-  const email = textInput("cloud-new-email", "E-mail", "email");
-  const newPassword = passwordInput("cloud-new-password", "Senha", "new-password");
-  const newConfirm = passwordInput("cloud-new-confirm", "Repita a senha", "new-password");
-  const create = actionButton("cloud-create", ICONS.plus, "CRIAR CONTA NA NUVEM", async () => {
+  const email = emailInput("cloud-new-email", "E-mail");
+  const password = passwordInput("cloud-new-password", "Senha", "new-password");
+  const confirm = passwordInput("cloud-new-confirm", "Repita a senha", "new-password");
+  const create = actionButton("cloud-create", ICONS.plus, "CRIAR CONTA", async () => {
     const result = await cloudSignUp({
       username: username.input.value,
       email: email.input.value,
-      password: newPassword.input.value,
-      confirmPassword: newConfirm.input.value,
+      password: password.input.value,
+      confirmPassword: confirm.input.value,
     });
-    newPassword.input.value = "";
-    newConfirm.input.value = "";
+    password.input.value = "";
+    confirm.input.value = "";
     if (!result.ok) {
-      showCloud(createStatus, result, "");
+      showCloud(status, result, "");
       return;
     }
-    createStatus.dataset.tone = "ok";
-    createStatus.textContent = result.value.needsConfirmation
+    status.dataset.tone = "ok";
+    status.textContent = result.value.needsConfirmation
       ? "Conta criada! Confirme o e-mail que acabamos de enviar e depois entre por aqui."
       : "Conta criada. O progresso deste aparelho já subiu para ela.";
     if (!result.value.needsConfirmation) onAccountChanged();
     redraw();
   });
+  submitOnEnter(create, username.input, email.input, password.input, confirm.input);
 
-  return card(
-    ICONS.account,
-    "Conta na nuvem",
-    "Um usuário, um e-mail e o Recife em qualquer aparelho.",
-    "cloud-card",
-    h("p", {
-      class: "gr-hint gr-config__note",
-      text: "Com conta na nuvem o progresso deixa de ser deste navegador: entre no celular, no computador ou na casa de alguém e o Recife estará como você deixou.",
-    }),
-    identifier.row,
-    password.row,
-    enter,
-    signInStatus,
-    row(
-      ICONS.lock,
-      "Esqueci a senha",
-      actionButton("cloud-reset-toggle", ICONS.book, "RECUPERAR", () => {
-        resetForm.hidden = !resetForm.hidden;
-        resetSend.hidden = resetForm.hidden;
-        if (!resetForm.hidden) resetEmail.input.focus();
-      }),
-    ),
-    resetForm,
-    resetSend,
-    h("p", { class: "gr-hint gr-config__note", text: "Ainda não tem conta? Crie a sua:" }),
+  return h(
+    "div",
+    { class: "gr-field__form", testId: "cloud-signup-form" },
     username.row,
     email.row,
-    newPassword.row,
-    newConfirm.row,
+    password.row,
+    confirm.row,
     create,
-    createStatus,
+    status,
     h("p", {
       class: "gr-hint gr-config__note",
-      text: `De ${ACCOUNT_NAME_MIN} a ${ACCOUNT_NAME_MAX} letras no usuário (ele é único e não pode repetir) e ao menos ${CLOUD_PASSWORD_MIN} caracteres na senha. A senha fica guardada com hash no servidor — nem nós conseguimos lê-la.`,
+      text: `De ${ACCOUNT_NAME_MIN} a ${ACCOUNT_NAME_MAX} letras no usuário (ele é único) e ao menos ${CLOUD_PASSWORD_MIN} caracteres na senha. A senha fica guardada com hash no servidor — nem nós conseguimos lê-la.`,
+    }),
+  );
+}
+
+function resetForm(onMode: (next: CloudMode) => void): HTMLElement {
+  const status = statusLine("cloud-reset-status");
+  const email = emailInput("cloud-reset-email", "E-mail da conta");
+  const send = actionButton("cloud-reset-send", ICONS.book, "ENVIAR LINK", async () => {
+    const result = await getCloud().requestPasswordReset(email.input.value);
+    // A mensagem é a mesma exista ou não a conta: dizer "esse e-mail não tem conta" entregaria,
+    // para quem estivesse chutando endereços, quem joga aqui.
+    showCloud(status, result, "Se existir conta com esse e-mail, o link para trocar a senha já está a caminho.");
+  });
+  submitOnEnter(send, email.input);
+
+  return h(
+    "div",
+    { class: "gr-field__form", testId: "cloud-reset-form" },
+    email.row,
+    send,
+    status,
+    h("button", {
+      class: "gr-config__link",
+      testId: "cloud-reset-back",
+      type: "button",
+      text: "← Voltar para entrar",
+      onClick: () => onMode("signin"),
     }),
   );
 }
@@ -581,21 +642,44 @@ function row(icon: string, label: string, control: HTMLElement): HTMLElement {
   );
 }
 
-function textInput(testId: string, label: string, autocomplete: string): { row: HTMLElement; input: HTMLInputElement } {
-  return inputRow(testId, label, "text", autocomplete);
+/**
+ * Teto de caracteres por campo. Existe explícito porque o contrário custou caro: o teto era
+ * deduzido do TIPO do campo, e todo campo de texto herdava o limite do NOME de usuário — 16
+ * caracteres. Um e-mail de verdade não cabe em 16, então criar conta era impossível e a tela não
+ * dava nenhuma pista do motivo: o caractere simplesmente não aparecia.
+ */
+const FIELD_MAX: Record<"email" | "username" | "password", number> = {
+  /** O limite do e-mail é o da especificação, não um palpite. */
+  email: 254,
+  username: ACCOUNT_NAME_MAX,
+  password: 64,
+};
+
+function textInput(testId: string, label: string, autocomplete: string, maxLength = FIELD_MAX.username): { row: HTMLElement; input: HTMLInputElement } {
+  return inputRow(testId, label, "text", autocomplete, maxLength);
+}
+
+function emailInput(testId: string, label: string): { row: HTMLElement; input: HTMLInputElement } {
+  return inputRow(testId, label, "email", "email", FIELD_MAX.email);
 }
 
 function passwordInput(testId: string, label: string, autocomplete: string): { row: HTMLElement; input: HTMLInputElement } {
-  return inputRow(testId, label, "password", autocomplete);
+  return inputRow(testId, label, "password", autocomplete, FIELD_MAX.password);
 }
 
-function inputRow(testId: string, label: string, type: "text" | "password", autocomplete: string): { row: HTMLElement; input: HTMLInputElement } {
+function inputRow(
+  testId: string,
+  label: string,
+  type: "text" | "password" | "email",
+  autocomplete: string,
+  maxLength: number,
+): { row: HTMLElement; input: HTMLInputElement } {
   const input = h("input", {
     class: "gr-field__input",
     testId,
     type,
     autocomplete,
-    maxlength: type === "text" ? String(ACCOUNT_NAME_MAX) : "64",
+    maxlength: String(maxLength),
     "aria-label": label,
   }) as HTMLInputElement;
   return { input, row: h("label", { class: "gr-field" }, h("span", { class: "gr-field__label", text: label }), input) };
@@ -635,6 +719,35 @@ function actionButton(testId: string, icon: string, label: string, run: () => vo
     text,
   ) as HTMLButtonElement;
   return element;
+}
+
+/**
+ * Um bloco que abre e fecha, com o título virando o botão.
+ *
+ * Substitui o par "formulário escondido + botão escondido" que a tela usava: eram dois elementos
+ * com `hidden` para cada seção, e manter os dois em sincronia era um passo que dava para esquecer.
+ */
+function disclosure(testId: string, open: boolean, label: string, onToggle: () => void, ...children: Array<HTMLElement | null>): HTMLElement {
+  return h(
+    "section",
+    { class: `gr-config__more${open ? " gr-config__more--open" : ""}`, testId, dataOpen: String(open) },
+    h(
+      "button",
+      { class: "gr-config__more-head", testId: `${testId}-toggle`, type: "button", "aria-expanded": String(open), onClick: onToggle },
+      h("span", { class: "gr-icon", html: open ? ICONS.chevronDown : ICONS.chevronRight }),
+      h("span", { text: label }),
+    ),
+    open ? h("div", { class: "gr-config__more-body" }, ...children) : null,
+  );
+}
+
+/** Enter em qualquer campo do formulário aciona o botão dele — o que todo mundo espera de um form. */
+function submitOnEnter(button: HTMLButtonElement, ...inputs: HTMLInputElement[]): void {
+  for (const input of inputs) {
+    input.addEventListener("keydown", (event) => {
+      if ((event as KeyboardEvent).key === "Enter") button.click();
+    });
+  }
 }
 
 function statusLine(testId: string): HTMLElement {

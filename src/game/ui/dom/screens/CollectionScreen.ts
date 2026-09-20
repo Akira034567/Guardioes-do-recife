@@ -173,15 +173,13 @@ export function collectionScreen(
               { class: "gr-album__body" },
               h(
                 "div",
-                { class: "gr-album__grid", testId: "album-grid" },
-                ...entries.map((entry) =>
-                  card(entry, current?.id === entry.id, () => {
-                    chosen = entry.id;
-                    sheetTab = "info";
-                    actionFrame = 0;
-                    draw();
-                  }),
-                ),
+                { class: `gr-album__grid${tab === "school" ? " gr-album__grid--lessons" : ""}`, testId: "album-grid" },
+                ...cards(tab, entries, current?.id ?? null, (entry) => {
+                  chosen = entry.id;
+                  sheetTab = "info";
+                  actionFrame = 0;
+                  draw();
+                }),
               ),
               current ? current.sheet() : h("div", { class: "gr-album__sheet" }),
             ),
@@ -267,6 +265,73 @@ function tabs(current: AlbumTab, onPick: (tab: AlbumTab) => void): HTMLElement {
     ),
   );
 }
+
+/**
+ * As cartas da aba — e a Escola tem forma própria.
+ *
+ * A Escola vinha saindo IDÊNTICA à dos Guardiões e à da Maestria: a mesma grade de três retratos
+ * grandes. As três falam de coisas diferentes e mereciam silhuetas diferentes, senão a troca de aba
+ * parece não ter acontecido. Aula é texto, não criatura, então ela vira uma LISTA agrupada pelos
+ * quatro cursos — que é também como um manual se parece.
+ */
+function cards(tab: AlbumTab, entries: readonly AlbumEntry[], chosenId: string | null, onPick: (entry: AlbumEntry) => void): HTMLElement[] {
+  if (tab !== "school") return entries.map((entry) => card(entry, chosenId === entry.id, () => onPick(entry)));
+
+  const nodes: HTMLElement[] = [];
+  let openGroup: string | null = null;
+  for (const entry of entries) {
+    const group = entry.group ?? "";
+    if (group !== openGroup) {
+      openGroup = group;
+      const read = entries.filter((candidate) => candidate.group === group && candidate.state === "read").length;
+      const total = entries.filter((candidate) => candidate.group === group).length;
+      nodes.push(
+        h(
+          "h3",
+          { class: "gr-album__group", testId: `album-group-${slug(group)}` },
+          h("span", { text: group }),
+          h("span", { class: "gr-album__group-count", text: `${read}/${total}` }),
+        ),
+      );
+    }
+    nodes.push(lessonRow(entry, chosenId === entry.id, () => onPick(entry)));
+  }
+  return nodes;
+}
+
+/** Uma aula: miniatura à esquerda, título e resumo no meio, selo de lida à direita. */
+function lessonRow(entry: AlbumEntry, chosen: boolean, onClick: () => void): HTMLElement {
+  return h(
+    "button",
+    {
+      class: `gr-album__lesson${chosen ? " gr-album__lesson--on" : ""}`,
+      testId: `collection-card-${entry.id}`,
+      dataState: entry.state ?? "read",
+      type: "button",
+      onClick,
+    },
+    h(
+      "span",
+      { class: "gr-album__lesson-art" },
+      entry.art ? h("img", { class: "gr-album__lesson-img", src: entry.art, alt: "" }) : h("span", { class: "gr-icon gr-icon--lg", html: entry.icon }),
+    ),
+    h(
+      "span",
+      { class: "gr-album__lesson-copy" },
+      h("span", { class: "gr-album__lesson-name", text: entry.name }),
+      h("span", { class: "gr-hint", text: entry.hint }),
+    ),
+    entry.state === "new" ? h("span", { class: "gr-album__lesson-new", text: "NOVA" }) : null,
+  );
+}
+
+const slug = (value: string): string =>
+  value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/(^-|-$)/g, "");
 
 function card(entry: AlbumEntry, chosen: boolean, onClick: () => void): HTMLElement {
   const state = entry.state ?? (entry.found ? "unlocked" : "locked");

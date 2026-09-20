@@ -212,3 +212,34 @@ seis rotas e tem uma dependência de runtime só.
 
 Sem `VITE_SUPABASE_URL` configurado, nada disto aparece e o jogo roda exatamente como antes. O passo
 a passo de ligação está no README, em [Contas e saves](../README.md#contas-e-saves).
+
+---
+
+## 11. Segunda passada, depois de usar
+
+Cinco acertos pedidos depois de jogar a versão publicada. Quatro são de proporção — coisas que
+estavam certas e grandes demais — e um era um defeito que impedia de usar a tela.
+
+- **O e-mail não cabia no campo.** Todo campo de texto da tela de conta herdava o teto do NOME de
+  usuário: 16 caracteres. Um e-mail de verdade não cabe em 16, então criar conta era impossível — e
+  a tela não dava pista nenhuma do motivo, o caractere simplesmente não aparecia. Agora o teto é
+  declarado por campo (`FIELD_MAX`), e o do e-mail é o da especificação: 254.
+- **Minha Conta mostrava seis formulários ao mesmo tempo.** Entrar, criar, recuperar, entrar no
+  aparelho, criar no aparelho e o código de transferência — uns vinte campos abertos numa tela cujo
+  trabalho é responder "quem está jogando?". Agora é um cartão só, com um seletor de dois botões
+  (ENTRAR / CRIAR CONTA) trocando o formulário no lugar, e "Mais opções" guardando o resto. O
+  código do Recife saiu da frente mas não saiu do jogo: a conta na nuvem é opcional, e quem prefere
+  não dar e-mail nenhum continua só com ele para levar o progresso.
+- **As trilhas de dificuldade comiam um quinto da tela.** Eram três cartões com nome, contagem,
+  estrelas e uma frase de apoio cada. Viraram três pílulas numa fileira fina; a frase e o requisito
+  foram para o `title`.
+- **A pílula da onda cortava "EM CURSO".** Ela foi dimensionada para "EM 10s". Agora ela cresce
+  quando o botão PRÓXIMA ONDA some — que é exatamente quando o texto fica longo e o espaço ao lado
+  vaga — e encolhe quando ele volta.
+- **A Escola era idêntica às outras abas.** Mesma grade de três retratos dos Guardiões e da
+  Maestria, o que fazia a troca de aba parecer não ter acontecido. Aula é texto, não criatura:
+  virou uma lista agrupada pelos quatro cursos, com contador por seção.
+- **Sobrava uma faixa vazia no canto de baixo à direita**, herdada do bloco de comandos que subiu
+  para a barra de cima. O painel do Guardião tomou a faixa: ganhou uma quarta medida (o quanto já
+  foi investido NAQUELA unidade, que é o número que decide entre evoluir e vender) e a descrição
+  dos ramos deixou de ser espremida em duas linhas de 9 px.

@@ -29,6 +29,11 @@ async function openAccount(page: Page): Promise<void> {
   await page.getByTestId("hub-menu-toggle").click();
   await page.getByTestId("hub-nav-account").click();
   await expect(page.getByTestId("account-panel")).toBeVisible();
+  // As contas DESTE APARELHO moram em "Mais opções", fechado por padrão: a tela abre no caminho de
+  // quem veio entrar, e o resto é manutenção. As sondas daqui são justamente sobre a manutenção.
+  const extras = page.getByTestId("account-extras");
+  if ((await extras.getAttribute("data-open")) === "false") await page.getByTestId("account-extras-toggle").click();
+  await expect(extras).toHaveAttribute("data-open", "true");
 }
 
 async function createAccount(page: Page, name: string, password: string): Promise<void> {

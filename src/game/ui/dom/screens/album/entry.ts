@@ -32,6 +32,11 @@ export interface AlbumEntry {
   state?: string;
   /** Roda quando o jogador escolhe a carta (a Escola marca a aula como lida). */
   onOpen?(): void;
+  /**
+   * Seção a que a entrada pertence. Só a Escola usa: as aulas são agrupadas por curso, em lista,
+   * e é isso que dá à aba uma silhueta própria — as outras abas são uma grade de retratos.
+   */
+  group?: string;
 }
 
 /** O que a ficha precisa para se redesenhar sem recriar a tela inteira. */

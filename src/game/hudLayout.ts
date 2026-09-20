@@ -42,6 +42,15 @@ export const HUD_LAYOUT = {
     wave: { x: 720, width: 182 },
   },
   /**
+   * Largura da pílula da onda QUANDO NÃO HÁ onda para chamar.
+   *
+   * "EM 10s" cabe folgado em 182 px; "EM CURSO" não — e é justamente enquanto a onda corre que o
+   * botão PRÓXIMA ONDA some, deixando o espaço dele vago ao lado. A pílula toma esse espaço
+   * emprestado e devolve quando o botão volta, então nada nunca fica cortado e nada nunca briga
+   * pelo mesmo pixel.
+   */
+  wavePodWideWidth: 292,
+  /**
    * Aviso curto da partida. Saiu da barra de cima (onde disputava espaço com as pílulas) e virou um
    * balão discreto logo abaixo dela, sem encostar na barra do chefe.
    */
@@ -97,19 +106,21 @@ export const HUD_LAYOUT = {
 
   // ── Barra de baixo: painel do Guardião em foco ───────────────────────────────
   /**
-   * Painel do Guardião em foco. Começa depois da última carta (que termina em 588) e agora vai até
-   * perto da borda: o bloco de comandos que ocupava a direita subiu inteiro para a barra de cima.
+   * Painel do Guardião em foco. Começa depois da última carta (que termina em 588) e vai até a
+   * borda: o bloco de comandos que ocupava a direita subiu inteiro para a barra de cima, e a faixa
+   * de 120 px que sobrava ali não estava fazendo nada. Com ela, cabe uma quarta medida e a
+   * descrição do ramo deixa de ser espremida em duas linhas de 9 px.
    */
-  panelX: 880,
-  panelWidth: 560,
+  panelX: 934,
+  panelWidth: 668,
   panelY: GAME_HEIGHT - 58,
   panelHeight: 104,
   /** Botões do painel: ramo A à esquerda, ramo B no meio, venda à direita. */
   optionButtonY: GAME_HEIGHT - 27,
-  optionButtonXs: [696, 876] as const,
-  optionButtonWidth: 170,
+  optionButtonXs: [714, 926] as const,
+  optionButtonWidth: 200,
   optionButtonHeight: 34,
-  sellButtonX: 1056,
+  sellButtonX: 1138,
 
   // ── Atalho de desenvolvimento ────────────────────────────────────────────────
   /** Flutua acima da barra de baixo; só aparece com `?debug=1`. */
