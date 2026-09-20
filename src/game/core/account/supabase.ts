@@ -64,6 +64,20 @@ function translate(status: number, body: unknown): SupabaseError {
   if (lower.includes("duplicate key") && lower.includes("username")) return new SupabaseError("Este nome de usuário já está em uso.", status, code);
   if (lower.includes("password should be")) return new SupabaseError("A senha é curta demais para o servidor: use pelo menos 6 caracteres.", status, code);
   if (lower.includes("rate limit") || status === 429) return new SupabaseError("Muitas tentativas seguidas. Espere um minuto e tente de novo.", status, code);
+  /*
+   * O servidor de e-mail recusou a mensagem (SMTP mal configurado, provedor ainda não liberado,
+   * cota estourada). A mensagem crua é "Error sending confirmation email" — em inglês e sem dizer
+   * nada a quem está do outro lado. Duas coisas importam aqui: que a culpa não é de quem digitou,
+   * e que a conta PODE ter nascido mesmo assim, então tentar de novo com o mesmo e-mail talvez
+   * responda "já existe".
+   */
+  if (lower.includes("sending confirmation") || lower.includes("sending recovery") || lower.includes("sending email") || lower.includes("smtp")) {
+    return new SupabaseError(
+      "Não foi possível enviar o e-mail — o problema é do nosso servidor de mensagens, não seu. Tente de novo mais tarde; se disser que a conta já existe, ela foi criada e falta só o e-mail de confirmação.",
+      status,
+      code,
+    );
+  }
   if (raw.length > 0) return new SupabaseError(raw, status, code);
   return new SupabaseError(`O servidor respondeu ${status}.`, status, code);
 }

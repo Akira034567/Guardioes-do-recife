@@ -58,16 +58,20 @@ A conta de verdade: **usuário único, e-mail, senha com hash e o progresso em q
 2. **Crie o esquema.** No painel, SQL Editor → New query → cole o conteúdo de [`supabase/schema.sql`](supabase/schema.sql) inteiro → Run. Ele é idempotente: rodar de novo depois de uma atualização não apaga nada.
 3. **Aponte para onde o e-mail volta.** Authentication → URL Configuration: ponha a URL do jogo em **Site URL** e a mesma em **Redirect URLs**. Sem isso, o link de "esqueci a senha" chega mas leva para o lugar errado. Em Authentication → Sign In / Providers → Email, deixe **Confirm email** ligado: é ele que garante que o e-mail do reset é de verdade.
 4. **Configure o jogo.** Copie `.env.example` para `.env.local` e preencha `VITE_SUPABASE_URL` e `VITE_SUPABASE_PUBLISHABLE_KEY` (painel → Settings → API Keys; a chave começa com `sb_publishable_`). Projetos antigos têm o JWT `anon` no lugar — vale também, em `VITE_SUPABASE_ANON_KEY`.
-5. **Ligue um SMTP próprio — sem isto, só VOCÊ consegue se cadastrar.** O mailer embutido do Supabase entrega apenas para endereços da equipe do projeto (qualquer outro recebe *"Email address not authorized"*) e manda no máximo 2 por hora; a própria documentação diz que ele não é para produção. Em Authentication → Emails → SMTP Settings, aponte para um provedor. O [Brevo](https://www.brevo.com/free-smtp-server/) resolve sem domínio próprio: plano grátis de 300/dia, e basta verificar UM endereço remetente (um Gmail seu serve).
+5. **Ligue um SMTP próprio — sem isto, só VOCÊ consegue se cadastrar.** O mailer embutido do Supabase entrega apenas para endereços da equipe do projeto (qualquer outro recebe *"Email address not authorized"*) e manda no máximo 2 por hora; a própria documentação diz que ele não é para produção. Em Authentication → Emails → SMTP Settings, aponte para um provedor.
+
+   **Sem domínio próprio, use o Gmail.** É o único caminho que funciona no mesmo dia: 500 mensagens/dia, sem verificação de domínio e sem fila de aprovação.
 
    | Campo no Supabase | Valor |
    | --- | --- |
-   | Host | `smtp-relay.brevo.com` |
+   | Host | `smtp.gmail.com` |
    | Port | `587` |
-   | Username | o e-mail de login do Brevo |
-   | Password | a *SMTP key* gerada no Brevo (não é a senha da conta) |
-   | Sender email | o endereço que você verificou no Brevo |
+   | Username | seu endereço `@gmail.com` |
+   | Password | uma **senha de app** de 16 letras (Conta Google → Segurança → Senhas de app). Exige verificação em duas etapas ligada; a senha normal da conta **não** funciona desde 2022 |
+   | Sender email | o mesmo endereço `@gmail.com` |
    | Sender name | `Guardiões do Recife` |
+
+   ⚠️ **Provedores transacionais (Brevo, SendGrid, Mailgun) NÃO servem para começar sem domínio.** Eles só liberam envio transacional depois de você verificar um **domínio** e passar por uma aprovação manual do suporte (1–2 dias úteis no Brevo). Até lá o Supabase responde *"Error sending confirmation email"* em todo cadastro. Verificar apenas um endereço remetente não basta — vale para campanhas, não para o relay SMTP. Quando o jogo tiver domínio e volume, migrar para um deles é o passo certo; antes disso, não.
 
    Depois de salvar, o Supabase impõe um teto inicial de 30 mensagens/hora: ajuste em Authentication → Rate Limits.
 

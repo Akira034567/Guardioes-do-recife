@@ -14,6 +14,11 @@
  *       O caminho completo: entrar pelo nome de usuário, gravar um progresso de teste, ler de volta
  *       e desfazer. Use uma conta de teste — ele ESCREVE no save dela.
  *
+ *   node scripts/verify-supabase.mjs --reenviar EMAIL
+ *       Reenvia a confirmação de uma conta que já existe. É o jeito de testar o SMTP SEM criar
+ *       usuário nenhum — e é o conserto de quem ficou com a conta criada e o e-mail não enviado,
+ *       que é o estado em que um SMTP quebrado deixa as pessoas.
+ *
  *   node scripts/verify-supabase.mjs --cadastrar EMAIL --usuario NOME --senha SENHA
  *       Cria uma conta de verdade pelo mesmo caminho do jogo. Serve para responder à pergunta que
  *       nenhuma conferência de leitura responde: OUTRA pessoa consegue se cadastrar? Com o mailer
@@ -60,6 +65,7 @@ const argOf = (flag) => {
 const USER = argOf("--usuario");
 const PASSWORD = argOf("--senha");
 const SIGNUP_EMAIL = argOf("--cadastrar");
+const RESEND_EMAIL = argOf("--reenviar");
 
 // ---------------------------------------------------------------- relatório
 
@@ -180,6 +186,39 @@ async function checkSignupPolicy() {
     warn("Confirmação de e-mail", "está desligada: as contas entram sem provar o e-mail, e o reset de senha fica frágil.");
   } else {
     ok("Confirmação de e-mail", "ligada — é ela que garante que o e-mail do reset é real");
+  }
+}
+
+/**
+ * Reenvia a confirmação — e, de quebra, é o teste de SMTP mais barato que existe.
+ *
+ * Nenhuma conta é criada: o endpoint pega uma que já existe e manda o e-mail de novo. Se o SMTP
+ * estiver quebrado, o erro aparece aqui igualzinho ao do cadastro. Se a conta não existir, o
+ * Supabase responde 200 sem mandar nada (é assim que ele evita que alguém descubra quem tem conta),
+ * então um "OK" aqui só prova o envio quando o e-mail realmente pertence a alguém.
+ */
+async function checkResend(email) {
+  const response = await call("/auth/v1/resend", {
+    method: "POST",
+    body: JSON.stringify({ type: "signup", email }),
+  });
+  const message = String(messageOf(response.body) ?? "");
+  if (response.ok) {
+    ok("Reenviar confirmação", `o servidor aceitou mandar para ${email} — se a conta existir, o e-mail saiu`);
+    return;
+  }
+  if (/not authorized/i.test(message)) {
+    bad("Reenviar confirmação", "o mailer embutido só entrega para a equipe do projeto. Configure um SMTP próprio.");
+  } else if (/rate limit|too many|after \d+ seconds/i.test(message)) {
+    warn("Reenviar confirmação", `o limite de envio segurou a mensagem: ${message}. Espere e tente de novo.`);
+  } else if (/sending|smtp|mail/i.test(message)) {
+    bad(
+      "Reenviar confirmação",
+      `o SMTP recusou: ${message}. Confira host, porta, usuário e senha em Authentication → Emails → SMTP Settings ` +
+        "(no Gmail, a senha é a SENHA DE APP de 16 letras, não a da conta).",
+    );
+  } else {
+    bad("Reenviar confirmação", `${response.status}: ${message}`);
   }
 }
 
@@ -311,9 +350,10 @@ if (await checkConfig()) {
     await checkSignupPolicy();
     await checkTablesAndRls();
     await checkRpcs();
+    if (RESEND_EMAIL) await checkResend(RESEND_EMAIL);
     if (SIGNUP_EMAIL && USER && PASSWORD) await checkSignup(SIGNUP_EMAIL, USER, PASSWORD);
     else if (USER && PASSWORD) await checkRoundTrip(USER, PASSWORD);
-    else console.log("  (sem --usuario/--senha: pulei o teste de entrar e gravar)\n");
+    else if (!RESEND_EMAIL) console.log("  (sem --usuario/--senha: pulei o teste de entrar e gravar)\n");
   }
 }
 
