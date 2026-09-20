@@ -1,7 +1,18 @@
+import { LEVEL_IDS } from "./levels";
+
 /**
  * Conquistas (item 37). Cada uma é só dado: um jeito de medir, uma meta e as Conchas que paga.
  * A avaliação é pura (`core/progression/achievements.ts`) e roda no fim de cada partida.
  */
+
+/** Quantas fases a campanha tem hoje: as conquistas de "campanha inteira" acompanham sozinhas. */
+const CAMPAIGN_LEVELS = LEVEL_IDS.length;
+
+/**
+ * Teto de vidas perdidas do "Sopro de vida". Um único número, num lugar só: se a façanha ficar dura
+ * demais (ou fácil demais) é aqui que ela se mexe, e a descrição na tela acompanha.
+ */
+const MAX_LIVES_LOST_FOR_SECRET = 1;
 export type AchievementMeasure =
   /** Totais do perfil. */
   | { type: "totalKills" }
@@ -20,7 +31,19 @@ export type AchievementMeasure =
   /** Melhor marca de uma única partida. */
   | { type: "bestInMatch"; stat: "enemiesKilled" | "pearlsEarned" | "upgradesBought" | "maxSimultaneousGuardians" }
   /** Contagem de partidas que satisfizeram uma condição. */
-  | { type: "matchesWith"; condition: "noLeaks" | "hardDifficulty" | "soloGuardian" };
+  | { type: "matchesWith"; condition: "noLeaks" | "hardDifficulty" | "soloGuardian" }
+  /**
+   * Fases da campanha cuja MELHOR vitória respeita um teto. É o que sustenta as conquistas de
+   * campanha inteira ("todas as fases com no máximo X"): cada fase entra na conta uma vez, e o
+   * recorde de uma partida antiga continua valendo.
+   */
+  | { type: "campaignBest"; stat: "livesLost" | "distinctGuardians"; max: number }
+  /**
+   * Fases concluídas ENQUANTO o jogador nunca reiniciou nenhuma. Um único recomeço na vida zera a
+   * medida — e como o progresso de conquista nunca regride, o que já foi contado fica congelado
+   * abaixo da meta para sempre. É exatamente o que "sem reiniciar nenhuma vez" quer dizer.
+   */
+  | { type: "campaignWithoutRestart" };
 
 /** Prateleira da conquista na tela de Conquistas. Só organiza a lista; não muda regra nenhuma. */
 export type AchievementCategory = "exploracao" | "combate" | "guardioes" | "colecao" | "especiais";
@@ -36,6 +59,14 @@ export interface AchievementDefinition {
   shells: number;
   /** Fica em "???" na lista até ser conquistada (surpresas do fim do jogo). */
   hidden?: boolean;
+  /**
+   * SECRETA: não aparece na tela de jeito nenhum antes de ser conquistada — nem como "???".
+   *
+   * `hidden` mostra a moldura e esconde o nome; `secret` esconde a entrada inteira, e ela surge na
+   * lista no momento em que o jogador a completa. A tela anuncia só quantas existem, para o jogador
+   * saber que há o que procurar sem saber o quê.
+   */
+  secret?: boolean;
 }
 
 export const ACHIEVEMENTS: AchievementDefinition[] = [
@@ -175,6 +206,39 @@ export const ACHIEVEMENTS: AchievementDefinition[] = [
     target: 8,
     shells: 35,
   },
+  // ── Segredos do Recife ───────────────────────────────────────────────────────
+  // Nenhuma aparece na lista antes da hora. São façanhas de campanha inteira: quem as persegue de
+  // propósito precisa jogar as seis fases de um jeito específico do começo ao fim.
+  {
+    id: "sopro-de-vida",
+    name: "Sopro de vida",
+    description: `Vença as ${CAMPAIGN_LEVELS} fases do Recife Costeiro perdendo no máximo ${MAX_LIVES_LOST_FOR_SECRET} vida em cada uma.`,
+    category: "especiais",
+    measure: { type: "campaignBest", stat: "livesLost", max: MAX_LIVES_LOST_FOR_SECRET },
+    target: CAMPAIGN_LEVELS,
+    shells: 120,
+    secret: true,
+  },
+  {
+    id: "sem-recomeco",
+    name: "Sem recomeço",
+    description: "Conclua a campanha inteira sem nunca reiniciar uma fase.",
+    category: "especiais",
+    measure: { type: "campaignWithoutRestart" },
+    target: CAMPAIGN_LEVELS,
+    shells: 140,
+    secret: true,
+  },
+  {
+    id: "dupla-do-recife",
+    name: "Dupla do Recife",
+    description: "Vença todas as fases usando no máximo duas espécies de Guardião em cada.",
+    category: "especiais",
+    measure: { type: "campaignBest", stat: "distinctGuardians", max: 2 },
+    target: CAMPAIGN_LEVELS,
+    shells: 160,
+    secret: true,
+  },
   {
     id: "veterano",
     name: "Veterano",
@@ -187,6 +251,9 @@ export const ACHIEVEMENTS: AchievementDefinition[] = [
 ];
 
 export const ACHIEVEMENT_IDS: readonly string[] = ACHIEVEMENTS.map((achievement) => achievement.id);
+
+/** As secretas, para a tela anunciar quantas existem sem revelar quais são. */
+export const SECRET_ACHIEVEMENTS: readonly AchievementDefinition[] = ACHIEVEMENTS.filter((entry) => entry.secret === true);
 
 export function achievement(id: string): AchievementDefinition | undefined {
   return ACHIEVEMENTS.find((candidate) => candidate.id === id);

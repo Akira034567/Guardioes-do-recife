@@ -30,6 +30,18 @@ export const RECIFE_THREE: LevelDefinition = {
     { id: "vidas", kind: "minLivesRemaining", value: 12 },
     { id: "poucos", kind: "maxGuardians", value: 4 },
   ],
+  objectivesByDifficulty: {
+    dificil: [
+      { id: "completar", kind: "complete" },
+      { id: "elites", kind: "noEliteLeaks" },
+      { id: "rapido", kind: "underTimeMs", value: 300_000 },
+    ],
+    abissal: [
+      { id: "completar", kind: "complete" },
+      { id: "vidas", kind: "minLivesRemaining", value: 12 },
+      { id: "especies", kind: "maxDistinctGuardians", value: 3 },
+    ],
+  },
   waypoints: [
     { x: -40, y: 257 },
     { x: 0, y: 256 },

@@ -71,11 +71,38 @@ function fromV4(document: Record<string, unknown>): Record<string, unknown> {
   return { ...document, saveVersion: 5, mastery: {}, migratedFrom: 4 };
 }
 
+/**
+ * v5 → v6: cada dificuldade passa a ter objetivos próprios, então cada uma ganha a sua trilha.
+ *
+ * O que já existia era medido pelos objetivos do Normal, seja qual for a dificuldade em que a
+ * partida foi jogada — então ele vira, honestamente, a trilha do Normal. Difícil e Abissal começam
+ * vazios: as missões deles são outras e nunca foram avaliadas.
+ */
+function fromV5(document: Record<string, unknown>): Record<string, unknown> {
+  const levelStars = isRecord(document.levelStars) ? document.levelStars : {};
+  const migrated: Record<string, unknown> = {};
+  for (const [levelId, record] of Object.entries(levelStars)) {
+    if (!isRecord(record)) {
+      migrated[levelId] = record;
+      continue;
+    }
+    migrated[levelId] = {
+      ...record,
+      byDifficulty: {
+        normal: { stars: record.stars ?? 0, objectives: record.objectives ?? [], completions: record.completions ?? 0 },
+      },
+    };
+  }
+  const totals = isRecord(document.totals) ? document.totals : {};
+  return { ...document, saveVersion: 6, levelStars: migrated, totals: { ...totals, restarts: 0 }, migratedFrom: 5 };
+}
+
 export const MIGRATIONS: Record<number, Migration> = {
   1: fromV1,
   2: fromV2,
   3: fromV3,
   4: fromV4,
+  5: fromV5,
 };
 
 /** Aplica as migrações em cadeia a partir de `fromVersion` até a versão alvo. */

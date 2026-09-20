@@ -70,12 +70,21 @@ export class ProgressionService {
     return this.save.progress.levelStars[levelId];
   }
 
-  /** Aplica o resultado de uma partida e devolve o que a tela de vitória precisa mostrar. */
-  applyMatchResult(result: MatchResult, objectiveDefinitions: readonly LevelObjectiveDefinition[]): MatchOutcome {
+  /**
+   * Aplica o resultado de uma partida e devolve o que a tela de vitória precisa mostrar.
+   *
+   * `objectiveDefinitions` é a missão DA DIFICULDADE jogada; `normalDefinitions` é a do Normal, que
+   * continua sendo a dona das estrelas da campanha. Quem joga só no Normal passa uma só.
+   */
+  applyMatchResult(
+    result: MatchResult,
+    objectiveDefinitions: readonly LevelObjectiveDefinition[],
+    normalDefinitions: readonly LevelObjectiveDefinition[] = objectiveDefinitions,
+  ): MatchOutcome {
     const isEncounter = result.kind === "encounter";
     const achieved = evaluateObjectives(objectiveDefinitions, result);
     const before = this.save.progress.levelStars[result.levelId];
-    const merge = mergeLevelRecord(before, result, achieved);
+    const merge = mergeLevelRecord(before, result, achieved, { normalObjectives: evaluateObjectives(normalDefinitions, result) });
     const counted = countsForProgression(result);
     // Encontro não vale estrela: paga uma recompensa própria e entrega o Guardião.
     const rewards = !counted || !result.victory ? { shells: 0, lines: [] } : isEncounter ? encounterRewards(this.save.progress, result) : computeLevelRewards(merge, result.difficulty);
@@ -146,11 +155,11 @@ export class ProgressionService {
       levelId: result.levelId,
       victory: result.victory,
       encounterId: isEncounter && result.victory ? (result.encounterId ?? result.levelId) : null,
-      stars: isEncounter ? 0 : merge.next.stars,
-      starsBefore: isEncounter ? 0 : (before?.stars ?? 0),
+      stars: isEncounter ? 0 : merge.playedStars,
+      starsBefore: isEncounter ? 0 : merge.playedStarsBefore,
       objectives: (isEncounter ? [] : objectiveDefinitions).map((definition, index) => ({
         definition,
-        achieved: merge.next.objectives[index] ?? false,
+        achieved: merge.playedObjectives[index] ?? false,
         isNew: merge.newObjectives[index] ?? false,
       })),
       rewards,
@@ -214,6 +223,16 @@ export class ProgressionService {
       draft.mastery[guardianId] = level + 1;
     });
     return { ok: true, level: level + 1, spent: cost };
+  }
+
+  /**
+   * O jogador reiniciou a fase. Fica no save, e não numa variável da cena, porque é justamente o
+   * contrário disso que a conquista secreta mede: uma campanha inteira SEM nenhum recomeço.
+   */
+  recordRestart(): void {
+    this.save.update((draft) => {
+      draft.totals.restarts += 1;
+    });
   }
 
   rememberLoadout(loadout: readonly GuardianId[]): void {

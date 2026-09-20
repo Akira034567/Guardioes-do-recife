@@ -1,19 +1,38 @@
 import type { AccountRecord, AccountResult } from "../../../core/account/AccountStore";
 import { ACCOUNT_NAME_MAX, ACCOUNT_NAME_MIN, PASSWORD_MIN } from "../../../core/account/AccountStore";
+import { CLOUD_PASSWORD_MIN, type CloudProfile, type CloudResult } from "../../../core/account/CloudAccount";
 import { getAccounts } from "../../../systems/accounts";
-import { changePassword, deleteAccount, importAccountCode, signIn, signOut, signUp } from "../../../systems/session";
+import { getCloud } from "../../../systems/cloud";
+import {
+  changePassword,
+  cloudSignIn,
+  cloudSignOut,
+  cloudSignUp,
+  cloudSyncNow,
+  deleteAccount,
+  importAccountCode,
+  signIn,
+  signOut,
+  signUp,
+} from "../../../systems/session";
 import { fill, h } from "../h";
 import { ICONS } from "../icons";
 import type { Screen } from "../ScreenHost";
 import { shellSidebar, type ShellNav } from "../shell";
 
 /**
- * Minha Conta: entrar, criar conta e levar o progresso para outro aparelho.
+ * Minha Conta: entrar, criar conta e levar o progresso para onde o jogador estiver.
  *
- * O jogo é uma página estática, sem servidor. Então "conta" aqui quer dizer duas coisas concretas:
- * cada jogador tem o SEU save neste aparelho (e ninguém joga por cima do progresso do outro), e o
- * progresso cabe num código que se cola no outro aparelho. É honesto dizer isso na tela, e a tela
- * diz — ninguém deve achar que o progresso está guardado num servidor que não existe.
+ * A tela tem DOIS níveis, e diz claramente qual é qual:
+ *
+ * 1. **Conta na nuvem** — a conta de verdade: usuário único, e-mail, senha guardada com hash no
+ *    servidor e progresso que aparece em qualquer aparelho. Só existe quando a instalação está
+ *    configurada (`VITE_SUPABASE_URL`); sem isso, este bloco nem é desenhado.
+ * 2. **Contas deste aparelho** — o que sempre existiu: saves separados aqui, e um código para
+ *    levar o progresso na mão. Continua valendo para quem não quer dar e-mail nenhum.
+ *
+ * A tela nunca promete o que não tem: sem nuvem configurada, ela diz que o progresso mora no
+ * aparelho, e é verdade.
  *
  * Toda operação que troca de save termina em `onAccountChanged()`, que refaz a cena: o Recife, as
  * Conchas e os Guardiões que aparecem depois já são os da conta que acabou de entrar.
@@ -29,6 +48,7 @@ export function accountScreen(onBack: () => void, nav?: ShellNav, embedded = fal
       const draw = (): void => {
         const store = getAccounts();
         const active = store.active;
+        const cloud = cloudCard(draw, onAccountChanged);
         fill(
           layout,
           embedded || !nav
@@ -46,10 +66,25 @@ export function accountScreen(onBack: () => void, nav?: ShellNav, embedded = fal
             h(
               "div",
               { class: "gr-config__body" },
-              h("div", { class: "gr-config__column" }, currentCard(active, draw, onAccountChanged), accessCard(active, store.list(), draw, onAccountChanged)),
-              h("div", { class: "gr-config__column" }, transferCard(active, draw, onAccountChanged)),
+              // Com a nuvem ligada ela ocupa a coluna da esquerda junto com "quem está jogando", e o
+              // que é deste aparelho desce para a direita. Sem a nuvem, as duas colunas voltam ao
+              // arranjo de sempre — senão a da esquerda ficaria com um cartão só e um vazio enorme.
+              ...(cloud
+                ? [
+                    h("div", { class: "gr-config__column" }, cloud, currentCard(active, draw, onAccountChanged)),
+                    h("div", { class: "gr-config__column" }, accessCard(active, store.list(), draw, onAccountChanged), transferCard(active, draw, onAccountChanged)),
+                  ]
+                : [
+                    h("div", { class: "gr-config__column" }, currentCard(active, draw, onAccountChanged), accessCard(active, store.list(), draw, onAccountChanged)),
+                    h("div", { class: "gr-config__column" }, transferCard(active, draw, onAccountChanged)),
+                  ]),
             ),
-            h("p", { class: "gr-album__foot", text: "As contas ficam neste aparelho. Para jogar em outro, leve o código do Recife." }),
+            h("p", {
+              class: "gr-album__foot",
+              text: getCloud().isConfigured
+                ? "Com conta na nuvem, o progresso te encontra em qualquer aparelho."
+                : "As contas ficam neste aparelho. Para jogar em outro, leve o código do Recife.",
+            }),
           ),
         );
       };
@@ -61,6 +96,7 @@ export function accountScreen(onBack: () => void, nav?: ShellNav, embedded = fal
 }
 
 function header(active: AccountRecord | null): HTMLElement {
+  const cloud = getCloud().profile;
   return h(
     "header",
     { class: "gr-album__top" },
@@ -71,7 +107,11 @@ function header(active: AccountRecord | null): HTMLElement {
       h("p", {
         class: "gr-subtitle",
         testId: "account-subtitle",
-        text: active ? `Você está jogando como ${active.name}.` : "Você está jogando como convidado, neste aparelho.",
+        text: cloud
+          ? `Você está na conta ${cloud.username}, com o progresso guardado na nuvem.`
+          : active
+            ? `Você está jogando como ${active.name}, neste aparelho.`
+            : "Você está jogando como convidado, neste aparelho.",
       }),
     ),
     h("p", { class: "gr-album__quote", text: "“Todo Guardião tem um nome.”" }),
@@ -79,6 +119,194 @@ function header(active: AccountRecord | null): HTMLElement {
 }
 
 // ------------------------------------------------------------------------------- cartões
+
+/**
+ * A CONTA NA NUVEM. Um cartão só, com três estados: desligada, deslogado e logado.
+ *
+ * O e-mail é obrigatório porque é ele — e só ele — que devolve a senha quando o jogador a esquece.
+ * O nome de usuário é o que ele digita para entrar e é único no servidor inteiro, não só aqui.
+ */
+function cloudCard(redraw: () => void, onAccountChanged: () => void): HTMLElement | null {
+  const cloud = getCloud();
+  if (!cloud.isConfigured) return null;
+  const profile = cloud.profile;
+  return profile ? cloudSignedInCard(profile, redraw, onAccountChanged) : cloudSignedOutCard(redraw, onAccountChanged);
+}
+
+function cloudSignedOutCard(redraw: () => void, onAccountChanged: () => void): HTMLElement {
+  const signInStatus = statusLine("cloud-signin-status");
+  const identifier = textInput("cloud-identifier", "Usuário ou e-mail", "username");
+  const password = passwordInput("cloud-password", "Senha", "current-password");
+  const enter = actionButton("cloud-signin", ICONS.play, "ENTRAR NA NUVEM", async () => {
+    const result = await cloudSignIn(identifier.input.value, password.input.value);
+    password.input.value = "";
+    if (!result.ok) {
+      showCloud(signInStatus, result, "");
+      return;
+    }
+    // Dizer QUAL save venceu é o mínimo: o jogador acabou de arriscar o progresso dele.
+    const note =
+      result.value.source === "cloud"
+        ? `Bem-vindo, ${result.value.profile.username}! Trouxemos o progresso mais recente da nuvem.`
+        : `Bem-vindo, ${result.value.profile.username}! O progresso deste aparelho era o mais novo e subiu para a nuvem.`;
+    signInStatus.dataset.tone = "ok";
+    signInStatus.textContent = note;
+    onAccountChanged();
+    redraw();
+  });
+  password.input.addEventListener("keydown", (event) => {
+    if ((event as KeyboardEvent).key === "Enter") enter.click();
+  });
+
+  const resetStatus = statusLine("cloud-reset-status");
+  const resetEmail = textInput("cloud-reset-email", "E-mail da conta", "email");
+  const resetForm = h("div", { class: "gr-field__group", testId: "cloud-reset-form", hidden: "" }, resetEmail.row, resetStatus);
+  const resetSend = actionButton("cloud-reset-send", ICONS.book, "ENVIAR E-MAIL", async () => {
+    const result = await getCloud().requestPasswordReset(resetEmail.input.value);
+    // A mensagem é a mesma exista ou não a conta: dizer "esse e-mail não tem conta" entregaria,
+    // para quem estivesse chutando endereços, quem joga aqui.
+    showCloud(resetStatus, result, "Se existir conta com esse e-mail, o link para trocar a senha já está a caminho.");
+  });
+  resetSend.hidden = true;
+
+  const createStatus = statusLine("cloud-create-status");
+  const username = textInput("cloud-new-username", "Nome de usuário", "username");
+  const email = textInput("cloud-new-email", "E-mail", "email");
+  const newPassword = passwordInput("cloud-new-password", "Senha", "new-password");
+  const newConfirm = passwordInput("cloud-new-confirm", "Repita a senha", "new-password");
+  const create = actionButton("cloud-create", ICONS.plus, "CRIAR CONTA NA NUVEM", async () => {
+    const result = await cloudSignUp({
+      username: username.input.value,
+      email: email.input.value,
+      password: newPassword.input.value,
+      confirmPassword: newConfirm.input.value,
+    });
+    newPassword.input.value = "";
+    newConfirm.input.value = "";
+    if (!result.ok) {
+      showCloud(createStatus, result, "");
+      return;
+    }
+    createStatus.dataset.tone = "ok";
+    createStatus.textContent = result.value.needsConfirmation
+      ? "Conta criada! Confirme o e-mail que acabamos de enviar e depois entre por aqui."
+      : "Conta criada. O progresso deste aparelho já subiu para ela.";
+    if (!result.value.needsConfirmation) onAccountChanged();
+    redraw();
+  });
+
+  return card(
+    ICONS.account,
+    "Conta na nuvem",
+    "Um usuário, um e-mail e o Recife em qualquer aparelho.",
+    "cloud-card",
+    h("p", {
+      class: "gr-hint gr-config__note",
+      text: "Com conta na nuvem o progresso deixa de ser deste navegador: entre no celular, no computador ou na casa de alguém e o Recife estará como você deixou.",
+    }),
+    identifier.row,
+    password.row,
+    enter,
+    signInStatus,
+    row(
+      ICONS.lock,
+      "Esqueci a senha",
+      actionButton("cloud-reset-toggle", ICONS.book, "RECUPERAR", () => {
+        resetForm.hidden = !resetForm.hidden;
+        resetSend.hidden = resetForm.hidden;
+        if (!resetForm.hidden) resetEmail.input.focus();
+      }),
+    ),
+    resetForm,
+    resetSend,
+    h("p", { class: "gr-hint gr-config__note", text: "Ainda não tem conta? Crie a sua:" }),
+    username.row,
+    email.row,
+    newPassword.row,
+    newConfirm.row,
+    create,
+    createStatus,
+    h("p", {
+      class: "gr-hint gr-config__note",
+      text: `De ${ACCOUNT_NAME_MIN} a ${ACCOUNT_NAME_MAX} letras no usuário (ele é único e não pode repetir) e ao menos ${CLOUD_PASSWORD_MIN} caracteres na senha. A senha fica guardada com hash no servidor — nem nós conseguimos lê-la.`,
+    }),
+  );
+}
+
+function cloudSignedInCard(profile: CloudProfile, redraw: () => void, onAccountChanged: () => void): HTMLElement {
+  const sync = getCloud().sync;
+  const syncStatus = statusLine("cloud-sync-status");
+  if (sync.error) {
+    syncStatus.dataset.tone = "error";
+    syncStatus.textContent = `A última sincronização falhou: ${sync.error}`;
+  } else if (sync.lastSyncAt) {
+    syncStatus.dataset.tone = "ok";
+    syncStatus.textContent = `Sincronizado às ${new Date(sync.lastSyncAt).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}.`;
+  }
+
+  const passwordStatus = statusLine("cloud-password-status");
+  const next = passwordInput("cloud-password-next", "Senha nova", "new-password");
+  const confirm = passwordInput("cloud-password-confirm", "Repita a senha nova", "new-password");
+  const form = h("div", { class: "gr-field__group", testId: "cloud-password-form", hidden: "" }, next.row, confirm.row, passwordStatus);
+  const save = actionButton("cloud-password-save", ICONS.lock, "SALVAR SENHA", async () => {
+    const result = await getCloud().changePassword(next.input.value, confirm.input.value);
+    showCloud(passwordStatus, result, "Senha trocada em todos os aparelhos.");
+    next.input.value = "";
+    confirm.input.value = "";
+  });
+  save.hidden = true;
+
+  return card(
+    ICONS.account,
+    profile.username,
+    "Conta na nuvem — o progresso está guardado no servidor.",
+    "cloud-card",
+    row(ICONS.book, "E-mail", h("span", { class: "gr-config__value", testId: "cloud-email", text: profile.email })),
+    row(
+      ICONS.refresh,
+      "Progresso",
+      actionButton("cloud-sync", ICONS.refresh, "SINCRONIZAR AGORA", async () => {
+        const result = await cloudSyncNow();
+        showCloud(syncStatus, result, "Progresso enviado para a nuvem.");
+      }),
+    ),
+    syncStatus,
+    h("p", {
+      class: "gr-hint gr-config__note",
+      text: "O jogo sincroniza sozinho alguns segundos depois de cada partida. Este botão é para quem vai trocar de aparelho agora e quer garantir.",
+    }),
+    row(
+      ICONS.lock,
+      "Senha",
+      actionButton("cloud-password-toggle", ICONS.gear, "TROCAR SENHA", () => {
+        form.hidden = !form.hidden;
+        save.hidden = form.hidden;
+        if (!form.hidden) next.input.focus();
+      }),
+    ),
+    form,
+    save,
+    row(
+      ICONS.chevronLeft,
+      "Sair da conta",
+      actionButton("cloud-signout", ICONS.chevronLeft, "SAIR", async () => {
+        await cloudSignOut();
+        onAccountChanged();
+        redraw();
+      }),
+    ),
+    h("p", {
+      class: "gr-hint gr-config__note",
+      text: "Sair envia o que faltava e devolve este aparelho ao save de convidado. O progresso continua guardado na nuvem.",
+    }),
+  );
+}
+
+function showCloud(status: HTMLElement, result: CloudResult<unknown>, successMessage: string): void {
+  status.dataset.tone = result.ok ? "ok" : "error";
+  status.textContent = result.ok ? successMessage : result.message;
+}
+
 
 /** A conta de agora: quem é, desde quando, e como sair ou trocar a senha. */
 function currentCard(active: AccountRecord | null, redraw: () => void, onAccountChanged: () => void): HTMLElement {

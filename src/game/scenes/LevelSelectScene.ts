@@ -9,9 +9,11 @@ import { launchConfigFor } from "../match/MatchLaunchConfig";
 import { createLevelProgress } from "../systems/ProgressStore";
 import { getProgression } from "../systems/progression";
 import { challengeRule } from "../core/progression/challenges";
+import { clampDifficulty } from "../core/progression/difficultyUnlocks";
+import type { DifficultyId } from "../data/difficulty";
 import { pendingStory } from "../systems/story";
 import { getScreenHost } from "../ui/dom/host";
-import { openSection, type SectionRouter } from "../ui/dom/sections";
+import { openSection, type SectionOptions, type SectionRouter } from "../ui/dom/sections";
 import { mapScreen } from "../ui/dom/screens/MapScreen";
 import { preparationScreen } from "../ui/dom/screens/PreparationScreen";
 import { storyScreen } from "../ui/dom/screens/StoryScreen";
@@ -60,13 +62,13 @@ export class LevelSelectScene extends Phaser.Scene {
     host.push(
       mapScreen(progression, (levelId) => this.progress.isUnlocked(levelId), {
         onGoHub: () => this.openSection("hub"),
-        onPlayLevel: (level) => this.openPreparation(level),
+        onPlayLevel: (level, difficulty) => this.openPreparation(level, undefined, difficulty),
         onPlayEncounter: (encounter) => this.openPreparation(encounter.level, encounter),
         onPlayChallenge: (challenge) => this.openChallenge(challenge),
         onOpenAchievements: () => this.openSection("achievements"),
-        onOpenSchool: () => this.openSection("school"),
+        onOpenSchool: () => this.openSection("collection", { albumTab: "school" }),
         onOpenCollection: () => this.openSection("collection"),
-        onOpenMastery: () => this.openSection("mastery"),
+        onOpenMastery: () => this.openSection("collection", { albumTab: "mastery" }),
         onOpenBestiary: () => this.openSection("bestiary"),
         onOpenStories: () => this.openSection("stories"),
         onOpenAccount: () => this.openSection("account"),
@@ -109,8 +111,8 @@ export class LevelSelectScene extends Phaser.Scene {
     };
   }
 
-  private openSection(section: ShellSection): void {
-    openSection(section, this.router());
+  private openSection(section: ShellSection, options: SectionOptions = {}): void {
+    openSection(section, this.router(), options);
   }
 
   /**
@@ -171,13 +173,13 @@ export class LevelSelectScene extends Phaser.Scene {
    * Abre a preparação da fase, depois da história de abertura quando ela ainda não foi lida.
    * Encontros usam a mesma tela: o esquadrão e a dificuldade valem ali também.
    */
-  private openPreparation(level: LevelDefinition, encounter?: EncounterDefinition): void {
+  private openPreparation(level: LevelDefinition, encounter?: EncounterDefinition, difficulty: DifficultyId = "normal"): void {
     const intro = pendingStory({ type: "levelIntro", levelId: level.id });
     const host = getScreenHost(this.game);
     if (intro) {
       host.push(storyScreen(intro, () => {
         host.pop();
-        this.openPreparation(level, encounter);
+        this.openPreparation(level, encounter, difficulty);
       }));
       return;
     }
@@ -196,9 +198,10 @@ export class LevelSelectScene extends Phaser.Scene {
           },
         },
         {
-          // Toda fase abre no NORMAL (item 4). `lastDifficulty` continua sendo gravado (os
-          // atalhos de URL e as sondas de balanceamento o usam), mas deixou de decidir isto.
-          difficulty: "normal",
+          // A preparação abre na TRILHA que o jogador estava olhando no mapa — e nunca acima do
+          // que ele abriu (`clampDifficulty`). `lastDifficulty` continua sendo gravado (os atalhos
+          // de URL e as sondas de balanceamento o usam), mas segue sem decidir isto.
+          difficulty: clampDifficulty(difficulty, saved, LEVEL_IDS),
           loadout: (saved.lastLoadout.length > 0 ? saved.lastLoadout : saved.unlockedGuardians) as GuardianId[],
           encounter: encounter ? { guardianId: encounter.guardianId, teaser: encounter.teaser } : undefined,
         },

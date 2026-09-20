@@ -284,7 +284,7 @@ test("migrates an old save so existing players keep their levels", async ({ page
   await expect(canvas).toHaveAttribute("data-screen", "menu");
   await expect(canvas).toHaveAttribute("data-unlocked-levels", "3");
   const saved = await page.evaluate(() => JSON.parse(window.localStorage.getItem("guardioes-do-recife.save") ?? "{}"));
-  expect(saved.saveVersion).toBe(5);
+  expect(saved.saveVersion).toBe(6);
   expect(saved.completedLevels).toEqual(["recife-1", "recife-2"]);
   expect(saved.levelStars["recife-1"].stars).toBe(1);
   expect(saved.currency.shells).toBeGreaterThan(0);
@@ -293,6 +293,11 @@ test("migrates an old save so existing players keep their levels", async ({ page
   expect(saved.levelStars["recife-1"].clearedDifficulties).toEqual([]);
   // v5 (V3): nasce a maestria permanente. Também conservadora — ninguém herda nó nenhum.
   expect(saved.mastery).toEqual({});
+  // v6 (V3.5): cada dificuldade ganha trilha própria. O que existia foi medido pelos objetivos do
+  // Normal, então vira a trilha do Normal — e Difícil e Abissal nascem vazios.
+  expect(saved.levelStars["recife-1"].byDifficulty.normal.stars).toBe(1);
+  expect(saved.levelStars["recife-1"].byDifficulty.dificil).toBeUndefined();
+  expect(saved.totals.restarts).toBe(0);
   const legacy = await page.evaluate(() => window.localStorage.getItem("guardioes-do-recife.progress.v1"));
   expect(legacy, "a chave antiga fica para trás como segurança").not.toBeNull();
   expect(pageErrors).toEqual([]);

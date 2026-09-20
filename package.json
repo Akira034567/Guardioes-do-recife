@@ -14,7 +14,8 @@
     "test:watch": "vitest",
     "test:e2e": "npm run build && playwright test --grep-invert @balance",
     "preview": "vite preview",
-    "test:balance": "npm run build && playwright test --grep @balance --project=desktop-chromium --workers=3"
+    "test:balance": "npm run build && playwright test --grep @balance --project=desktop-chromium --workers=3",
+    "verify:supabase": "node scripts/verify-supabase.mjs"
   },
   "dependencies": {
     "phaser": "^3.90.0"

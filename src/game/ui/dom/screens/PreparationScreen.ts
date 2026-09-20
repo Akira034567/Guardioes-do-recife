@@ -2,6 +2,8 @@ import { artPath, GUARDIAN_ART } from "../../../assets/guardianArt";
 import { enemyPortraitPath } from "../../../assets/enemyArt";
 import { levelBackgroundPath } from "../../../assets/levelBackgrounds";
 import { objectiveLabel } from "../../../core/progression/objectives";
+import { hasOwnObjectives, objectivesFor } from "../../../core/progression/levelObjectives";
+import { difficultyTrack } from "../../../core/progression/stars";
 import type { ProgressionService } from "../../../core/progression/ProgressionService";
 import type { LevelRecord } from "../../../core/save/PlayerProgress";
 import { DIFFICULTIES, DIFFICULTY_IDS, type DifficultyId } from "../../../data/difficulty";
@@ -326,23 +328,37 @@ function statTile(icon: string, label: string, value: string): HTMLElement {
  * Conchas que o objetivo ainda paga, na dificuldade escolhida. Objetivo já cumprido não paga de novo,
  * então ele aparece marcado em vez de anunciar um prêmio que não vem mais.
  */
-function objectiveShells(index: number, record: LevelRecord | undefined, difficulty: DifficultyId): number {
+function objectiveShells(index: number, track: { stars: number; completions: number }, difficulty: DifficultyId): number {
   let shells = REWARDS.perNewStar;
-  if (index === 0 && (record?.completions ?? 0) === 0) shells += REWARDS.firstCompletion;
-  if (index === 2 && (record?.stars ?? 0) < 3) shells += REWARDS.firstPerfect;
+  if (index === 0 && track.completions === 0) shells += REWARDS.firstCompletion;
+  if (index === 2 && track.stars < 3) shells += REWARDS.firstPerfect;
   return Math.round(shells * (DIFFICULTY_REWARD_MULTIPLIER[difficulty] ?? 1));
 }
 
+/**
+ * Os objetivos DESTA dificuldade. Trocar o cartão de dificuldade troca a missão junto: o Difícil e
+ * o Abissal pedem outras três coisas e guardam as estrelas deles numa trilha própria.
+ */
 function objectives(level: LevelDefinition, record: LevelRecord | undefined, difficulty: DifficultyId): HTMLElement {
+  const track = difficultyTrack(record, difficulty);
+  const own = hasOwnObjectives(level, difficulty);
+  const definition = DIFFICULTIES[difficulty];
   return h(
     "section",
-    { class: "gr-prep__block" },
+    { class: "gr-prep__block", dataDifficulty: difficulty },
     blockTitle(ICONS.star, "Objetivos da missão"),
+    h(
+      "p",
+      { class: "gr-prep__objectives-track", testId: "prep-objectives-track", style: `--gr-accent:${definition.accent}` },
+      h("span", { class: "gr-badge gr-badge--accent", text: definition.name }),
+      h("span", { class: "gr-hint", text: own ? "Missão própria desta dificuldade." : "Mesma missão do Normal." }),
+      h("span", { class: "gr-prep__objectives-stars", text: `${track.stars}/3 estrelas aqui` }),
+    ),
     h(
       "ul",
       { class: "gr-objectives", testId: "prep-objectives" },
-      ...(level.objectives ?? []).map((objective, index) => {
-        const done = record?.objectives[index] ?? false;
+      ...objectivesFor(level, difficulty).map((objective, index) => {
+        const done = track.objectives[index] ?? false;
         return h(
           "li",
           { class: `gr-objective${done ? " gr-objective--done" : ""}`, dataState: done ? "done" : "open" },
@@ -354,7 +370,7 @@ function objectives(level: LevelDefinition, record: LevelRecord | undefined, dif
                 "span",
                 { class: "gr-prep__reward", title: `${GLOBAL_CURRENCY.name} por cumprir este objetivo` },
                 h("span", { class: "gr-icon", html: ICONS.shell }),
-                h("span", { text: `+${objectiveShells(index, record, difficulty)}` }),
+                h("span", { text: `+${objectiveShells(index, track, difficulty)}` }),
               ),
         );
       }),

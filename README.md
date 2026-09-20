@@ -30,15 +30,64 @@ Abra `http://localhost:5173`. O jogo usa mouse e touch em layout horizontal 16:9
 - A carta da fase abre a história de abertura (na primeira vez) e depois a preparação: objetivos, dificuldade, ameaças conhecidas e as cinco vagas do esquadrão.
 - Concluir objetivos rende estrelas e Conchas, a moeda permanente gasta fora da partida.
 
+### Dificuldade: três campanhas, não três multiplicadores
+
+Fechar a campanha no Normal abre o **Difícil**; fechá-la no Difícil abre o **Abissal** (`core/progression/difficultyUnlocks.ts`). O que mudou na V3.5 é que isso deixou de ser invisível e deixou de ser só "os bichos batem mais forte":
+
+- **Cada dificuldade tem a sua missão.** A fase declara o trio do Normal em `objectives` e o das outras em `objectivesByDifficulty`; quem resolve o par fase+dificuldade é `core/progression/levelObjectives.ts`, e nenhuma tela lê `level.objectives` direto. No Recife 1 o Normal pede 15 vidas e no máximo 3 Guardiões; o Difícil pede que ninguém passe, com no máximo 2 espécies.
+- **Cada dificuldade tem a sua trilha de estrelas.** `LevelRecord.byDifficulty` guarda estrelas e objetivos por dificuldade (save v6). Os campos de cima do registro continuam sendo a trilha do **Normal** — é deles que vivem as estrelas da campanha, os desbloqueios e as conquistas antigas, então nada inflou.
+- **O mapa mostra qual trilha você está olhando.** Uma fileira de três cartões (`map-track-<id>`) acima do mapa, com a cor da dificuldade, quantas fases caíram e quantas estrelas aquela trilha tem; os nós, as estrelas dos nós e os objetivos da ficha respondem à trilha escolhida. O mapa abre na mais alta que o jogador já liberou — antes o Difícil era liberado e nada na tela mudava.
+- **A partida diz em que dificuldade está.** A plaquinha da barra de cima traz "FASE 3/6 · NOME" e um selo com o nome e a cor da dificuldade.
+
 ## Contas e saves
 
-O jogo roda inteiro no navegador, sem servidor. "Conta" aqui é uma conta **deste aparelho**, com nome e senha, e serve para duas coisas concretas: separar saves e levar o progresso para outro lugar.
+Há dois níveis de conta, e a tela Minha Conta diz claramente qual é qual.
+
+### Conta na nuvem (Supabase)
+
+A conta de verdade: **usuário único, e-mail, senha com hash e o progresso em qualquer aparelho**. Ela só existe quando a instalação está configurada — sem isso o jogo roda inteiro offline, com o que está descrito na seção seguinte.
+
+- **Divisão de trabalho.** E-mail, hash da senha (bcrypt) e os e-mails de confirmação e de "esqueci a senha" são do Supabase Auth. O nome de usuário único e o documento de progresso são duas tabelas nossas com RLS (`supabase/schema.sql`). O jogo só empurra e puxa um JSON.
+- **Entrar pelo nome de usuário.** O Supabase só autentica por e-mail. Traduzir nome → e-mail com uma função aberta vazaria o endereço de qualquer um; então a RPC `email_for_credentials(usuario, senha)` **confere o hash antes** de devolver o e-mail. Senha errada e usuário inexistente dão exatamente a mesma resposta.
+- **Sincronização.** O jogo grava no `localStorage` como sempre e empurra para o servidor alguns segundos depois (`systems/cloud.ts`). Falhar ao empurrar nunca quebra a partida: vira um aviso em Minha Conta. Ao entrar, vence o documento **mais recente** — não há fusão de progresso, porque "eu tinha 12 estrelas e agora tenho 9" é pior do que qualquer perda honesta.
+- **Cliente próprio.** São ~150 linhas de `fetch` (`core/account/supabase.ts`) em vez do SDK: o jogo usa seis rotas e tem uma dependência de runtime só (o Phaser). Os dois cabeçalhos (`apikey` e `Authorization: Bearer`) levam a chave publicável enquanto ninguém entrou, e o `Authorization` passa a levar o token da sessão depois — que é o que a RLS lê para saber de quem são as linhas.
+
+**Como ligar** (uma vez, por instalação):
+
+1. **Crie o projeto.** [supabase.com](https://supabase.com) → New project (o plano free basta). Guarde a senha do banco que ele pede; ela não é usada pelo jogo, mas é a sua chave mestra do Postgres.
+2. **Crie o esquema.** No painel, SQL Editor → New query → cole o conteúdo de [`supabase/schema.sql`](supabase/schema.sql) inteiro → Run. Ele é idempotente: rodar de novo depois de uma atualização não apaga nada.
+3. **Aponte para onde o e-mail volta.** Authentication → URL Configuration: ponha a URL do jogo em **Site URL** e a mesma em **Redirect URLs**. Sem isso, o link de "esqueci a senha" chega mas leva para o lugar errado. Em Authentication → Sign In / Providers → Email, deixe **Confirm email** ligado: é ele que garante que o e-mail do reset é de verdade.
+4. **Configure o jogo.** Copie `.env.example` para `.env.local` e preencha `VITE_SUPABASE_URL` e `VITE_SUPABASE_PUBLISHABLE_KEY` (painel → Settings → API Keys; a chave começa com `sb_publishable_`). Projetos antigos têm o JWT `anon` no lugar — vale também, em `VITE_SUPABASE_ANON_KEY`.
+5. **Ligue um SMTP próprio — sem isto, só VOCÊ consegue se cadastrar.** O mailer embutido do Supabase entrega apenas para endereços da equipe do projeto (qualquer outro recebe *"Email address not authorized"*) e manda no máximo 2 por hora; a própria documentação diz que ele não é para produção. Em Authentication → Emails → SMTP Settings, aponte para um provedor. O [Brevo](https://www.brevo.com/free-smtp-server/) resolve sem domínio próprio: plano grátis de 300/dia, e basta verificar UM endereço remetente (um Gmail seu serve).
+
+   | Campo no Supabase | Valor |
+   | --- | --- |
+   | Host | `smtp-relay.brevo.com` |
+   | Port | `587` |
+   | Username | o e-mail de login do Brevo |
+   | Password | a *SMTP key* gerada no Brevo (não é a senha da conta) |
+   | Sender email | o endereço que você verificou no Brevo |
+   | Sender name | `Guardiões do Recife` |
+
+   Depois de salvar, o Supabase impõe um teto inicial de 30 mensagens/hora: ajuste em Authentication → Rate Limits.
+
+6. **Confira.** `npm run verify:supabase` testa tudo pelo mesmo caminho que o jogo usa e diz qual peça faltou: configuração, tabelas, **RLS realmente barrando quem não entrou**, e as duas RPCs (inclusive que a de login por usuário nega sem revelar se o nome existe). Dois modos a mais:
+
+   - `npm run verify:supabase -- --cadastrar EMAIL --usuario NOME --senha SENHA` cria uma conta de verdade. É o único jeito de responder "outra pessoa consegue se cadastrar?" — é aqui que o mailer embutido denuncia o `not authorized`.
+   - `npm run verify:supabase -- --usuario NOME --senha SENHA` faz o caminho completo com uma conta já confirmada: entrar pelo nome, gravar o progresso, ler de volta e desfazer.
+7. **Leve para o deploy.** As duas variáveis precisam existir na hora do `npm run build` do GitHub Actions. Declare-as como *repository variables* (Settings → Secrets and variables → Actions → Variables): `gh variable set VITE_SUPABASE_URL` e `gh variable set VITE_SUPABASE_PUBLISHABLE_KEY`. O workflow já as lê.
+
+Sem `VITE_SUPABASE_URL`, `isCloudEnabled()` é falso, o cartão da nuvem não é desenhado e nada muda.
+
+### Contas deste aparelho
+
+O que sempre existiu, e continua valendo para quem não quer dar e-mail nenhum: uma conta **deste aparelho**, com nome e senha, que separa saves e leva o progresso num código.
 
 - **Um save por conta.** Quem joga sem entrar continua no save do aparelho (`guardioes-do-recife.save`); cada conta tem o seu (`guardioes-do-recife.save:<id>`). Entrar é só trocar a chave que o `SaveManager` abre, então dois irmãos no mesmo computador nunca jogam por cima um do outro.
 - **Nome é único.** A comparação ignora maiúsculas, acentos e espaço sobrando ("Ana", "ana" e " aNa " são a mesma pessoa), então não existem dois usuários com o mesmo nome.
 - **A senha não é guardada.** Fica só a derivação PBKDF2-SHA-256 com sal por conta (`core/account/passwords.ts`). Em contexto sem `crypto.subtle` (http puro, `file://`) o esquema cai para um plano B fraco, **marcado como tal** no registro — nunca é senha em texto puro.
 - **Progresso já salvo vira conta.** Criar conta pergunta se o progresso do aparelho vem junto; vindo, ele é copiado (o save do convidado fica intacto) e carimbado com o `profileId` da conta nova.
-- **Jogar em outro aparelho.** `exportCode()` empacota conta e save num "código do Recife" (`GR1.…`) para colar no outro aparelho, onde a mesma senha o abre. Se a conta já existir lá, o código só substitui o progresso dela quando a senha for a mesma. É a ponte honesta enquanto não houver servidor: **ninguém guarda o progresso por você** — sem o código, o save fica no navegador onde foi jogado.
+- **Jogar em outro aparelho.** `exportCode()` empacota conta e save num "código do Recife" (`GR1.…`) para colar no outro aparelho, onde a mesma senha o abre. Se a conta já existir lá, o código só substitui o progresso dela quando a senha for a mesma. Continua sendo a ponte de quem joga sem conta na nuvem: **sem o código, o save fica no navegador onde foi jogado**.
 - **Trocar de conta reabre tudo.** `systems/session.ts` derruba os serviços únicos da página (`ProgressStore`, `progression`) e a cena se refaz (`router.reboot()`), senão a conta nova continuaria mexendo no documento da anterior.
 - As contas ficam em `guardioes-do-recife.accounts`; apagar uma conta apaga o save dela e devolve o jogador ao modo convidado.
 
@@ -60,7 +109,11 @@ Tudo isso roda em `core/Interactables.ts` (regra pura) mais o comando `interact`
 
 ## Conquistas e desafios
 
-- **Conquistas** (`data/achievements.ts` + `core/progression/achievements.ts`): dezesseis medidas sobre o perfil, a coleção e a melhor marca de uma partida. O progresso nunca regride, cada uma paga Conchas uma vez e as escondidas ficam em "???" até caírem. São recalculadas no fim de cada partida e ao abrir o mapa.
+- **Conquistas** (`data/achievements.ts` + `core/progression/achievements.ts`): dezenove medidas sobre o perfil, a coleção e a melhor marca de uma partida. O progresso nunca regride, cada uma paga Conchas uma vez e as escondidas ficam em "???" até caírem. São recalculadas no fim de cada partida e ao abrir o mapa.
+- **Segredos do Recife** (`secret: true`): três façanhas de campanha inteira que **não aparecem na lista** antes de caírem — nem como "???" — e entram nela no instante em que o jogador as completa. A tela anuncia só quantas existem ("Segredos do Recife: 1 de 3"), para haver o que procurar sem entregar o quê.
+  - *Sopro de vida* — vencer as seis fases perdendo no máximo 1 vida em cada (o teto é a constante `MAX_LIVES_LOST_FOR_SECRET`).
+  - *Sem recomeço* — concluir a campanha sem nunca reiniciar uma fase. Um único recomeço na vida (`totals.restarts`) tranca a conquista para sempre, porque o progresso medido congela abaixo da meta.
+  - *Dupla do Recife* — vencer todas as fases usando no máximo duas espécies em cada (`best.distinctGuardians`). Save antigo, que nunca mediu espécies, conta como "ainda não" — nunca como zero.
 - **Desafios** (`core/progression/challenges.ts`): um do dia e um da semana, sorteados a partir da data com a semente do `Rng` — sem servidor, sem rede. O sorteio só usa fases e Guardiões que o jogador já alcançou; a preparação entra travada, com esquadrão e dificuldade fixos, e a recompensa cai ao cumprir a regra extra.
 
 ## Arte dos inimigos
@@ -89,15 +142,18 @@ Não há arquivo de áudio no projeto: tudo é sintetizado com osciladores em `s
 
 Menus são HTML por cima do canvas (`src/game/ui/dom`), alinhados ao jogo e escalados por `--gr-scale`; o HUD da partida continua em Phaser.
 
-- **Álbum do Recife**: uma carta por Guardião. Bloqueado vira silhueta com "???" e a pista de onde encontrá-lo; encontrado abre ficha com história, números, carreira e as duas árvores de evolução.
+- **Álbum do Recife**: seis abas com a mesma carta ilustrada e a mesma ficha — Guardiões, Encontros, Locais, Tesouros, **Escola** e **Maestria**. Guardião bloqueado vira silhueta com "???" e a pista de onde encontrá-lo; encontrado abre ficha com história, números, carreira e as duas árvores de evolução.
+  - **Escola do Recife** (aba): as 25 aulas viraram cartas com a arte de quem elas ensinam, agrupadas pelo curso; a ficha traz resumo, pontos e a REGRA. Nada é bloqueado — o que a aba guarda é o que já foi lido, para marcar o que é novo.
+  - **Maestria** (aba): a foto de cada Guardião na grade e, ao clicar, a árvore dele desenhada como árvore — tronco de quatro nós, o nó 5 e a bifurcação nas duas evoluções finais, com a arte de cada uma.
+  - As duas saíram do menu lateral: o menu perdeu dois itens (no celular, dois alvos a menos disputando o polegar) e os dois assuntos ganharam o desenho do resto do jogo. `ShellNav.onOpenSchool/onOpenMastery` continuam existindo e abrem o álbum na aba certa.
 - **Ameaças do Recife**: bestiário. O inimigo só aparece depois do primeiro encontro, com vida, velocidade, fraquezas, resistências e habilidades; chefes ganham página destacada.
 - **Histórias do Recife**: índice dos capítulos já vividos, com releitura.
 - **Configurações**: volumes, silenciar, efeitos reduzidos, tremor de tela e escala da interface. Tudo grava no save na hora.
 - **Meu Recife**: a tela inicial e a casa do jogador (`scenes/HubScene.ts`). Um cenário pintado (`assets/reef/backdrop.png`) onde os Guardiões encontrados moram de verdade — nadam, reparam no cursor e reagem ao clique. O cenário É a interface: os seis lugares vêm desenhados no próprio fundo, com plaquinha e tudo (a ostra abre o Álbum, o naufrágio as Ameaças, o arco o Mapa, a lápide as Histórias, o troféu as Conquistas, o leme as Configurações), e cada um tem um alvo transparente por cima que dá o clique, o brilho no hover e o foco de teclado. O rótulo que aparece ao aproximar mostra só a dica — o nome já está pintado. Em aparelho sem cursor, o primeiro toque mostra a dica e o segundo entra. Clicar num Guardião abre uma ficha pequena com papel, origem e carreira. O menu lateral fica recolhido atrás do botão ☰: uma coluna sempre aberta taparia o Álbum e as Ameaças, que moram naquela faixa do desenho.
-- **Mapa do Recife**: as seis fases em sequência, com estrelas, e os nós de Encontro pendurados nelas. Deixou de ser a tela inicial: agora é uma seção como as outras, com VOLTAR para o Meu Recife.
-- **Menu de pause**: o botão Ⅱ pausa e abre continuar, configurações, reiniciar e sair para o mapa.
+- **Mapa do Recife**: as seis fases em sequência, com estrelas, e os nós de Encontro pendurados nelas. Acima do mapa, a fileira das três dificuldades: escolher uma troca a campanha inteira que a tela mostra (nós, estrelas e objetivos da ficha). Deixou de ser a tela inicial: agora é uma seção como as outras, com VOLTAR para o Meu Recife.
+- **Menu de pause**: o botão Ⅱ pausa e abre uma gaveta ao lado do mapa, com continuar, Escola, reiniciar, fases, sair e os ajustes inteiros. A gaveta **anda para os lados**: arraste pela alça do topo e ela encosta no lado mais perto, que passa a valer nas próximas pausas da sessão.
 - **Conquistas do Recife**: a lista com barra de progresso, o que já caiu e o que falta.
-- **Minha Conta**: entrar, criar conta, trocar senha, apagar conta e o código do Recife para jogar em outro aparelho. O letreiro do Meu Recife mostra quem está jogando ("Convidado" quando ninguém entrou). Ver [Contas e saves](#contas-e-saves).
+- **Minha Conta**: a conta na nuvem (entrar por usuário ou e-mail, criar, recuperar senha por e-mail, sincronizar) e, abaixo dela, as contas deste aparelho com o código do Recife. O letreiro do Meu Recife mostra quem está jogando ("Convidado" quando ninguém entrou). Ver [Contas e saves](#contas-e-saves).
 
 ## UX da partida
 
@@ -106,7 +162,11 @@ Menus são HTML por cima do canvas (`src/game/ui/dom`), alinhados ao jogo e esca
 - **Números de dano**: `core/DamageAggregator.ts` soma os acertos de um mesmo alvo numa janela curta e `systems/FloatingTextPool.ts` reaproveita os textos. Golpe forte sai maior; veneno e área têm cor própria; a recompensa da morte sobe em dourado. Desligável nas configurações.
 - **Tutorial, camada 1 — os passos**: `core/tutorial/TutorialDirector.ts` decide o passo (lógica pura, testada) e a `UIScene` desenha uma faixa acima das cartas com contorno no botão citado. Só no Recife 1, ensina a MEXER no jogo. Nada bloqueia, PULAR encerra de vez e `?tutorial=0` desliga.
 - **Tutorial, camada 2 — os momentos**: `core/tutorial/Moments.ts` é uma fila que dispara aulas-relâmpago em QUALQUER fase, uma vez na vida do jogador, no instante em que a coisa acontece pela primeira vez — o primeiro veneno, a primeira correnteza, o primeiro chefe, o primeiro Polvo em campo. Divide a faixa com a camada 1, e o passo tem preferência: duas vozes ensinando ao mesmo tempo é pior que uma. Uma frase por vez, com intervalo de 14s, para a onda 1 do Recife 3 não despejar cinco cartões juntos. Desligável em Configurações (`tutorialMoments`).
-- **Escola do Recife** (`ui/dom/screens/SchoolScreen.ts`, conteúdo em `data/school.ts`): o manual. 25 aulas em quatro cursos — os nove Guardiões, os cinco efeitos de status, a correnteza e os seis tipos de invasor. Existe porque o Álbum e as Ameaças CATALOGAM e nunca EXPLICAM: lá o jogador lê que o Cascudo tem armadura 9; aqui ele lê que isso corta 36% de cada golpe. Toda aula fecha numa `rule` com o número exato, e um teste exige isso. Nada é bloqueado. Alcançável pela barra lateral e pelo menu de pause, sem sair da partida.
+- **Escola do Recife** (`ui/dom/screens/album/schoolTab.ts`, conteúdo em `data/school.ts`): o manual, hoje uma aba do Álbum. 25 aulas em quatro cursos — os nove Guardiões, os cinco efeitos de status, a correnteza e os seis tipos de invasor. Existe porque o Álbum e as Ameaças CATALOGAM e nunca EXPLICAM: lá o jogador lê que o Cascudo tem armadura 9; aqui ele lê que isso corta 36% de cada golpe. Toda aula fecha numa `rule` com o número exato, e um teste exige isso. Nada é bloqueado. Alcançável pelo Álbum e pela gaveta de pausa, sem sair da partida.
+- **Barra de cima** (V3.5): marca, plaquinha da fase com a dificuldade, pérolas, vida do Recife, a pílula da onda (em que onda estou **e** quanto falta para a próxima) e, à direita, PRÓXIMA ONDA seguido de velocidade, reiniciar, pausa, tela cheia e som. A plaquinha e o chamado de onda vinham do canto de baixo: lá eles dividiam o bloco mais apertado do HUD e ficavam longe de tudo que responde "como vai a partida". O canto de baixo ficou só com as cartas e o painel do Guardião, que cresceu para ocupar o espaço.
+- **Atalhos de teclado**: `1`–`5` escolhem a carta da vaga; `ESPAÇO` chama a próxima onda e, quando não há onda para chamar, alterna 1×/2× (uma tecla, dois momentos que nunca coexistem); `R` pede para reiniciar; `Enter` ou `R` de novo confirmam; `ESC` cancela a confirmação, desfaz a seleção ou abre a pausa, nessa ordem. A confirmação nasce **desarmada** por 600 ms (`ConfirmScreen`): o segundo `R` de um toque duplo é o mesmo gesto que abriu a pergunta, não a resposta dela.
+- **Tela cheia**: quem vai para tela cheia é o `#game` inteiro (`scale.fullscreenTarget`), não o canvas. Sem isso o Phaser move só o canvas para um `<div>` próprio e a camada HTML fica de fora — era por isso que o jogo "travava" ao pausar e ao passar de fase em tela cheia: a gaveta e o painel de resultado estavam abertos (bloqueando o input, como toda tela modal) e invisíveis.
+- **Celular**: no primeiro toque de um aparelho de toque o jogo pede tela cheia (`systems/immersive.ts`), que é a única forma de tirar a barra do navegador de cima do HUD em paisagem; desligável em Configurações (`immersiveMobile`). Em tela estreita o menu lateral e as abas do Álbum viram pictogramas de 44 px e o álbum passa a uma coluna só.
 - **Registro do HUD**: `ui/UiRegistry.ts` guarda a posição de cada controle por nome (`pause`, `speed:2`, `card:first`, `upgrade:a`, ...). O tutorial usa para destacar e os testes e2e para achar um botão sem coordenada escrita à mão (`window.__grUi`).
 - **Carga de arte**: o boot traz só a forma base dos nove Guardiões; as evoluções entram na `GameScene`, apenas para o esquadrão da partida.
 
@@ -187,7 +247,7 @@ Uma partida inteira vive em `src/game/core/match/Match.ts`, sem Phaser:
 - `src/game/data`: balanceamento, catálogo de Guardiões e inimigos, registro de fases.
 - `src/game/core`: regras puras e testáveis (rota, correntes, economia com razão de fontes, ondas, árvore de upgrades, projétil, status, auras, alvo e formas de alcance, habilidades de inimigo, encontro de chefe).
 - `src/game/core/match`: o motor único da partida (`Match`): estado, `tick()` de passo fixo, comandos (`placeGuardian`, `upgradeGuardian`, `sellGuardian`, `startNextWave`), eventos de domínio, `MatchStats`, `MatchClock` (pause e velocidade). Cena e simulação de balanceamento rodam o mesmo motor.
-- `src/game/core/account`: contas locais (`AccountStore`, `passwords`) — nome único, senha derivada, um save por conta e o código de transferência. Puro: o armazenamento entra por injeção.
+- `src/game/core/account`: contas locais (`AccountStore`, `passwords`) — nome único, senha derivada, um save por conta e o código de transferência — e a conta na nuvem (`CloudAccount`, `supabase`), com o cliente HTTP próprio. Puro: armazenamento e `fetch` entram por injeção ou pelo ambiente.
 - `src/game/core/save`: progressão permanente versionada (`PlayerProgress`, `SaveManager`, migrações); nunca se mistura com o estado da partida.
 - `src/game/objects`: views Phaser (`EnemyView`, `GuardianView`, `ProjectileView`, áreas) que só desenham o que o motor diz.
 - `src/game/scenes`: carregamento, hub (`HubScene`), menu de fases, apresentação da partida (`GameScene`) e HUD.
@@ -196,8 +256,9 @@ Uma partida inteira vive em `src/game/core/match/Match.ts`, sem Phaser:
 - `src/game/assets/reefArt.ts`: chaves e caminhos da arte do Recife. Nada disso entra no boot — a cena pede o fundo e só as peças que estão plantadas.
 - `public/assets/reef/`: o fundo pintado e as 18 decorações, fatiadas das folhas por `scripts/slice-reef-sheet.py`.
 - `src/game/systems`: `MatchEffects` (evento → efeito/som/mensagem), áudio provisório, overlay de debug, fundo procedural, `ProgressStore`, `accounts` (registro de contas da página), `session` (entrar/sair reabre o save), `settings` e `story`.
-- `src/game/ui/dom`: camada de telas em HTML (`ScreenHost`, `h`, `ui.css`) e as telas de preparação, resultado, coleção, bestiário, histórias, conta, configurações e pause.
-- `src/game/core/progression`: objetivos, estrelas, recompensas, desbloqueios e o `ProgressionService` que aplica o resultado de uma partida.
+- `src/game/ui/dom`: camada de telas em HTML (`ScreenHost`, `h`, `ui.css`) e as telas de preparação, resultado, álbum (com as abas em `screens/album/`), bestiário, histórias, conta, configurações, confirmação e pause.
+- `src/game/core/progression`: objetivos (e o trio por dificuldade em `levelObjectives.ts`), estrelas por trilha, recompensas, desbloqueios e o `ProgressionService` que aplica o resultado de uma partida.
+- `supabase/schema.sql`: o banco da conta na nuvem — perfis, saves, RLS e as duas RPCs. Roda uma vez no SQL Editor do projeto.
 
 ## Como estender
 

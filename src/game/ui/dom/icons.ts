@@ -169,6 +169,12 @@ export const ICONS = {
 
   play: svg(`<path d="M7.6 4.6 19 12 7.6 19.4z" fill="currentColor"/>`),
 
+  /** Seta em círculo: recomeçar a fase. */
+  refresh: svg(
+    `<path d="M19.2 12a7.2 7.2 0 1 1-2.1-5.1" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/>` +
+      `<path d="M19.4 3.4v4.1h-4.1" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>`,
+  ),
+
   chevronLeft: svg(`<path d="M15 4.5 7.5 12 15 19.5" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>`),
   chevronRight: svg(`<path d="M9 4.5 16.5 12 9 19.5" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>`),
   close: svg(`<path d="M6.4 6.4l11.2 11.2M17.6 6.4L6.4 17.6" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"/>`),

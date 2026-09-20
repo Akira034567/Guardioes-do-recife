@@ -6,17 +6,26 @@ import { BRAND_WAVE, ICONS } from "./icons";
  * o álbum desenham a mesma coluna da esquerda, só mudando qual item está aceso — assim o jogador nunca
  * perde a referência ao trocar de seção.
  */
-export type ShellSection = "hub" | "map" | "school" | "collection" | "mastery" | "bestiary" | "stories" | "achievements" | "account" | "settings";
+/**
+ * As seções do menu da esquerda.
+ *
+ * A Escola do Recife e a Maestria SAÍRAM daqui: viraram abas do Álbum do Recife, que já é o lugar
+ * do acervo. O menu perdeu dois itens (no celular, dois alvos a menos disputando o polegar) e os
+ * dois assuntos ganharam a mesma carta ilustrada das outras abas. `ShellNav` mantém os dois atalhos
+ * porque quem chama continua sendo o mesmo — o hub, o mapa e as aulas em campo —, só que agora eles
+ * abrem o álbum na aba certa.
+ */
+export type ShellSection = "hub" | "map" | "collection" | "bestiary" | "stories" | "achievements" | "account" | "settings";
 
 export interface ShellNav {
   /** Volta para o Meu Recife, a tela inicial e a casa do jogador. */
   onGoHub(): void;
   /** Abre o mapa das fases. */
   onGoMap(): void;
-  /** Abre a Escola do Recife (o manual: Guardiões, efeitos, correnteza e ameaças). */
+  /** Abre o Álbum na aba Escola do Recife (o manual: Guardiões, efeitos, correnteza e ameaças). */
   onOpenSchool(): void;
   onOpenCollection(): void;
-  /** Abre a Maestria do Recife (progressão permanente por Guardião). */
+  /** Abre o Álbum na aba Maestria (progressão permanente por Guardião). */
   onOpenMastery(): void;
   onOpenBestiary(): void;
   onOpenStories(): void;
@@ -44,9 +53,7 @@ interface ShellOptions {
 const ITEMS: ReadonlyArray<{ section: ShellSection; icon: string; label: string; open: (nav: ShellNav) => void }> = [
   { section: "hub", icon: ICONS.coral, label: "Meu Recife", open: (nav) => nav.onGoHub() },
   { section: "map", icon: ICONS.compass, label: "Mapa do Recife", open: (nav) => nav.onGoMap() },
-  { section: "school", icon: ICONS.target, label: "Escola do Recife", open: (nav) => nav.onOpenSchool() },
   { section: "collection", icon: ICONS.fish, label: "Álbum do Recife", open: (nav) => nav.onOpenCollection() },
-  { section: "mastery", icon: ICONS.star, label: "Maestria", open: (nav) => nav.onOpenMastery() },
   { section: "bestiary", icon: ICONS.spiky, label: "Ameaças", open: (nav) => nav.onOpenBestiary() },
   { section: "stories", icon: ICONS.book, label: "História", open: (nav) => nav.onOpenStories() },
   { section: "achievements", icon: ICONS.trophy, label: "Conquistas", open: (nav) => nav.onOpenAchievements() },
@@ -58,9 +65,7 @@ const ITEMS: ReadonlyArray<{ section: ShellSection; icon: string; label: string;
 export const MAP_NAV_IDS: Record<ShellSection, string> = {
   hub: "map-hub",
   map: "map-here",
-  school: "map-school",
   collection: "map-collection",
-  mastery: "map-mastery",
   bestiary: "map-bestiary",
   stories: "map-stories",
   achievements: "map-achievements",
@@ -124,6 +129,10 @@ export function shellSidebar(active: ShellSection, nav: ShellNav, options: Shell
             testId: options.navId(item.section),
             dataSection: item.section,
             type: "button",
+            // Em tela estreita o rótulo some e sobra o pictograma: o nome tem que continuar
+            // alcançável pelo toque longo e pelo leitor de tela.
+            title: item.label,
+            "aria-label": item.label,
             "aria-current": current ? "page" : undefined,
             onClick: (event: MouseEvent) => {
               // Lê o estado do DOM, e não o `current` do fechamento: `retargetShell` muda a classe

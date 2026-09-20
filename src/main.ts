@@ -7,6 +7,19 @@ import { HubScene } from "./game/scenes/HubScene";
 import { LevelSelectScene } from "./game/scenes/LevelSelectScene";
 import { UIScene } from "./game/scenes/UIScene";
 import { DIAGNOSTICS_ON, dumpLifecycle } from "./game/systems/devLog";
+import { armImmersiveFullscreen } from "./game/systems/immersive";
+import { setCloudLinkEvent } from "./game/systems/cloud";
+import { adoptCloudLinkSession } from "./game/systems/session";
+
+/**
+ * O jogador pode estar CHEGANDO de um link de e-mail (confirmação de conta ou troca de senha).
+ *
+ * A sessão tem que ser adotada ANTES de o Phaser existir: adotar depois trocaria o save por baixo
+ * de cenas já criadas, que continuariam mostrando o progresso do convidado. Sem `#access_token` na
+ * URL — o caso de 99,9% das aberturas — isto é uma função que olha a hash e volta na hora.
+ */
+const linkEvent = await adoptCloudLinkSession();
+if (linkEvent) setCloudLinkEvent(linkEvent);
 
 const game = new Phaser.Game({
   type: Phaser.AUTO,
@@ -20,6 +33,19 @@ const game = new Phaser.Game({
     autoCenter: Phaser.Scale.CENTER_BOTH,
     width: GAME_WIDTH,
     height: GAME_HEIGHT,
+    /*
+     * A TELA CHEIA PRECISA LEVAR A CAMADA HTML JUNTO.
+     *
+     * Sem isto, o Phaser cria um `<div>` próprio, move só o `<canvas>` para dentro dele e manda
+     * ESSE div para tela cheia. O `#ui-layer` — que é irmão do canvas dentro de `#game` — fica de
+     * fora do elemento em tela cheia e o navegador simplesmente não o desenha.
+     *
+     * O sintoma não parecia um problema de tela cheia: o jogo "travava" ao pausar e ao passar de
+     * fase. Não travava nada — a gaveta de pausa e o painel de resultado estavam abertos,
+     * bloqueando o input do Phaser (como toda tela modal faz) e invisíveis. Apontar a tela cheia
+     * para `#game`, que contém os dois, resolve os dois sintomas de uma vez.
+     */
+    fullscreenTarget: "game",
   },
   render: {
     antialias: true,
@@ -30,7 +56,14 @@ const game = new Phaser.Game({
   },
 });
 
-window.addEventListener("beforeunload", () => game.destroy(true));
+// No celular, o primeiro toque pede tela cheia: é a única forma de a barra do navegador sair da frente.
+const stage = document.getElementById("game");
+const disarmImmersive = stage ? armImmersiveFullscreen(stage) : () => {};
+
+window.addEventListener("beforeunload", () => {
+  disarmImmersive();
+  game.destroy(true);
+});
 
 /**
  * O laço do Phaser reagenda o próximo quadro DEPOIS de chamar o `update()` das cenas

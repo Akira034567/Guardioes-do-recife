@@ -1,6 +1,6 @@
 import { achievementStatuses, type AchievementStatus } from "../../../core/progression/achievements";
 import type { ProgressionService } from "../../../core/progression/ProgressionService";
-import type { AchievementCategory } from "../../../data/achievements";
+import { SECRET_ACHIEVEMENTS, type AchievementCategory } from "../../../data/achievements";
 import { levelBackgroundPath } from "../../../assets/levelBackgrounds";
 import { LEVELS } from "../../../data/levels";
 import { GLOBAL_CURRENCY } from "../../../data/progression";
@@ -63,9 +63,11 @@ export function achievementsScreen(progression: ProgressionService, onBack: () =
       const redraw = (): void => {
         const statuses = achievementStatuses(progression.progress);
         const done = statuses.filter((status) => status.unlocked).length;
+        const secretsFound = SECRET_ACHIEVEMENTS.filter((definition) => Boolean(progression.progress.achievements[definition.id]?.unlockedAt)).length;
         const listed = statuses.filter((status) => filter === "all" || status.definition.category === filter);
         const current = listed.find((status) => status.definition.id === chosen) ?? listed.find((status) => status.unlocked) ?? listed[0];
         root.dataset.done = String(done);
+        root.dataset.secrets = String(secretsFound);
 
         fill(layout, 
           embedded ? null : shellSidebar("achievements", nav ?? fallbackNav(onBack), {
@@ -76,7 +78,7 @@ export function achievementsScreen(progression: ProgressionService, onBack: () =
           h(
             "div",
             { class: "gr-album__main" },
-            header(done, statuses.length),
+            header(done, statuses.length, secretsFound),
             filters(filter, done, statuses.length, (next) => {
               filter = next;
               chosen = null;
@@ -133,7 +135,7 @@ function fallbackNav(onBack: () => void): ShellNav {
   };
 }
 
-function header(done: number, total: number): HTMLElement {
+function header(done: number, total: number, secretsFound: number): HTMLElement {
   const ratio = Math.round((done / Math.max(1, total)) * 100);
   return h(
     "header",
@@ -157,6 +159,19 @@ function header(done: number, total: number): HTMLElement {
       ),
     ),
     h("p", { class: "gr-album__quote", text: "“Grandes jornadas também são feitas de pequenos feitos.”" }),
+    // Os Segredos do Recife não aparecem na lista antes de caírem. Esconder que eles EXISTEM seria
+    // esconder o jogo inteiro: a faixa conta quantos são e quantos você já achou, e nada mais.
+    h(
+      "p",
+      { class: "gr-album__secrets", testId: "achievements-secrets", dataFound: String(secretsFound) },
+      h("span", { class: "gr-icon", html: ICONS.lock }),
+      h("span", {
+        text:
+          secretsFound >= SECRET_ACHIEVEMENTS.length
+            ? `Segredos do Recife: ${secretsFound} de ${SECRET_ACHIEVEMENTS.length} — nada mais escondido por aqui.`
+            : `Segredos do Recife: ${secretsFound} de ${SECRET_ACHIEVEMENTS.length} descobertos. Eles só aparecem na lista depois de conquistados.`,
+      }),
+    ),
   );
 }
 

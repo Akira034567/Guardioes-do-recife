@@ -7,3 +7,7 @@ test-results/
 *.log
 *.tsbuildinfo
 .DS_Store
+
+# Variáveis locais da conta na nuvem (a de exemplo, `.env.example`, fica versionada).
+.env
+.env.local

@@ -4,8 +4,9 @@ import { GAME_HEIGHT, GAME_WIDTH, HUD_BOTTOM, HUD_TOP } from "./constants";
  * Geometria do HUD da partida. Fica fora do Phaser para que os testes e2e cliquem exatamente onde a
  * `UIScene` desenha: mudar um número aqui move o controle na tela e move a sonda junto.
  *
- * Leitura de cima para baixo: barra de cima (marca, pílulas de estado, botões), faixa flutuante sob
- * ela (fase à esquerda, sondagem à direita) e barra de baixo (cartas, painel do Guardião, comandos).
+ * Leitura de cima para baixo: barra de cima (marca, fase, pílulas de estado, chamado e botões),
+ * faixa flutuante sob ela (chefe no meio, sondagem à direita) e barra de baixo (cartas e o painel do
+ * Guardião em foco).
  */
 
 /** Altura das pílulas de estado da barra de cima e centro vertical delas. */
@@ -19,26 +20,42 @@ export const HUD_LAYOUT = {
   /** Marca do jogo, encostada à esquerda. */
   brand: { x: 12, width: 160, height: 48 },
   /**
-   * Pílulas de estado: moeda, vida do Recife, onda e contagem da próxima onda, nesta ordem.
-   * A última ganhou largura para caber a legenda inteira, em vez de um "EM 10s" sem contexto.
+   * Plaquinha da fase: "FASE 3/6 · TRÊS REDEMOINHOS" e a dificuldade em que se está jogando.
+   *
+   * Subiu do canto de baixo para cá com o botão PRÓXIMA ONDA (v3.5). Lá embaixo ela dividia o bloco
+   * mais apertado do HUD e ficava longe de tudo que responde "como vai a partida"; aqui ela abre a
+   * mesma fileira das pílulas de estado, que é onde o olho já procura.
+   *
+   * A dificuldade entra junto porque o Difícil e o Abissal mudam a MISSÃO, e não só os números: sem
+   * ela na tela, duas partidas da mesma fase são indistinguíveis.
+   */
+  levelPod: { x: 180, width: 244 },
+  /**
+   * Pílulas de estado: moeda, vida do Recife e a onda (com a contagem da próxima junto).
+   *
+   * Onda e contagem viraram UMA pílula: são a mesma pergunta ("em que ponto da fase eu estou?") e
+   * separadas custavam 100 px que a barra não tem mais, agora que a fase e o chamado moram aqui.
    */
   pods: {
-    pearls: { x: 178, width: 122 },
-    reef: { x: 310, width: 192 },
-    wave: { x: 512, width: 148 },
-    timer: { x: 670, width: 300 },
+    pearls: { x: 432, width: 106 },
+    reef: { x: 546, width: 166 },
+    wave: { x: 720, width: 182 },
   },
   /**
    * Aviso curto da partida. Saiu da barra de cima (onde disputava espaço com as pílulas) e virou um
-   * balão discreto logo abaixo dela, sem encostar na plaquinha da fase nem na barra do chefe.
+   * balão discreto logo abaixo dela, sem encostar na barra do chefe.
    */
   messageX: GAME_WIDTH / 2,
   messageY: HUD_TOP + 54,
   messageWidth: 420,
-  /** Botões quadrados da direita: 1×, 2×, pausa, tela cheia e som. */
+  /** Botões da direita: chamar onda, 1×/2×, reiniciar, pausa, tela cheia e som. */
   topButtonY: TOP_CENTER,
-  topButtonSize: 46,
-  topButtonHeight: 42,
+  topButtonSize: 42,
+  topButtonHeight: 40,
+  /** Botão "PRÓXIMA ONDA", logo depois da pílula da onda: o chamado fica ao lado da contagem. */
+  skipButtonX: 960,
+  skipButtonY: TOP_CENTER,
+  skipButtonWidth: 104,
   /**
    * Velocidade da partida: UM botão que alterna.
    *
@@ -46,17 +63,21 @@ export const HUD_LAYOUT = {
    * espaço servia só para mostrar a opção que não estava valendo. O botão único mostra a velocidade
    * ATUAL e troca ao toque, que é como o resto do HUD já se comporta.
    */
-  speedButtonX: 1056,
-  speedButtonWidth: 52,
-  pauseButtonX: 1137,
-  fullscreenButtonX: 1191,
-  muteButtonX: 1245,
+  speedButtonX: 1044,
+  speedButtonWidth: 50,
+  /**
+   * REINICIAR FASE, entre a velocidade e a pausa.
+   *
+   * Ele joga a partida fora, então pede confirmação (a mesma da tecla R) — mas precisa estar à mão:
+   * quem percebe no minuto dois que o esquadrão está errado não quer abrir a gaveta de pausa,
+   * achar o item e confirmar duas vezes.
+   */
+  restartButtonX: 1098,
+  pauseButtonX: 1146,
+  fullscreenButtonX: 1194,
+  muteButtonX: 1242,
 
   // ── Faixa flutuante sob a barra de cima ──────────────────────────────────────
-  /** Nome da fase, à esquerda, por cima do mapa. */
-  levelChipX: 12,
-  levelChipY: 92,
-  levelChipHeight: 30,
   /** Barra do chefe, centralizada. */
   bossBarX: 640,
   bossBarY: 92,
@@ -76,37 +97,22 @@ export const HUD_LAYOUT = {
 
   // ── Barra de baixo: painel do Guardião em foco ───────────────────────────────
   /**
-   * Painel do Guardião em foco. Encaixa entre a última carta (termina em 588) e o bloco de
-   * comandos (começa em 1042), com folga nos dois lados.
+   * Painel do Guardião em foco. Começa depois da última carta (que termina em 588) e agora vai até
+   * perto da borda: o bloco de comandos que ocupava a direita subiu inteiro para a barra de cima.
    */
-  panelX: 820,
-  panelWidth: 440,
+  panelX: 880,
+  panelWidth: 560,
   panelY: GAME_HEIGHT - 58,
   panelHeight: 104,
   /** Botões do painel: ramo A à esquerda, ramo B no meio, venda à direita. */
   optionButtonY: GAME_HEIGHT - 27,
-  optionButtonXs: [676, 820] as const,
-  optionButtonWidth: 138,
+  optionButtonXs: [696, 876] as const,
+  optionButtonWidth: 170,
   optionButtonHeight: 34,
-  sellButtonX: 964,
+  sellButtonX: 1056,
 
-  // ── Barra de baixo: comandos da partida ──────────────────────────────────────
-  /** Nome e número da fase, acima dos comandos. */
-  commandLabelX: 1155,
-  commandLabelY: GAME_HEIGHT - 106,
-  /** Botão "PRÓXIMA ONDA". */
-  skipButtonX: 1096,
-  skipButtonY: GAME_HEIGHT - 74,
-  skipButtonWidth: 108,
-  commandButtonHeight: 38,
-  restartButtonX: 1214,
-  restartButtonY: GAME_HEIGHT - 74,
-  /** Botão "FASES": ocupa a largura inteira do bloco de comandos. */
-  menuButtonX: 1155,
-  menuButtonY: GAME_HEIGHT - 28,
-  menuButtonWidth: 226,
-  menuButtonHeight: 40,
-  /** Atalho de desenvolvimento: flutua acima da barra, só aparece com `?debug=1`. */
+  // ── Atalho de desenvolvimento ────────────────────────────────────────────────
+  /** Flutua acima da barra de baixo; só aparece com `?debug=1`. */
   debugButtonX: 1142,
   debugButtonY: GAME_HEIGHT - HUD_BOTTOM - 22,
 

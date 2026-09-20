@@ -77,11 +77,18 @@ test("não mexe na rolagem ao escolher Guardião", async ({ page }) => {
   // há o que preservar, e o cenário deste teste simplesmente não existe ali.
   test.skip(before === 0, "a coluna só rola por dentro nas telas largas");
 
-  await page.getByTestId("prep-guardian-pufferfish").click();
-  expect(await side.evaluate((element) => element.scrollTop)).toBe(before);
+  // `poll` e não leitura única: a reposição insiste enquanto a altura do conteúdo novo não é a
+  // final (imagem que ainda não chegou), então ela pode acontecer um quadro depois do clique. O que
+  // esta sonda protege continua sendo o mesmo — a coluna NÃO fica no lugar errado.
+  const heldPosition = async (): Promise<void> => {
+    await expect.poll(() => side.evaluate((element) => element.scrollTop), { timeout: 2000 }).toBe(before);
+  };
 
   await page.getByTestId("prep-guardian-pufferfish").click();
-  expect(await side.evaluate((element) => element.scrollTop)).toBe(before);
+  await heldPosition();
+
+  await page.getByTestId("prep-guardian-pufferfish").click();
+  await heldPosition();
 });
 
 test("reordena as vagas arrastando e leva a ordem para o HUD", async ({ page, isMobile }) => {

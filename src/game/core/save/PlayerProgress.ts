@@ -4,16 +4,40 @@ import { MASTERY_MAX_LEVEL } from "../../data/mastery";
  * Progressão permanente do jogador (item 37). Nunca mistura com o estado de uma partida: o motor
  * (`core/match`) não conhece este documento, e este documento só recebe resultados no fim da partida.
  */
-export const SAVE_VERSION = 5;
+export const SAVE_VERSION = 6;
 
 export type Stars = 0 | 1 | 2 | 3;
+
+/**
+ * A trilha de UMA dificuldade numa fase: as estrelas e os objetivos daquela missão.
+ *
+ * Difícil e Abissal têm objetivos próprios (`objectivesByDifficulty`), então guardar um único vetor
+ * de booleanos por fase misturaria missões diferentes no mesmo índice — o jogador veria a estrela 2
+ * do Normal acesa na ficha do Difícil, que pede outra coisa.
+ */
+export interface DifficultyRecord {
+  stars: Stars;
+  /** Objetivos daquela dificuldade já cumpridos em qualquer tentativa (OR entre partidas). */
+  objectives: boolean[];
+  completions: number;
+}
 
 export interface LevelRecord {
   stars: Stars;
   /** Objetivos já cumpridos em qualquer tentativa (OR entre partidas; nunca regride). */
   objectives: boolean[];
   completions: number;
-  best: { livesLost: number; durationMs: number; guardiansUsed: number; difficulty: string } | null;
+  best: {
+    livesLost: number;
+    durationMs: number;
+    guardiansUsed: number;
+    difficulty: string;
+    /**
+     * Menor número de ESPÉCIES usadas numa vitória. Ausente = nunca medido (save antigo): as
+     * conquistas secretas que dependem disto tratam ausência como "ainda não", nunca como zero.
+     */
+    distinctGuardians?: number;
+  } | null;
   /**
    * Dificuldades em que esta fase já foi VENCIDA pelo menos uma vez. Nunca regride (item 4).
    *
@@ -21,6 +45,14 @@ export interface LevelRecord {
    * o mesmo `registry.levelIds` e some junto quando a fase sai do catálogo.
    */
   clearedDifficulties: string[];
+  /**
+   * Uma trilha por dificuldade. Os campos acima continuam sendo a trilha do NORMAL — é deles que
+   * vivem as estrelas da campanha, os desbloqueios e as conquistas antigas.
+   *
+   * Opcional porque um registro montado à mão (testes, ferramentas) não precisa conhecê-la: quem lê
+   * passa por `difficultyTrack`, que deriva a trilha do Normal dos campos de cima.
+   */
+  byDifficulty?: Record<string, DifficultyRecord>;
 }
 
 export interface PlayerSettings {
@@ -40,6 +72,13 @@ export interface PlayerSettings {
    * "sei mexer no jogo", não "não quero saber o que é vulnerabilidade".
    */
   tutorialMoments: boolean;
+  /**
+   * No celular, pedir tela cheia no primeiro toque para tirar a barra do navegador da frente.
+   *
+   * Ligado por padrão porque em paisagem a barra de endereço cobre a barra de cima do HUD. Quem
+   * prefere continuar com os controles do navegador à mão desliga aqui.
+   */
+  immersiveMobile: boolean;
   uiScale: "small" | "normal" | "large";
 }
 
@@ -136,7 +175,16 @@ export interface PlayerProgress {
   completedEncounters: string[];
   /** Guardiões desbloqueados ainda não apresentados ao jogador. */
   pendingUnlockReveals: string[];
-  totals: { matches: number; victories: number; defeats: number; kills: number; playTimeMs: number; wavesCleared: number };
+  totals: {
+    matches: number;
+    victories: number;
+    defeats: number;
+    kills: number;
+    playTimeMs: number;
+    wavesCleared: number;
+    /** Quantas vezes o jogador reiniciou uma fase. Só sobe; é o que sustenta a conquista secreta. */
+    restarts: number;
+  };
   /** Hub "Meu Recife": o que está plantado e quem mora lá. O crescimento em si é derivado. */
   reef: ReefState;
 }
@@ -164,6 +212,7 @@ export const DEFAULT_SETTINGS: PlayerSettings = {
   damageNumbers: true,
   highContrast: false,
   tutorialMoments: true,
+  immersiveMobile: true,
   uiScale: "normal",
 };
 
@@ -191,7 +240,7 @@ export function createDefaultProgress(registry: SanitizeRegistry, now: Date): Pl
     discoveredSecrets: [],
     completedEncounters: [],
     pendingUnlockReveals: [],
-    totals: { matches: 0, victories: 0, defeats: 0, kills: 0, playTimeMs: 0, wavesCleared: 0 },
+    totals: { matches: 0, victories: 0, defeats: 0, kills: 0, playTimeMs: 0, wavesCleared: 0, restarts: 0 },
     // Perfil novo começa com o Recife vazio; `reconcileReef` planta na primeira visita ao hub.
     reef: emptyReef(),
   };
@@ -223,12 +272,30 @@ function sanitizeLevelRecord(value: unknown, registry: SanitizeRegistry): LevelR
         durationMs: finite(value.best.durationMs, 0, 0),
         guardiansUsed: finite(value.best.guardiansUsed, 0, 0),
         difficulty: text(value.best.difficulty, "normal"),
+        ...(typeof value.best.distinctGuardians === "number" && Number.isFinite(value.best.distinctGuardians)
+          ? { distinctGuardians: Math.max(0, Math.floor(value.best.distinctGuardians)) }
+          : {}),
       }
     : null;
   const clearedDifficulties = Array.isArray(value.clearedDifficulties)
     ? [...new Set(value.clearedDifficulties.filter((id): id is string => typeof id === "string" && (registry.difficultyIds?.includes(id) ?? true)))]
     : [];
-  return { stars, objectives, completions: Math.floor(finite(value.completions, 0, 0)), best, clearedDifficulties };
+  const byDifficulty: Record<string, DifficultyRecord> = {};
+  if (isRecord(value.byDifficulty)) {
+    for (const [difficultyId, entry] of Object.entries(value.byDifficulty)) {
+      if (registry.difficultyIds && !registry.difficultyIds.includes(difficultyId)) continue;
+      if (!isRecord(entry)) continue;
+      const flags = Array.isArray(entry.objectives) ? entry.objectives.map((flag) => flag === true) : [];
+      byDifficulty[difficultyId] = {
+        stars: Math.max(0, Math.min(3, Math.floor(finite(entry.stars, flags.filter(Boolean).length)))) as Stars,
+        objectives: flags,
+        completions: Math.floor(finite(entry.completions, 0, 0)),
+      };
+    }
+  }
+  // Invariante barata: a trilha do Normal é sempre a de cima, mesmo num save escrito à mão.
+  byDifficulty.normal = { stars, objectives, completions: Math.floor(finite(value.completions, 0, 0)) };
+  return { stars, objectives, completions: Math.floor(finite(value.completions, 0, 0)), best, clearedDifficulties, byDifficulty };
 }
 
 /**
@@ -363,6 +430,7 @@ export function sanitizeProgress(raw: unknown, registry: SanitizeRegistry, now: 
       damageNumbers: bool(settings.damageNumbers, DEFAULT_SETTINGS.damageNumbers),
       highContrast: bool(settings.highContrast, DEFAULT_SETTINGS.highContrast),
       tutorialMoments: bool(settings.tutorialMoments, DEFAULT_SETTINGS.tutorialMoments),
+      immersiveMobile: bool(settings.immersiveMobile, DEFAULT_SETTINGS.immersiveMobile),
       uiScale: settings.uiScale === "small" || settings.uiScale === "large" ? settings.uiScale : "normal",
     },
     guardianStats,
@@ -397,6 +465,7 @@ export function sanitizeProgress(raw: unknown, registry: SanitizeRegistry, now: 
       kills: finite(totals.kills, 0, 0),
       playTimeMs: finite(totals.playTimeMs, 0, 0),
       wavesCleared: finite(totals.wavesCleared, 0, 0),
+      restarts: finite(totals.restarts, 0, 0),
     },
   };
 }

@@ -29,6 +29,18 @@ export const RECIFE_FOUR: LevelDefinition = {
     { id: "intacto", kind: "noLeaks" },
     { id: "poucos", kind: "maxGuardians", value: 5 },
   ],
+  objectivesByDifficulty: {
+    dificil: [
+      { id: "completar", kind: "complete" },
+      { id: "vidas", kind: "minLivesRemaining", value: 14 },
+      { id: "especies", kind: "maxDistinctGuardians", value: 3 },
+    ],
+    abissal: [
+      { id: "completar", kind: "complete" },
+      { id: "intacto", kind: "noLeaks" },
+      { id: "paciencia", kind: "noEarlyCall" },
+    ],
+  },
   waypoints: [
     { x: 428, y: -20 },
     { x: 428, y: 20 },

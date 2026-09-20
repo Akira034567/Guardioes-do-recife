@@ -14,6 +14,9 @@ import { preserveScroll } from "../scroll";
 import { ICONS } from "../icons";
 import type { Screen } from "../ScreenHost";
 import { shellSidebar, type ShellNav } from "../shell";
+import type { AlbumEntry, SheetContext, SheetTab } from "./album/entry";
+import { schoolEntries } from "./album/schoolTab";
+import { masteryEntries } from "./album/masteryTab";
 
 /** Caminho da imagem de uma variante do Guardião (`base`, `perfuracao-1`, …). */
 function variantArt(guardianId: GuardianId, folder: string, kind: "idle" | "attack" | "projectile" | "portrait"): string {
@@ -25,42 +28,69 @@ function basePortrait(guardianId: GuardianId): string {
   return variantArt(guardianId, GUARDIAN_ART[guardianId].base.folder, "idle");
 }
 
-export type AlbumTab = "guardians" | "encounters" | "places" | "treasures";
+export type AlbumTab = "guardians" | "encounters" | "places" | "treasures" | "school" | "mastery";
 
 const TABS: ReadonlyArray<{ id: AlbumTab; label: string; icon: string }> = [
   { id: "guardians", label: "Guardiões", icon: ICONS.fish },
   { id: "encounters", label: "Encontros", icon: ICONS.shell },
   { id: "places", label: "Locais", icon: ICONS.coral },
   { id: "treasures", label: "Tesouros", icon: ICONS.chest },
+  { id: "school", label: "Escola", icon: ICONS.target },
+  { id: "mastery", label: "Maestria", icon: ICONS.star },
 ];
 
 /**
- * Uma carta do álbum, seja ela um Guardião, um Encontro, um lugar ou um achado. Tudo o que a tela
- * precisa saber para desenhar a carta à esquerda e a ficha à direita mora aqui, então uma aba nova é
- * só uma função que devolve uma lista destas.
+ * O cabeçalho muda de assunto com a aba. Contar "encontrados" numa aba onde nada se encontra (a
+ * Escola não bloqueia aula nenhuma) era o que mais confundia quando as duas telas viraram abas.
  */
-interface AlbumEntry {
-  id: string;
-  name: string;
-  subtitle: string;
-  found: boolean;
-  /** Sem nenhuma pista, a carta vira "???" e a arte fica em silhueta. */
-  hidden: boolean;
-  art: string | null;
-  /** Pictograma usado quando a entrada não tem arte própria. */
-  icon: string;
-  /** O que falta para encontrar, quando ainda não foi. */
-  hint: string;
-  progress: { label: string; current: number; target: number } | null;
-  /** Corpo da ficha da direita. */
-  sheet(): HTMLElement;
-  /** Faixa grande no topo da ficha; ausente = a própria arte da carta. */
-  banner?: string | null;
-}
+const TAB_COPY: Record<AlbumTab, { title: string; lead: string; counter: string; quote: string }> = {
+  guardians: {
+    title: "ÁLBUM DO RECIFE",
+    lead: "Todo Guardião tem uma história. Descubra, desbloqueie e faça parte desse oceano.",
+    counter: "Guardiões encontrados",
+    quote: "“Mais que criaturas, são laços que mantêm o Recife vivo.”",
+  },
+  encounters: {
+    title: "ÁLBUM DO RECIFE",
+    lead: "Todo Guardião tem uma história. Descubra, desbloqueie e faça parte desse oceano.",
+    counter: "Encontros concluídos",
+    quote: "“Mais que criaturas, são laços que mantêm o Recife vivo.”",
+  },
+  places: {
+    title: "ÁLBUM DO RECIFE",
+    lead: "Todo Guardião tem uma história. Descubra, desbloqueie e faça parte desse oceano.",
+    counter: "Locais visitados",
+    quote: "“Mais que criaturas, são laços que mantêm o Recife vivo.”",
+  },
+  treasures: {
+    title: "ÁLBUM DO RECIFE",
+    lead: "Todo Guardião tem uma história. Descubra, desbloqueie e faça parte desse oceano.",
+    counter: "Tesouros achados",
+    quote: "“Mais que criaturas, são laços que mantêm o Recife vivo.”",
+  },
+  school: {
+    title: "ESCOLA DO RECIFE",
+    lead: "O manual do oceano: como cada Guardião luta, o que cada efeito faz e por onde a correnteza empurra.",
+    counter: "Aulas lidas",
+    quote: "“Nada aqui é bloqueado. Leia na ordem que quiser.”",
+  },
+  mastery: {
+    title: "MAESTRIA DO RECIFE",
+    lead: "Treino permanente: cinco nós por Guardião, comprados com Conchas, valendo em toda partida seguinte.",
+    counter: "Guardiões em treino",
+    quote: "“O que se aprende no Recife, o Recife não esquece.”",
+  },
+};
 
 /**
- * Álbum do Recife (item 4): tudo o que o jogador já encontrou. Quatro abas — Guardiões, Encontros,
- * Locais e Tesouros —, a lista à esquerda e a ficha completa à direita, sem trocar de tela.
+ * Álbum do Recife (item 4): tudo o que o jogador já encontrou. Seis abas — Guardiões, Encontros,
+ * Locais, Tesouros, Escola e Maestria —, a grade à esquerda e a ficha completa à direita, sem trocar
+ * de tela.
+ *
+ * A Escola e a Maestria eram duas entradas a mais no menu lateral e duas telas com layout próprio.
+ * Elas falam do MESMO acervo que o álbum cataloga (os Guardiões, os efeitos, as ameaças), então
+ * moram aqui, com a mesma carta e a mesma ficha das outras abas — e o menu da esquerda ficou com
+ * dois itens a menos para o polegar errar no celular.
  */
 /** Onde o álbum abre. O hub usa `focus` para cair direto no Guardião que o jogador clicou no Recife. */
 export interface CollectionOptions {
@@ -92,7 +122,7 @@ export function collectionScreen(
       root.append(layout);
 
       const redraw = (): void => {
-        const entries = entriesFor(tab, progression, {
+        const context: SheetContext = {
           frame: actionFrame,
           sheetTab,
           onFrame: (next) => {
@@ -104,9 +134,21 @@ export function collectionScreen(
             draw();
           },
           onChanged: () => draw(),
-        });
+        };
+        let entries = entriesFor(tab, progression, context);
         const current = entries.find((entry) => entry.id === chosen) ?? entries.find((entry) => entry.found) ?? entries[0];
+        // Abrir uma carta pode mudar a própria carta (ler a aula tira o selo "Nova"), então a grade
+        // é relida depois do gancho — nunca antes, senão a etiqueta atrasaria um clique.
+        if (current?.onOpen) {
+          current.onOpen();
+          entries = entriesFor(tab, progression, context);
+        }
         const found = entries.filter((entry) => entry.found).length;
+        // A Escola conta aulas LIDAS, não encontradas: nada nela é bloqueado.
+        const score = tab === "school" ? entries.filter((entry) => entry.state === "read").length : found;
+        root.dataset.tab = tab;
+        if (tab === "school") root.dataset.read = String(score);
+        else delete root.dataset.read;
 
         fill(layout, 
           embedded ? null : shellSidebar("collection", nav ?? fallbackNav(onBack), {
@@ -118,7 +160,7 @@ export function collectionScreen(
           h(
             "div",
             { class: "gr-album__main" },
-            header(tab, found, entries.length),
+            header(tab, score, entries.length),
             tabs(tab, (next) => {
               tab = next;
               chosen = null;
@@ -175,7 +217,7 @@ function fallbackNav(onBack: () => void): ShellNav {
 }
 
 function header(tab: AlbumTab, found: number, total: number): HTMLElement {
-  const label = TABS.find((candidate) => candidate.id === tab)?.label ?? "Itens";
+  const copy = TAB_COPY[tab];
   const ratio = Math.round((found / Math.max(1, total)) * 100);
   return h(
     "header",
@@ -183,8 +225,8 @@ function header(tab: AlbumTab, found: number, total: number): HTMLElement {
     h(
       "div",
       { class: "gr-album__titles" },
-      h("h1", { class: "gr-album__title", text: "ÁLBUM DO RECIFE" }),
-      h("p", { class: "gr-subtitle", text: "Todo Guardião tem uma história. Descubra, desbloqueie e faça parte desse oceano." }),
+      h("h1", { class: "gr-album__title", text: copy.title }),
+      h("p", { class: "gr-subtitle", text: copy.lead }),
     ),
     h(
       "div",
@@ -193,12 +235,12 @@ function header(tab: AlbumTab, found: number, total: number): HTMLElement {
       h(
         "span",
         { class: "gr-album__score-copy" },
-        h("span", { class: "gr-stat__label", text: `${label} encontrados` }),
+        h("span", { class: "gr-stat__label", text: copy.counter }),
         h("span", { class: "gr-album__score-value", text: `${found} de ${total}` }),
         h("span", { class: "gr-progress__track" }, h("span", { class: "gr-progress__fill", style: `width:${ratio}%` })),
       ),
     ),
-    h("p", { class: "gr-album__quote", text: "“Mais que criaturas, são laços que mantêm o Recife vivo.”" }),
+    h("p", { class: "gr-album__quote", text: copy.quote }),
   );
 }
 
@@ -213,6 +255,9 @@ function tabs(current: AlbumTab, onPick: (tab: AlbumTab) => void): HTMLElement {
           class: `gr-album__tab${tab.id === current ? " gr-album__tab--on" : ""}`,
           testId: `album-tab-${tab.id}`,
           type: "button",
+          // Em tela estreita fica só o pictograma; o nome continua no `title` e no rótulo acessível.
+          title: tab.label,
+          "aria-label": tab.label,
           "aria-pressed": String(tab.id === current),
           onClick: () => onPick(tab.id),
         },
@@ -224,7 +269,7 @@ function tabs(current: AlbumTab, onPick: (tab: AlbumTab) => void): HTMLElement {
 }
 
 function card(entry: AlbumEntry, chosen: boolean, onClick: () => void): HTMLElement {
-  const state = entry.found ? "unlocked" : "locked";
+  const state = entry.state ?? (entry.found ? "unlocked" : "locked");
   return h(
     "button",
     {
@@ -244,11 +289,18 @@ function card(entry: AlbumEntry, chosen: boolean, onClick: () => void): HTMLElem
     ),
     h("span", { class: "gr-album__card-name", text: entry.hidden && !entry.found ? "???" : entry.name }),
     h("span", { class: "gr-hint", text: entry.found ? entry.subtitle : entry.hint }),
-    entry.found
-      ? h("span", { class: "gr-album__chip" }, h("span", { class: "gr-icon", html: ICONS.star }), h("span", { text: "Encontrado" }))
+    entry.chip
+      ? h(
+          "span",
+          { class: `gr-album__chip${entry.chip.tone ? ` gr-album__chip--${entry.chip.tone}` : ""}` },
+          h("span", { class: "gr-icon", html: entry.chip.icon }),
+          h("span", { text: entry.chip.label }),
+        )
       : entry.progress
         ? progressBar(entry.progress.label, entry.progress.current, entry.progress.target)
-        : null,
+        : entry.found
+          ? h("span", { class: "gr-album__chip" }, h("span", { class: "gr-icon", html: ICONS.star }), h("span", { text: "Encontrado" }))
+          : null,
   );
 }
 
@@ -264,15 +316,6 @@ function progressBar(label: string, current: number, target: number): HTMLElemen
 
 // ------------------------------------------------------------------------------- conteúdo das abas
 
-interface SheetContext {
-  frame: number;
-  sheetTab: SheetTab;
-  onFrame(next: number): void;
-  onSheetTab(next: SheetTab): void;
-  /** Redesenha a tela no lugar. Trocar por `host.replace` perderia `nav`, aba e foco. */
-  onChanged(): void;
-}
-
 function entriesFor(tab: AlbumTab, progression: ProgressionService, context: SheetContext): AlbumEntry[] {
   switch (tab) {
     case "guardians":
@@ -283,6 +326,10 @@ function entriesFor(tab: AlbumTab, progression: ProgressionService, context: She
       return placeEntries(progression);
     case "treasures":
       return treasureEntries(progression);
+    case "school":
+      return schoolEntries();
+    case "mastery":
+      return masteryEntries(progression, context);
   }
 }
 
@@ -382,8 +429,6 @@ function treasureEntries(progression: ProgressionService): AlbumEntry[] {
 }
 
 // ------------------------------------------------------------------------------- ficha da direita
-
-type SheetTab = "info" | "skills" | "tree" | "story";
 
 const SHEET_TABS: ReadonlyArray<{ id: SheetTab; label: string }> = [
   { id: "info", label: "Informações" },

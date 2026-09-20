@@ -31,6 +31,18 @@ export const RECIFE_FIVE: LevelDefinition = {
     { id: "vidas", kind: "minLivesRemaining", value: 10 },
     { id: "poucos", kind: "maxGuardians", value: 6 },
   ],
+  objectivesByDifficulty: {
+    dificil: [
+      { id: "completar", kind: "complete" },
+      { id: "elites", kind: "noEliteLeaks" },
+      { id: "poucos", kind: "maxGuardians", value: 5 },
+    ],
+    abissal: [
+      { id: "completar", kind: "complete" },
+      { id: "vidas", kind: "minLivesRemaining", value: 10 },
+      { id: "sem-venda", kind: "noSell" },
+    ],
+  },
   waypoints: [
     { x: 243, y: -30 },
     { x: 255, y: 20 },

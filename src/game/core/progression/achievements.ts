@@ -1,4 +1,5 @@
 import { ACHIEVEMENTS, type AchievementDefinition } from "../../data/achievements";
+import { LEVEL_IDS } from "../../data/levels";
 import type { PlayerProgress } from "../save/PlayerProgress";
 import type { MatchResult } from "./MatchResult";
 import { totalStars } from "./stars";
@@ -58,6 +59,18 @@ export function measureAchievement(definition: AchievementDefinition, progress: 
               : stats.maxSimultaneousGuardians;
       return Math.max(stored, value);
     }
+    case "campaignBest": {
+      // Só a campanha entra: Encontro não tem estrela nem recorde comparável.
+      return LEVEL_IDS.filter((levelId) => {
+        const best = progress.levelStars[levelId]?.best;
+        if (!best) return false;
+        const value = measure.stat === "livesLost" ? best.livesLost : best.distinctGuardians;
+        // `undefined` = save antigo, que nunca mediu espécies. Conta como "ainda não", nunca como 0.
+        return value !== undefined && value <= measure.max;
+      }).length;
+    }
+    case "campaignWithoutRestart":
+      return progress.totals.restarts > 0 ? 0 : progress.completedLevels.filter((levelId) => LEVEL_IDS.includes(levelId)).length;
     case "matchesWith": {
       if (!result || !result.victory) return stored;
       const satisfied =
@@ -90,9 +103,21 @@ export function applyAchievements(draft: PlayerProgress, result?: MatchResult, n
   return unlocked;
 }
 
-/** Lista completa para a tela de conquistas. */
-export function achievementStatuses(progress: PlayerProgress, justUnlocked: readonly string[] = []): AchievementStatus[] {
-  return ACHIEVEMENTS.map((definition) => {
+/**
+ * Lista para a tela de conquistas.
+ *
+ * As secretas ficam FORA enquanto não caem: elas não existem para quem ainda não as fez, nem como
+ * "???" — e entram na lista no instante em que são conquistadas. Quem quiser a lista crua (testes,
+ * ferramentas) passa `includeSecret`.
+ */
+export function achievementStatuses(
+  progress: PlayerProgress,
+  justUnlocked: readonly string[] = [],
+  options: { includeSecret?: boolean } = {},
+): AchievementStatus[] {
+  return ACHIEVEMENTS.filter(
+    (definition) => options.includeSecret === true || definition.secret !== true || Boolean(progress.achievements[definition.id]?.unlockedAt),
+  ).map((definition) => {
     const entry = progress.achievements[definition.id];
     const value = Math.min(definition.target, entry?.progress ?? 0);
     return {

@@ -81,12 +81,68 @@ describe("achievements", () => {
     draft.totals.kills = 250;
     applyAchievements(draft);
     const statuses = achievementStatuses(draft, ["faxina"]);
-    expect(statuses).toHaveLength(ACHIEVEMENTS.length);
+    expect(statuses).toHaveLength(ACHIEVEMENTS.filter((definition) => definition.secret !== true).length);
     const faxina = statuses.find((status) => status.definition.id === "faxina");
     expect(faxina).toMatchObject({ progress: 250, target: 500, unlocked: false, isNew: true });
     // O progresso mostrado nunca passa da meta.
     draft.totals.kills = 900;
     applyAchievements(draft);
     expect(achievementStatuses(draft).find((status) => status.definition.id === "faxina")?.progress).toBe(500);
+  });
+});
+
+describe("conquistas secretas", () => {
+  it("não aparecem na lista antes de caírem, e entram assim que caem", () => {
+    const draft = progress();
+    const visible = () => achievementStatuses(draft).map((status) => status.definition.id);
+    expect(visible(), "segredo não existe para quem ainda não fez").not.toContain("sem-recomeco");
+    expect(achievementStatuses(draft, [], { includeSecret: true }).map((status) => status.definition.id)).toContain("sem-recomeco");
+
+    draft.completedLevels = [...LEVEL_IDS];
+    applyAchievements(draft);
+    expect(visible()).toContain("sem-recomeco");
+  });
+
+  it("um único recomeço tranca o \"Sem recomeço\" para sempre", () => {
+    const draft = progress();
+    draft.completedLevels = LEVEL_IDS.slice(0, 3);
+    applyAchievements(draft);
+    draft.totals.restarts = 1;
+    draft.completedLevels = [...LEVEL_IDS];
+    applyAchievements(draft);
+    const entry = draft.achievements["sem-recomeco"];
+    expect(entry.unlockedAt, "reiniciou uma vez: nunca mais").toBeNull();
+    expect(entry.progress, "o progresso congela no que já havia").toBe(3);
+  });
+
+  it("mede campanha inteira pelo MELHOR resultado de cada fase", () => {
+    const draft = progress();
+    for (const levelId of LEVEL_IDS) {
+      draft.levelStars[levelId] = {
+        stars: 3,
+        objectives: [true, true, true],
+        completions: 1,
+        best: { livesLost: 1, durationMs: 1000, guardiansUsed: 4, difficulty: "normal", distinctGuardians: 2 },
+        clearedDifficulties: ["normal"],
+      };
+    }
+    applyAchievements(draft);
+    expect(draft.achievements["sopro-de-vida"].unlockedAt).not.toBeNull();
+    expect(draft.achievements["dupla-do-recife"].unlockedAt).not.toBeNull();
+  });
+
+  it("save antigo sem contagem de espécies não ganha a dupla de graça", () => {
+    const draft = progress();
+    for (const levelId of LEVEL_IDS) {
+      draft.levelStars[levelId] = {
+        stars: 3,
+        objectives: [true, true, true],
+        completions: 1,
+        best: { livesLost: 0, durationMs: 1000, guardiansUsed: 2, difficulty: "normal" },
+        clearedDifficulties: ["normal"],
+      };
+    }
+    applyAchievements(draft);
+    expect(draft.achievements["dupla-do-recife"].unlockedAt).toBeNull();
   });
 });

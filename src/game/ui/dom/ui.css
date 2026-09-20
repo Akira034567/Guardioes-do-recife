@@ -570,8 +570,93 @@
    * rolagem sozinho. Aqui quem manda na posição é a tela, não o navegador (item 6).
    */
   overflow-anchor: none;
+}
+
+/*
+ * `hidden` TEM que ganhar do nosso `display`.
+ *
+ * O navegador dá `display: none` a `[hidden]`, mas qualquer regra nossa com `display: flex` (e são
+ * muitas) vence essa, porque a do navegador tem especificidade zero. O sintoma é sempre o mesmo e
+ * sempre confuso: um formulário que devia abrir só depois do clique já nasce aberto — foi assim que
+ * o "ENVIAR E-MAIL" da recuperação de senha apareceu antes de alguém pedir para recuperar nada.
+ *
+ * Uma regra só, aqui, em vez de um remendo por elemento (o Meu Recife tinha dois).
+ */
+#ui-layer [hidden] {
+  display: none !important;
+}
+
+/* ---- a barra de rolagem, uma só para o jogo inteiro -------------------------------------------
+ * Duas decisões, e a primeira vale para TODA a camada: barra horizontal não existe. Nenhuma tela
+ * daqui é larga de propósito — quando uma aparecia, era sempre sintoma (um filho crescendo no
+ * `:hover`, uma grade sem `minmax(0, …)`), e a barra escondia o sintoma em vez de mostrá-lo.
+ *
+ * A vertical fica fina, arredondada e da cor da água, com trilho só quando há o que rolar. Ela
+ * Sem `scrollbar-gutter`: reservar o espaço dela de antemão estreita a caixa de conteúdo, e a
+ * coluna do menu — que é justa por desenho — passava a estourar na horizontal por causa disso.
+ * Um pulinho lateral quando a lista deixa de rolar é mais barato que uma barra que não devia existir.
+ */
+#ui-layer *,
+#ui-layer {
   scrollbar-width: thin;
   scrollbar-color: rgba(117, 223, 244, 0.45) transparent;
+}
+
+#ui-layer *::-webkit-scrollbar {
+  width: calc(9px * var(--gr-scale));
+  /* Zero de altura = barra horizontal nenhuma, em qualquer navegador WebKit. */
+  height: 0;
+}
+
+#ui-layer *::-webkit-scrollbar-track {
+  background: rgba(2, 20, 34, 0.5);
+  border-radius: 999px;
+  margin: calc(4px * var(--gr-scale)) 0;
+}
+
+#ui-layer *::-webkit-scrollbar-thumb {
+  background: linear-gradient(180deg, rgba(117, 223, 244, 0.55), rgba(45, 157, 196, 0.55));
+  border-radius: 999px;
+  border: calc(2px * var(--gr-scale)) solid transparent;
+  background-clip: padding-box;
+}
+
+#ui-layer *::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(180deg, rgba(150, 236, 255, 0.8), rgba(70, 190, 230, 0.8));
+  background-clip: padding-box;
+}
+
+#ui-layer *::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+/* Todo contêiner que rola: vertical à vontade, horizontal nunca. */
+.gr-screen,
+.gr-panel,
+.gr-world__nav,
+.gr-album__grid,
+.gr-album__sheet,
+.gr-album__list,
+.gr-album__detail,
+.gr-album__main,
+.gr-album__body,
+.gr-prep__main,
+.gr-prep__side,
+.gr-pause__drawer {
+  overflow-x: clip;
+}
+
+/*
+ * Exceção única: a fileira de abas do álbum. Com seis abas em tela estreita ela PRECISA rolar de
+ * lado — e aí a barra seria mais larga que a própria aba. Ela rola no dedo, sem barra nenhuma.
+ */
+.gr-album__tabs {
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.gr-album__tabs::-webkit-scrollbar {
+  display: none;
 }
 
 .gr-world__side {
@@ -1084,6 +1169,131 @@
   pointer-events: none;
 }
 
+/* A placa da dificuldade: mesma madeira das outras, mas com a cor da trilha. Fica no canto de cima
+   porque o rodapé do mapa já tem duas placas e a região não pode perder o lugar dela. */
+/*
+ * No RODAPÉ do mapa, no meio: as abas de região ocupam a faixa de cima inteira, e a placa caía em
+ * cima delas. Embaixo, ela fica entre a placa da região atual (à esquerda) e a da próxima (à
+ * direita) — o lugar onde o olho já procura por placas.
+ */
+.gr-world__sign--difficulty {
+  left: 50%;
+  transform: translateX(-50%);
+  color: #06212f;
+  background: linear-gradient(180deg, var(--gr-accent, #5fe0b4), color-mix(in srgb, var(--gr-accent, #5fe0b4) 65%, #062033));
+  border-color: color-mix(in srgb, var(--gr-accent, #5fe0b4) 55%, #03131e);
+}
+
+/* ---- trilhas de dificuldade */
+
+.gr-world__tracks {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: calc(8px * var(--gr-scale));
+}
+
+.gr-world__track {
+  display: flex;
+  flex-direction: column;
+  gap: calc(3px * var(--gr-scale));
+  text-align: left;
+  font: inherit;
+  color: var(--gr-shell);
+  background: rgba(3, 30, 47, 0.8);
+  border: calc(1px * var(--gr-scale)) solid rgba(21, 129, 163, 0.4);
+  border-left: calc(4px * var(--gr-scale)) solid var(--gr-accent, #5fe0b4);
+  border-radius: calc(12px * var(--gr-scale));
+  padding: calc(8px * var(--gr-scale)) calc(11px * var(--gr-scale));
+  cursor: pointer;
+  min-width: 0;
+}
+
+/* A trilha aberta é a única acesa: é ela que manda no mapa inteiro. */
+.gr-world__track--on {
+  background: color-mix(in srgb, var(--gr-accent, #5fe0b4) 18%, rgba(3, 30, 47, 0.9));
+  border-color: var(--gr-accent, #5fe0b4);
+  box-shadow: 0 0 calc(14px * var(--gr-scale)) color-mix(in srgb, var(--gr-accent, #5fe0b4) 35%, transparent);
+}
+
+.gr-world__track--locked {
+  cursor: not-allowed;
+  opacity: 0.55;
+  border-left-color: rgba(21, 129, 163, 0.4);
+}
+
+.gr-world__track-head {
+  display: flex;
+  align-items: center;
+  gap: calc(7px * var(--gr-scale));
+}
+
+.gr-world__track-name {
+  font-weight: bold;
+  font-size: calc(13px * var(--gr-scale));
+  letter-spacing: calc(0.5px * var(--gr-scale));
+}
+
+.gr-world__track-score {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: calc(8px * var(--gr-scale));
+  font-size: calc(12px * var(--gr-scale));
+  font-weight: bold;
+}
+
+.gr-world__track-stars {
+  display: inline-flex;
+  align-items: center;
+  gap: calc(4px * var(--gr-scale));
+  color: var(--gr-pearl);
+}
+
+/* Os objetivos da trilha, dentro da ficha da fase: compactos, sem prêmio (isso é da preparação). */
+.gr-world__objectives {
+  display: flex;
+  flex-direction: column;
+  gap: calc(5px * var(--gr-scale));
+  margin-top: calc(4px * var(--gr-scale));
+}
+
+.gr-world__objectives .gr-world__detail-title {
+  display: flex;
+  align-items: baseline;
+  gap: calc(6px * var(--gr-scale));
+  color: var(--gr-accent, var(--gr-cyan));
+}
+
+.gr-objectives--compact .gr-objective {
+  padding: calc(5px * var(--gr-scale)) calc(9px * var(--gr-scale));
+  font-size: calc(12px * var(--gr-scale));
+}
+
+/* Etiqueta com a cor da dificuldade, ao lado do "Fase 3". */
+.gr-badge--accent {
+  color: var(--gr-accent, var(--gr-cyan));
+  border-color: color-mix(in srgb, var(--gr-accent, #5fe0b4) 60%, transparent);
+  background: color-mix(in srgb, var(--gr-accent, #5fe0b4) 15%, transparent);
+}
+
+.gr-world__detail-tags {
+  display: flex;
+  align-items: center;
+  gap: calc(6px * var(--gr-scale));
+  flex-wrap: wrap;
+}
+
+/* Em tela estreita as três trilhas viram uma coluna rolável na horizontal. */
+@container (max-width: 720px) {
+  .gr-world__tracks {
+    grid-template-columns: repeat(3, minmax(calc(120px * var(--gr-scale)), 1fr));
+  }
+
+  .gr-world__track .gr-hint {
+    display: none;
+  }
+}
+
 .gr-world__sign--here {
   left: calc(12px * var(--gr-scale));
   transform: rotate(-3deg);
@@ -1564,6 +1774,12 @@
   display: flex;
   gap: calc(8px * var(--gr-scale));
   flex-wrap: wrap;
+  /*
+   * NUNCA encolhe. A coluna do álbum é um flex vertical, e uma aba com muitas cartas (a Escola tem
+   * 25) fazia a grade pedir espaço e ESPREMER esta fileira até sobrar meia aba visível — o único
+   * controle que troca de assunto na tela virava uma faixa cortada.
+   */
+  flex: 0 0 auto;
   /* As abas também sobem 2px no hover. */
   padding-top: calc(3px * var(--gr-scale));
 }
@@ -1996,6 +2212,18 @@
 
 .gr-album__prose p {
   margin: 0;
+}
+
+/* A faixa dos Segredos: discreta, dourada e sempre no rodapé do cabeçalho. */
+.gr-album__secrets {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  gap: calc(6px * var(--gr-scale));
+  margin: 0;
+  font-size: calc(11px * var(--gr-scale));
+  color: #ffe9b0;
+  opacity: 0.85;
 }
 
 .gr-album__quote--inline {
@@ -2608,19 +2836,53 @@
 }
 
 /* Num canvas estreito o álbum vira uma coluna só: cartas em cima, ficha embaixo. */
-@container (max-width: 620px) {
+/*
+ * Álbum em tela estreita. O limite subiu de 620 para 760 px porque 620 nunca alcançava o alvo
+ * real: um iPhone deitado dá ~694 px de canvas, e ali o álbum continuava em duas colunas de ~330 px
+ * — grade e ficha espremidas lado a lado, com as abas da ficha pequenas demais para o dedo. Em uma
+ * coluna só, a grade fica em cima, a ficha embaixo, e as duas ganham a largura inteira.
+ */
+@container (max-width: 760px) {
+  /*
+   * UM scroller só, e ele é a coluna do miolo.
+   *
+   * Empilhadas, a grade e a ficha somam muito mais que a altura da tela. Com cada uma rolando por
+   * dentro (como no desktop, lado a lado), as duas estouravam a própria faixa e a ficha era pintada
+   * POR CIMA das cartas. Aqui elas voltam ao fluxo normal, com altura natural, e quem rola é a
+   * coluna inteira — que é o que o dedo espera de uma tela estreita.
+   */
   .gr-album__layout {
-    grid-template-columns: minmax(0, 1fr);
+    overflow: hidden;
+  }
+
+  .gr-album__main {
+    min-height: 0;
     overflow-y: auto;
   }
 
-  .gr-album__body {
+  .gr-album__body,
+  .gr-album--achievements .gr-album__body,
+  .gr-config__body {
     grid-template-columns: minmax(0, 1fr);
+    flex: 0 0 auto;
+    min-height: 0;
   }
 
+  /* Quem rola é a coluna do miolo; o corpo volta ao fluxo, como no álbum. */
+  .gr-config__body {
+    overflow: visible;
+  }
+
+  /*
+   * Cartas do TAMANHO certo, não da largura que sobrar.
+   *
+   * Três colunas fixas num espaço largo esticavam cada carta até ~390px de jogo — três retratos
+   * gigantes onde cabiam oito. `auto-fill` com um mínimo em unidades de jogo mantém a carta do
+   * tamanho que ela tem no desktop e usa a largura extra para mostrar MAIS Guardiões.
+   */
   .gr-album__grid,
   .gr-album__grid--wide {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-columns: repeat(auto-fill, minmax(calc(180px * var(--gr-scale)), 1fr));
     overflow: visible;
   }
 
@@ -2630,6 +2892,7 @@
 
   .gr-album__sheet {
     overflow: visible;
+    min-height: 0;
   }
 
   .gr-album__info {
@@ -3811,60 +4074,38 @@
 }
 
 /* ==========================================================================
-   Maestria do Recife — progressão permanente por Guardião (V3).
-   Reaproveita a moldura do álbum; o que é próprio daqui são os nós e o bloco
-   que separa a maestria do Peixinho Dourado.
+   Maestria do Recife — agora uma ABA do álbum, com árvore de verdade.
+   A grade mostra a foto de cada Guardião; a ficha desenha o tronco (nós 1 a 4),
+   o nó 5 e a bifurcação nas duas evoluções finais, com a arte de cada uma.
    ========================================================================== */
 
-.gr-album--mastery .gr-album__list {
+.gr-tree {
   display: flex;
   flex-direction: column;
-  gap: calc(6px * var(--gr-scale));
-  overflow-y: auto;
-  min-height: 0;
-}
-
-.gr-album--mastery .gr-album__item {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
+  align-items: stretch;
   gap: calc(8px * var(--gr-scale));
-  font: inherit;
-  font-size: calc(13px * var(--gr-scale));
-  color: var(--gr-shell);
-  background: rgba(3, 30, 47, 0.72);
-  border: calc(1px * var(--gr-scale)) solid rgba(21, 129, 163, 0.45);
-  border-radius: calc(10px * var(--gr-scale));
-  padding: calc(9px * var(--gr-scale)) calc(11px * var(--gr-scale));
-  cursor: pointer;
-  text-align: left;
 }
 
-.gr-album--mastery .gr-album__item--on {
-  border-color: var(--gr-cyan);
-  background: rgba(8, 56, 82, 0.9);
-}
-
-/* Guardião ainda bloqueado continua visível: o jogador precisa ver o que existe adiante. */
-.gr-album--mastery .gr-album__item--locked {
-  opacity: 0.55;
-}
-
-.gr-album--mastery .gr-album__item-meta {
-  font-size: calc(11px * var(--gr-scale));
-  opacity: 0.8;
-}
-
-.gr-album--mastery .gr-album__detail {
+/* O tronco: os nós empilhados, ligados por um fio contínuo à esquerda. */
+.gr-tree__trunk {
   display: flex;
   flex-direction: column;
   gap: calc(8px * var(--gr-scale));
-  overflow-y: auto;
-  min-height: 0;
-  padding-right: calc(4px * var(--gr-scale));
+  position: relative;
 }
 
-.gr-mastery__node {
+.gr-tree__trunk::before {
+  content: "";
+  position: absolute;
+  left: calc(26px * var(--gr-scale));
+  top: calc(14px * var(--gr-scale));
+  bottom: calc(-14px * var(--gr-scale));
+  width: calc(2px * var(--gr-scale));
+  background: linear-gradient(to bottom, rgba(95, 224, 180, 0.55), rgba(21, 129, 163, 0.3));
+}
+
+.gr-tree__node {
+  position: relative;
   display: grid;
   grid-template-columns: calc(30px * var(--gr-scale)) minmax(0, 1fr) auto;
   align-items: start;
@@ -3877,18 +4118,24 @@
   font-size: calc(12px * var(--gr-scale));
 }
 
-.gr-mastery__node--on {
+.gr-tree__node--on {
   border-color: rgba(95, 224, 180, 0.7);
   background: rgba(8, 56, 62, 0.82);
 }
 
+/* O próximo nó é o único que o jogador pode comprar agora: ele pulsa de leve. */
+.gr-tree__node--next {
+  border-color: rgba(117, 223, 244, 0.85);
+  box-shadow: 0 0 calc(12px * var(--gr-scale)) rgba(117, 223, 244, 0.28);
+}
+
 /* O nó 5 é outro tipo de coisa: borda própria para não parecer o quinto de uma fila. */
-.gr-mastery__node--capstone {
+.gr-tree__node--capstone {
   border-color: rgba(192, 139, 255, 0.6);
   background: rgba(34, 22, 62, 0.75);
 }
 
-.gr-mastery__node-level {
+.gr-tree__level {
   display: grid;
   place-items: center;
   width: calc(28px * var(--gr-scale));
@@ -3896,32 +4143,93 @@
   border-radius: 50%;
   background: rgba(21, 129, 163, 0.35);
   font-weight: bold;
+  /* Fica ACIMA do fio do tronco, senão a linha corta o número no meio. */
+  position: relative;
+  z-index: 1;
 }
 
-.gr-mastery__node-body {
+.gr-tree__node--on .gr-tree__level {
+  background: rgba(95, 224, 180, 0.32);
+}
+
+.gr-tree__body {
   display: flex;
   flex-direction: column;
   gap: calc(3px * var(--gr-scale));
   min-width: 0;
 }
 
-.gr-mastery__node-note {
+.gr-tree__note {
   color: #ffd76a;
   font-size: calc(11px * var(--gr-scale));
 }
 
-.gr-mastery__node-cost,
-.gr-mastery__node-tag {
+.gr-tree__cost,
+.gr-tree__tag {
+  display: inline-flex;
+  align-items: center;
+  gap: calc(4px * var(--gr-scale));
   white-space: nowrap;
   font-size: calc(11px * var(--gr-scale));
   font-weight: bold;
 }
 
-.gr-mastery__node-tag {
+.gr-tree__tag {
   color: #5fe0b4;
 }
 
-/* O bloco dourado fecha a tela dizendo o que a maestria NÃO é. */
+/* O "Y" que liga o nó 5 aos dois ramos: puro desenho, sem conteúdo. */
+.gr-tree__fork {
+  height: calc(18px * var(--gr-scale));
+  background:
+    linear-gradient(to right, transparent calc(50% - 1px), rgba(192, 139, 255, 0.55) calc(50% - 1px), rgba(192, 139, 255, 0.55) calc(50% + 1px), transparent calc(50% + 1px));
+  position: relative;
+}
+
+.gr-tree__fork::after {
+  content: "";
+  position: absolute;
+  left: 25%;
+  right: 25%;
+  bottom: 0;
+  height: calc(2px * var(--gr-scale));
+  background: rgba(192, 139, 255, 0.55);
+}
+
+.gr-tree__branches {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: calc(8px * var(--gr-scale));
+}
+
+.gr-tree__branch {
+  display: flex;
+  align-items: center;
+  gap: calc(9px * var(--gr-scale));
+  background: rgba(3, 30, 47, 0.7);
+  border: calc(1px * var(--gr-scale)) solid rgba(192, 139, 255, 0.4);
+  border-radius: calc(12px * var(--gr-scale));
+  padding: calc(9px * var(--gr-scale));
+  min-width: 0;
+}
+
+.gr-tree__branch-art {
+  width: calc(56px * var(--gr-scale));
+  height: calc(56px * var(--gr-scale));
+  object-fit: contain;
+  flex: none;
+}
+
+.gr-tree__branch-copy {
+  display: flex;
+  flex-direction: column;
+  gap: calc(2px * var(--gr-scale));
+  min-width: 0;
+  font-size: calc(12px * var(--gr-scale));
+  color: var(--gr-shell);
+}
+
+/* O bloco dourado fecha a ficha dizendo o que a maestria NÃO é. */
 .gr-mastery__golden {
   display: flex;
   flex-direction: column;
@@ -3933,142 +4241,34 @@
   font-size: calc(12px * var(--gr-scale));
 }
 
-/* -------------------------------------------------------------- Minha Conta (formulários) */
-
-/*
- * Os campos da conta são os primeiros formulários de verdade do jogo. Eles usam a mesma moldura dos
- * cartões de Configurações (`gr-config__card`) e só acrescentam o que faltava: rótulo em cima do
- * campo, caixa de texto legível de longe e uma linha de recado logo abaixo da ação.
- */
-.gr-field {
-  display: flex;
-  flex-direction: column;
-  gap: calc(3px * var(--gr-scale));
-  padding: calc(5px * var(--gr-scale)) 0;
-  font-size: calc(12px * var(--gr-scale));
+/* Etiquetas próprias das abas novas: a Escola marca leitura, a Maestria marca conclusão. */
+.gr-album__chip--read {
+  color: #cfe6ff;
+  background: rgba(16, 58, 92, 0.65);
+  border-color: rgba(117, 223, 244, 0.45);
 }
 
-.gr-field--check {
-  flex-direction: row;
-  align-items: center;
-  gap: calc(8px * var(--gr-scale));
-  cursor: pointer;
+.gr-album__chip--new {
+  color: #fff3cf;
+  background: rgba(92, 70, 16, 0.6);
+  border-color: rgba(255, 216, 106, 0.6);
 }
 
-.gr-field__label {
-  color: #bfe6f6;
-  letter-spacing: calc(0.4px * var(--gr-scale));
+.gr-album__chip--done {
+  color: #e8d5ff;
+  background: rgba(52, 30, 92, 0.7);
+  border-color: rgba(192, 139, 255, 0.6);
 }
 
-.gr-field__input,
-.gr-field__code {
-  width: 100%;
-  box-sizing: border-box;
-  background: rgba(3, 29, 45, 0.9);
-  border: calc(1px * var(--gr-scale)) solid rgba(21, 129, 163, 0.65);
-  border-radius: calc(9px * var(--gr-scale));
-  padding: calc(7px * var(--gr-scale)) calc(10px * var(--gr-scale));
-  color: #f2fbff;
-  font-family: inherit;
-  font-size: calc(13px * var(--gr-scale));
-}
+/* Em tela estreita os dois ramos empilham, senão a arte fica do tamanho de um selo. */
+@container (max-width: 620px) {
+  .gr-tree__branches {
+    grid-template-columns: minmax(0, 1fr);
+  }
 
-.gr-field__code {
-  /* O código é uma parede de caracteres: monoespaçado e com quebra dentro da palavra. */
-  font-family: "Consolas", "Menlo", monospace;
-  font-size: calc(10px * var(--gr-scale));
-  line-height: 1.4;
-  resize: vertical;
-  word-break: break-all;
-}
-
-.gr-field__input:focus-visible,
-.gr-field__code:focus-visible {
-  outline: calc(2px * var(--gr-scale)) solid var(--gr-cyan);
-  outline-offset: calc(1px * var(--gr-scale));
-}
-
-.gr-field__check {
-  width: calc(16px * var(--gr-scale));
-  height: calc(16px * var(--gr-scale));
-  accent-color: #2aa6c9;
-  flex: none;
-}
-
-.gr-field__group {
-  display: flex;
-  flex-direction: column;
-  gap: calc(2px * var(--gr-scale));
-}
-
-.gr-field__block {
-  display: flex;
-  flex-direction: column;
-  gap: calc(2px * var(--gr-scale));
-}
-
-.gr-field__action {
-  align-self: flex-start;
-  margin-top: calc(4px * var(--gr-scale));
-}
-
-.gr-field__name {
-  text-align: left;
-}
-
-/* Recado do formulário: verde quando deu certo, vermelho quando faltou alguma coisa. */
-.gr-field__status {
-  min-height: calc(13px * var(--gr-scale));
-  font-size: calc(11px * var(--gr-scale));
-  line-height: 1.35;
-  color: #bfe6f6;
-}
-
-.gr-field__status[data-tone="ok"] {
-  color: var(--gr-success);
-}
-
-.gr-field__status[data-tone="warn"] {
-  color: var(--gr-pearl);
-}
-
-.gr-field__status[data-tone="error"] {
-  color: var(--gr-danger);
-}
-
-/* As contas já criadas neste aparelho: um toque preenche o nome no formulário de entrar. */
-.gr-field__chips {
-  display: flex;
-  flex-wrap: wrap;
-  gap: calc(5px * var(--gr-scale));
-  padding: calc(4px * var(--gr-scale)) 0;
-}
-
-.gr-field__chip {
-  background: rgba(21, 129, 163, 0.25);
-  border: calc(1px * var(--gr-scale)) solid rgba(21, 129, 163, 0.6);
-  border-radius: calc(999px * var(--gr-scale));
-  padding: calc(4px * var(--gr-scale)) calc(11px * var(--gr-scale));
-  color: #e9fbff;
-  font-family: inherit;
-  font-size: calc(11px * var(--gr-scale));
-  cursor: pointer;
-}
-
-.gr-field__chip:hover,
-.gr-field__chip:focus-visible {
-  background: rgba(117, 223, 244, 0.3);
-}
-
-.gr-field__chip--on {
-  border-color: var(--gr-pearl);
-  color: var(--gr-pearl);
-}
-
-#ui-layer[data-contrast="high"] .gr-field__input,
-#ui-layer[data-contrast="high"] .gr-field__code {
-  background: #01161f;
-  border-color: var(--gr-cyan);
+  .gr-tree__fork {
+    display: none;
+  }
 }
 
 /* ==========================================================================
@@ -4205,7 +4405,7 @@
   }
 
   .gr-album__item,
-  .gr-mastery__node {
+  .gr-tree__node {
     min-height: calc(40px * var(--gr-scale));
   }
 
@@ -4250,8 +4450,14 @@
 
   /* A marca e a frase do rodapé são as primeiras coisas a sair: não são navegação. */
   .gr-world__brand,
-  .gr-world__side-foot {
+  .gr-world__side-foot,
+  .gr-album__foot {
     display: none;
+  }
+
+  /* Sem isto a coluna do miolo não encolhe, e o que sobra vaza por cima do que está embaixo. */
+  .gr-album__main {
+    min-height: 0;
   }
 
   .gr-world__nav-item span:not(.gr-icon) {
@@ -4261,6 +4467,96 @@
   .gr-panel {
     max-height: 100%;
     overflow-y: auto;
+  }
+}
+
+/* 4. Tela ESTREITA (celular deitado, janela fina). O problema aqui não é altura: é que cada botão
+      foi desenhado para uma coluna de 186 px que a tela não tem mais. Em vez de espremer o texto,
+      o menu vira uma coluna de pictogramas e as abas perdem o rótulo — o alvo continua com 44 px,
+      que é o que o dedo precisa, e o miolo recupera a largura que era do rótulo. */
+@container (max-width: 760px) {
+  .gr-album__layout,
+  .gr-world__layout {
+    grid-template-columns: calc(52px * var(--gr-scale)) minmax(0, 1fr);
+    gap: calc(8px * var(--gr-scale));
+    padding: calc(8px * var(--gr-scale));
+  }
+
+  /*
+   * A coluna continua COLUNA.
+   *
+   * A regra de tela baixa (logo acima) vira a barra lateral numa fileira horizontal, porque lá ela
+   * some do lado e vai para o topo. As duas consultas disparam juntas num celular deitado — que é
+   * baixo E estreito — e aí os itens da fileira se empilhavam uns por cima dos outros dentro de uma
+   * coluna de 30px. Aqui o eixo é reafirmado.
+   */
+  .gr-world__side {
+    /*
+     * `display` também precisa voltar: a regra de canvas MUITO estreito (620px, mais acima)
+     * transforma esta coluna numa GRADE de três colunas e apaga a caixa do `nav`
+     * (`display: contents`). Num celular deitado as duas consultas disparam juntas, e mandar só o
+     * eixo do flex não desfazia a grade — os oito itens se espremiam em 28px, três por linha, um
+     * por cima do outro.
+     */
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    flex-wrap: nowrap;
+    gap: calc(6px * var(--gr-scale));
+  }
+
+  .gr-world__nav {
+    display: flex;
+    flex-direction: column;
+    flex-wrap: nowrap;
+  }
+
+  /* Rótulo fora, pictograma no meio: o botão passa a ter a largura do alvo, e não a do texto. */
+  .gr-world__nav-item {
+    justify-content: center;
+    padding: calc(9px * var(--gr-scale)) calc(4px * var(--gr-scale));
+    gap: 0;
+  }
+
+  .gr-world__nav-item span:not(.gr-icon),
+  .gr-world__back span:not(.gr-icon),
+  .gr-world__brand,
+  .gr-world__side-foot {
+    display: none;
+  }
+
+  .gr-world__back {
+    justify-content: center;
+    padding: calc(9px * var(--gr-scale)) calc(4px * var(--gr-scale));
+  }
+
+  /* Abas do álbum: seis delas não cabem escritas. Ficam os pictogramas, com o nome no `title`. */
+  .gr-album__tab span:not(.gr-icon) {
+    display: none;
+  }
+
+  .gr-album__tab {
+    padding: calc(8px * var(--gr-scale)) calc(10px * var(--gr-scale));
+  }
+
+  /* Botão de texto: menos respiro lateral e quebra de linha em vez de estouro. */
+  .gr-button {
+    padding: calc(10px * var(--gr-scale)) calc(10px * var(--gr-scale));
+    font-size: calc(12px * var(--gr-scale));
+    white-space: normal;
+  }
+
+  /*
+   * A frase do topo e a do rodapé são as primeiras a sair: não são navegação nem estado.
+   *
+   * O rodapé não é só enfeite ocupando espaço — em tela baixa ele ESCORREGAVA por cima das abas da
+   * ficha e comia o clique delas (era o que travava a sonda do álbum no celular deitado). Com ele
+   * fora, a ficha recebe o toque onde a ficha está desenhada.
+   */
+  .gr-album__quote,
+  .gr-album__foot,
+  .gr-world__stories-line {
+    display: none;
   }
 }
 
@@ -4277,136 +4573,10 @@
 }
 
 /* ==========================================================================
-   Escola do Recife — o manual (Guardiões, efeitos, correnteza e ameaças).
-   Reaproveita a moldura do álbum. O que é próprio daqui são a lista agrupada
-   por curso, o selo de aula nova e a caixa da REGRA, que é a razão de cada
-   aula existir e por isso não pode virar letra miúda.
+   Escola do Recife — o manual, hoje uma ABA do álbum.
+   A lista de texto virou a mesma grade ilustrada das outras abas; o que
+   sobrou de próprio daqui é a caixa da REGRA, que fecha cada aula.
    ========================================================================== */
-
-/* A lista tem 25 itens em quatro grupos: 186px espremia o nome das aulas. */
-.gr-album--school .gr-album__layout {
-  grid-template-columns: calc(216px * var(--gr-scale)) minmax(0, 1fr);
-}
-
-.gr-album--school .gr-album__list {
-  display: flex;
-  flex-direction: column;
-  gap: calc(5px * var(--gr-scale));
-  overflow-y: auto;
-  min-height: 0;
-}
-
-.gr-school__progress {
-  display: flex;
-  flex-direction: column;
-  gap: calc(2px * var(--gr-scale));
-  padding: calc(9px * var(--gr-scale)) calc(11px * var(--gr-scale));
-  background: rgba(3, 30, 47, 0.72);
-  border: calc(1px * var(--gr-scale)) solid rgba(21, 129, 163, 0.45);
-  border-radius: calc(10px * var(--gr-scale));
-  color: #f2fbff;
-  font-size: calc(13px * var(--gr-scale));
-}
-
-/* Cabeçalho de curso: não é clicável, então não pode parecer um item da lista. */
-.gr-school__course {
-  display: flex;
-  align-items: center;
-  gap: calc(8px * var(--gr-scale));
-  margin-top: calc(8px * var(--gr-scale));
-  padding: calc(6px * var(--gr-scale)) calc(4px * var(--gr-scale));
-  color: var(--gr-cyan);
-  font-size: calc(13px * var(--gr-scale));
-  border-bottom: calc(1px * var(--gr-scale)) solid rgba(21, 129, 163, 0.32);
-}
-
-.gr-school__course strong {
-  display: block;
-  color: #f2fbff;
-  letter-spacing: calc(0.4px * var(--gr-scale));
-}
-
-.gr-album--school .gr-album__item {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: calc(8px * var(--gr-scale));
-  font: inherit;
-  font-size: calc(13px * var(--gr-scale));
-  color: var(--gr-shell);
-  background: rgba(3, 30, 47, 0.72);
-  border: calc(1px * var(--gr-scale)) solid rgba(21, 129, 163, 0.45);
-  border-radius: calc(10px * var(--gr-scale));
-  padding: calc(8px * var(--gr-scale)) calc(11px * var(--gr-scale));
-  cursor: pointer;
-  text-align: left;
-}
-
-.gr-album--school .gr-album__item:hover,
-.gr-album--school .gr-album__item:focus-visible {
-  border-color: rgba(95, 224, 255, 0.7);
-}
-
-.gr-album--school .gr-album__item--on {
-  border-color: var(--gr-cyan);
-  background: rgba(8, 56, 82, 0.9);
-  color: #f2fbff;
-}
-
-.gr-school__new {
-  flex: none;
-  font-size: calc(9px * var(--gr-scale));
-  letter-spacing: calc(0.8px * var(--gr-scale));
-  color: #04202f;
-  background: var(--gr-gold, #ffd86a);
-  border-radius: calc(999px * var(--gr-scale));
-  padding: calc(2px * var(--gr-scale)) calc(6px * var(--gr-scale));
-}
-
-.gr-album--school .gr-album__detail {
-  display: flex;
-  flex-direction: column;
-  gap: calc(12px * var(--gr-scale));
-  overflow-y: auto;
-  min-height: 0;
-  padding-right: calc(4px * var(--gr-scale));
-}
-
-.gr-school__head {
-  display: flex;
-  align-items: center;
-  gap: calc(14px * var(--gr-scale));
-}
-
-.gr-school__art {
-  flex: none;
-  width: calc(116px * var(--gr-scale));
-  max-height: calc(92px * var(--gr-scale));
-  object-fit: contain;
-  filter: drop-shadow(0 calc(3px * var(--gr-scale)) calc(10px * var(--gr-scale)) rgba(0, 18, 30, 0.8));
-}
-
-/* O ícone de status é minúsculo no jogo (21px); aqui ele é o assunto da aula. */
-.gr-school__art--icon {
-  width: calc(88px * var(--gr-scale));
-  max-height: calc(88px * var(--gr-scale));
-}
-
-.gr-school__art--glyph {
-  flex: none;
-  color: var(--gr-cyan);
-}
-
-.gr-school__points {
-  margin: 0;
-  padding-left: calc(18px * var(--gr-scale));
-  display: flex;
-  flex-direction: column;
-  gap: calc(7px * var(--gr-scale));
-  color: var(--gr-shell);
-  font-size: calc(13px * var(--gr-scale));
-  line-height: 1.45;
-}
 
 .gr-school__rule {
   display: flex;
@@ -4427,16 +4597,184 @@
   color: var(--gr-gold, #ffd86a);
 }
 
-/* Tela estreita: a Escola vira uma coluna só, como o resto do álbum. */
-@container (max-width: 620px) {
-  .gr-album--school .gr-album__layout {
-    grid-template-columns: minmax(0, 1fr);
-  }
+/* ==========================================================================
+   Campos de formulário — Minha Conta.
+   Esta camada não tinha nenhum: a tela de conta subiu com `gr-field*` no HTML
+   e nada no CSS, então os rótulos saíam no corpo padrão do navegador (enormes
+   ao lado do resto, que é escalado por `--gr-scale`) e os campos apareciam
+   crus, cada um com a largura do seu `size` implícito.
+   ========================================================================== */
 
-  .gr-school__head {
-    flex-direction: column;
-    align-items: flex-start;
-  }
+/* Rótulo EM CIMA do campo, não ao lado: ao lado, cada linha começava num lugar
+   diferente e o formulário virava uma escada. */
+.gr-field {
+  display: flex;
+  flex-direction: column;
+  gap: calc(4px * var(--gr-scale));
+  min-width: 0;
+}
+
+.gr-field__label {
+  font-size: calc(12px * var(--gr-scale));
+  font-weight: bold;
+  letter-spacing: calc(0.3px * var(--gr-scale));
+  color: var(--gr-shell);
+}
+
+.gr-field__input {
+  width: 100%;
+  min-width: 0;
+  font: inherit;
+  font-size: calc(13px * var(--gr-scale));
+  color: #eafaff;
+  background: rgba(2, 20, 34, 0.78);
+  border: calc(1px * var(--gr-scale)) solid rgba(21, 129, 163, 0.55);
+  border-radius: calc(9px * var(--gr-scale));
+  padding: calc(8px * var(--gr-scale)) calc(10px * var(--gr-scale));
+  /* O alvo mínimo do dedo vale aqui como vale nos botões. */
+  min-height: calc(36px * var(--gr-scale));
+}
+
+.gr-field__input:focus-visible {
+  outline: none;
+  border-color: var(--gr-cyan);
+  box-shadow: 0 0 0 calc(2px * var(--gr-scale)) rgba(117, 223, 244, 0.25);
+}
+
+.gr-field__input::placeholder {
+  color: rgba(182, 227, 255, 0.45);
+}
+
+/* A caixinha de "trazer o progresso": marcador à esquerda, texto à direita. */
+.gr-field--check {
+  flex-direction: row;
+  align-items: center;
+  gap: calc(8px * var(--gr-scale));
+  cursor: pointer;
+}
+
+.gr-field__check {
+  width: calc(16px * var(--gr-scale));
+  height: calc(16px * var(--gr-scale));
+  accent-color: var(--gr-cyan);
+  flex: none;
+  cursor: pointer;
+}
+
+/* Bloco que abre e fecha (trocar senha, recuperar, apagar conta). */
+.gr-field__group {
+  display: flex;
+  flex-direction: column;
+  gap: calc(8px * var(--gr-scale));
+  padding: calc(9px * var(--gr-scale)) calc(10px * var(--gr-scale));
+  background: rgba(2, 20, 34, 0.45);
+  border: calc(1px * var(--gr-scale)) dashed rgba(21, 129, 163, 0.45);
+  border-radius: calc(10px * var(--gr-scale));
+}
+
+/* O botão de ação ocupa a linha inteira: ele fecha o bloco acima dele. */
+.gr-field__action {
+  justify-content: center;
+  width: 100%;
+}
+
+/*
+ * ...menos quando ele é o CONTROLE de uma linha ("Senha · TROCAR SENHA"). Ali o botão divide a
+ * linha com um rótulo, e esticá-lo espremia o rótulo até quebrar letra por letra.
+ */
+.gr-config__row .gr-field__action {
+  width: auto;
+}
+
+/* A resposta do servidor. Sem `tone`, não ocupa espaço nenhum. */
+.gr-field__status {
+  margin: 0;
+  font-size: calc(12px * var(--gr-scale));
+  line-height: 1.35;
+}
+
+.gr-field__status:empty {
+  display: none;
+}
+
+.gr-field__status[data-tone="ok"] {
+  color: #9ff5cd;
+}
+
+.gr-field__status[data-tone="error"] {
+  color: #ff9aa5;
+}
+
+.gr-field__status[data-tone="warn"] {
+  color: #ffd76a;
+}
+
+/* As contas já existentes neste aparelho, para entrar com um toque. */
+.gr-field__chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: calc(6px * var(--gr-scale));
+}
+
+.gr-field__chip {
+  font: inherit;
+  font-size: calc(12px * var(--gr-scale));
+  font-weight: bold;
+  color: var(--gr-shell);
+  background: rgba(3, 30, 47, 0.78);
+  border: calc(1px * var(--gr-scale)) solid rgba(21, 129, 163, 0.5);
+  border-radius: 999px;
+  padding: calc(5px * var(--gr-scale)) calc(11px * var(--gr-scale));
+  cursor: pointer;
+}
+
+.gr-field__chip--on,
+.gr-field__chip:hover {
+  border-color: var(--gr-cyan);
+  background: rgba(13, 74, 100, 0.8);
+}
+
+/* O código do Recife: texto longo, monoespaçado, que se quebra em qualquer ponto. */
+.gr-field__code {
+  width: 100%;
+  min-width: 0;
+  resize: vertical;
+  font-family: "Consolas", "Menlo", monospace;
+  font-size: calc(11px * var(--gr-scale));
+  line-height: 1.4;
+  color: #cfeefb;
+  background: rgba(2, 20, 34, 0.8);
+  border: calc(1px * var(--gr-scale)) solid rgba(21, 129, 163, 0.5);
+  border-radius: calc(9px * var(--gr-scale));
+  padding: calc(8px * var(--gr-scale));
+  word-break: break-all;
+}
+
+.gr-field__name {
+  font-weight: bold;
+}
+
+/* ==========================================================================
+   Confirmação — uma pergunta de sim ou não por cima do jogo.
+   Estreita de propósito: ela tem uma frase e dois botões, e o painel largo do
+   resto das telas faria um "tem certeza?" de 860 px.
+   ========================================================================== */
+
+.gr-confirm__panel {
+  width: min(100%, calc(420px * var(--gr-scale)));
+  align-items: center;
+  text-align: center;
+  gap: calc(10px * var(--gr-scale));
+}
+
+.gr-confirm__panel .gr-actions {
+  justify-content: center;
+}
+
+/* O sim nasce desligado por meio segundo: a diferença tem que ser VISÍVEL, senão o jogador acha
+   que o botão quebrou. */
+.gr-confirm[data-armed="false"] .gr-button--danger {
+  filter: grayscale(0.6);
 }
 
 /* ==========================================================================
@@ -4487,6 +4825,43 @@
 #ui-layer[data-contrast="high"] .gr-pause__drawer {
   background: linear-gradient(180deg, rgba(10, 60, 83, 0.98), rgba(3, 29, 45, 0.99));
   backdrop-filter: none;
+}
+
+/* A alça do arrasto: o único ponto por onde a gaveta anda de lado. */
+.gr-pause__grip {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: calc(3px * var(--gr-scale));
+  padding: calc(2px * var(--gr-scale)) 0 calc(4px * var(--gr-scale));
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+}
+
+.gr-pause__grip-bar {
+  width: calc(46px * var(--gr-scale));
+  height: calc(4px * var(--gr-scale));
+  border-radius: 999px;
+  background: rgba(117, 223, 244, 0.45);
+}
+
+.gr-pause__grip .gr-hint {
+  font-size: calc(9px * var(--gr-scale));
+  letter-spacing: calc(0.6px * var(--gr-scale));
+  text-transform: uppercase;
+  opacity: 0.6;
+}
+
+.gr-pause__drawer--dragging {
+  cursor: grabbing;
+  /* Sem transição durante o gesto: a gaveta tem que colar no dedo. */
+  transition: none;
+  box-shadow: 0 calc(18px * var(--gr-scale)) calc(48px * var(--gr-scale)) rgba(0, 10, 18, 0.7);
+}
+
+.gr-pause__drawer--dragging .gr-pause__grip {
+  cursor: grabbing;
 }
 
 .gr-pause__title {

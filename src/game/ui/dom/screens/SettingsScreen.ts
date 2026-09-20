@@ -206,9 +206,10 @@ function playSection(settings: PlayerSettings, apply: (patch: Partial<PlayerSett
     choice(ICONS.waves, "Tremor de tela", "settings-shake", settings.screenShake, (value) => apply({ screenShake: value })),
     choice(ICONS.target, "Números de dano", "settings-damage", settings.damageNumbers, (value) => apply({ damageNumbers: value })),
     choice(ICONS.book, "Aulas em campo", "settings-moments", settings.tutorialMoments, (value) => apply({ tutorialMoments: value })),
+    choice(ICONS.compass, "Tela cheia no celular", "settings-immersive", settings.immersiveMobile, (value) => apply({ immersiveMobile: value })),
     h("p", {
       class: "gr-hint gr-config__note",
-      text: "As aulas em campo aparecem uma vez na vida, quando a coisa acontece pela primeira vez — o primeiro veneno, a primeira correnteza, o primeiro chefe. Desligadas, a Escola do Recife continua inteira no menu.",
+      text: "As aulas em campo aparecem uma vez na vida, quando a coisa acontece pela primeira vez — o primeiro veneno, a primeira correnteza, o primeiro chefe. Desligadas, a Escola do Recife continua inteira no Álbum. A tela cheia no celular entra no primeiro toque e serve para tirar a barra do navegador de cima do jogo.",
     }),
   );
 }
@@ -264,7 +265,19 @@ function dataSection(apply: (patch: Partial<PlayerSettings>) => void, redraw: ()
           class: "gr-config__action",
           testId: "settings-restore",
           type: "button",
-          onClick: () => apply({ masterVolume: 1, musicVolume: 0.8, sfxVolume: 1, muted: false, reducedEffects: false, screenShake: true, damageNumbers: true, highContrast: false, uiScale: "normal" }),
+          onClick: () =>
+            apply({
+              masterVolume: 1,
+              musicVolume: 0.8,
+              sfxVolume: 1,
+              muted: false,
+              reducedEffects: false,
+              screenShake: true,
+              damageNumbers: true,
+              highContrast: false,
+              immersiveMobile: true,
+              uiScale: "normal",
+            }),
         },
         h("span", { class: "gr-icon", html: ICONS.timer }),
         h("span", { text: "RESTAURAR PADRÃO" }),

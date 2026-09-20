@@ -22,6 +22,9 @@ import { getProgression } from "../systems/progression";
 import { getSettings } from "../systems/settings";
 import { getScreenHost } from "../ui/dom/host";
 import { defeatScreen, pendingEncounterFor, unlockRevealScreen, victoryScreen } from "../ui/dom/screens/ResultScreens";
+import { objectivesFor } from "../core/progression/levelObjectives";
+import { confirmScreen, type ConfirmScreen } from "../ui/dom/screens/ConfirmScreen";
+import { ICONS } from "../ui/dom/icons";
 import { pauseScreen } from "../ui/dom/screens/PauseScreen";
 import { storyScreen } from "../ui/dom/screens/StoryScreen";
 import { pendingStory } from "../systems/story";
@@ -67,6 +70,21 @@ import type {
 } from "../types";
 
 const preventContextMenu = (event: Event): void => event.preventDefault();
+
+/**
+ * Janela em que um segundo ESC é tratado como eco do primeiro, e não como um toque novo.
+ * Um terço de segundo: mais que qualquer repetição de evento, menos que qualquer gesto humano.
+ */
+const ESCAPE_ECHO_MS = 320;
+
+/**
+ * O jogador está DIGITANDO? (a tela de conta tem campos de texto). Atalho de uma letra só pode
+ * disparar quando ninguém está escrevendo, senão digitar "recife" reiniciaria a fase.
+ */
+function isTypingTarget(target: EventTarget | null): boolean {
+  const element = target as HTMLElement | null;
+  return Boolean(element && (element.tagName === "INPUT" || element.tagName === "TEXTAREA" || element.isContentEditable));
+}
 
 /** Verde da faixa de margem e o único alfa que ela usa. Ver `GameScene.marginBand()`. 🔶 placeholders. */
 /**
@@ -137,6 +155,10 @@ export class GameScene extends Phaser.Scene {
   private crownView: GoldenCrownView | null = null;
   /** Arraste em curso: o jogador apertou uma carta e ainda não soltou. Ver `handleWorldPointerUp`. */
   private dragPlacing = false;
+  /** A pergunta do reinício, enquanto estiver na tela. `null` = não há nada a confirmar. */
+  private restartConfirm: ConfirmScreen | null = null;
+  /** Quando a última tecla ESC teve efeito; ver `handleEscape`. */
+  private escapeHandledAt = 0;
   private unlockedNextLevelId: string | null = null;
   private gameOverShown = false;
   private debugAllowed = false;
@@ -615,8 +637,10 @@ export class GameScene extends Phaser.Scene {
     EventBus.on(Events.setSpeed, this.setSpeed, this);
     EventBus.on(Events.toggleMute, this.toggleMute, this);
     EventBus.on(Events.restart, this.restartGame, this);
+    EventBus.on(Events.requestRestart, this.requestRestart, this);
     EventBus.on(Events.skipCountdown, this.startNextWave, this);
     EventBus.on(Events.startNextWave, this.startNextWave, this);
+    EventBus.on(Events.callWaveOrSpeed, this.callWaveOrSpeed, this);
     EventBus.on(Events.skipTutorial, this.skipTutorial, this);
     EventBus.on(Events.toggleDebug, this.toggleDebug, this);
     EventBus.on(Events.toggleDebugFlag, this.toggleDebugFlag, this);
@@ -631,6 +655,9 @@ export class GameScene extends Phaser.Scene {
     // 1 a 5 escolhem a carta daquela vaga do esquadrão — a mesma ação do clique na carta, incluindo
     // apertar de novo para largar. Só no teclado: o celular continua no toque.
     this.input.keyboard?.on("keydown", this.handleSlotKey, this);
+    // R pede para reiniciar; Enter responde "sim" à pergunta que o R abriu.
+    this.input.keyboard?.on("keydown-R", this.handleRestartKey, this);
+    this.input.keyboard?.on("keydown-ENTER", this.handleConfirmKey, this);
     // O menu do navegador no botão direito atrapalha o cancelamento por clique.
     this.game.canvas.addEventListener("contextmenu", preventContextMenu);
 
@@ -646,8 +673,10 @@ export class GameScene extends Phaser.Scene {
       EventBus.off(Events.setSpeed, this.setSpeed, this);
       EventBus.off(Events.toggleMute, this.toggleMute, this);
       EventBus.off(Events.restart, this.restartGame, this);
+      EventBus.off(Events.requestRestart, this.requestRestart, this);
       EventBus.off(Events.skipCountdown, this.startNextWave, this);
       EventBus.off(Events.startNextWave, this.startNextWave, this);
+      EventBus.off(Events.callWaveOrSpeed, this.callWaveOrSpeed, this);
       EventBus.off(Events.skipTutorial, this.skipTutorial, this);
       EventBus.off(Events.toggleDebug, this.toggleDebug, this);
       EventBus.off(Events.toggleDebugFlag, this.toggleDebugFlag, this);
@@ -661,6 +690,8 @@ export class GameScene extends Phaser.Scene {
       this.input.off("pointerup", this.handleWorldPointerUp, this);
       this.input.keyboard?.off("keydown-ESC", this.handleEscape, this);
       this.input.keyboard?.off("keydown", this.handleSlotKey, this);
+      this.input.keyboard?.off("keydown-R", this.handleRestartKey, this);
+      this.input.keyboard?.off("keydown-ENTER", this.handleConfirmKey, this);
     });
     this.disposables.add("listeners do canvas", () => {
       this.game.canvas.removeEventListener("contextmenu", preventContextMenu);
@@ -681,8 +712,7 @@ export class GameScene extends Phaser.Scene {
    */
   private handleSlotKey(event: KeyboardEvent): void {
     if (this.match.status !== "running") return;
-    const target = event.target as HTMLElement | null;
-    if (target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable)) return;
+    if (isTypingTarget(event.target)) return;
     if (event.altKey || event.ctrlKey || event.metaKey) return;
     const slot = Number.parseInt(event.key, 10);
     if (!Number.isInteger(slot) || slot < 1 || slot > this.loadout.length) return;
@@ -932,12 +962,93 @@ export class GameScene extends Phaser.Scene {
     return this.platforms.find((platform) => Math.abs(platform.definition.x - x) <= 47 && Math.abs(platform.definition.y - y) <= 47) ?? null;
   }
 
+  /**
+   * ESC: fecha a pergunta, larga a seleção ou abre a pausa — nessa ordem.
+   *
+   * A guarda do meio existe por um motivo observado, não teórico. O Phaser só processa a fila de
+   * teclado quando o input do jogo está ligado, e uma tela modal o desliga; um ESC apertado com a
+   * confirmação aberta podia, portanto, chegar DUAS vezes depois de ela fechar — o primeiro
+   * cancelava, o segundo caía aqui embaixo e abria a gaveta de pausa. Para quem estava jogando, o
+   * efeito era "apertei Esc para desistir e o jogo pausou sozinho".
+   *
+   * A janela é curta de propósito: dois ESC de VERDADE, separados por mais de um terço de segundo,
+   * continuam fazendo as duas coisas.
+   */
   private handleEscape(): void {
+    // A guarda vem ANTES de tudo, inclusive do cancelar. Um eco que chegasse depois de a pergunta
+    // ser reaberta fecharia a pergunta NOVA — que é o mesmo defeito, só que mais difícil de ver.
+    if (Date.now() - this.escapeHandledAt < ESCAPE_ECHO_MS) return;
+    this.escapeHandledAt = Date.now();
+    if (this.restartConfirm) {
+      this.restartConfirm.cancel();
+      return;
+    }
     if (this.selectedGuardianId || this.selectedPlacedGuardianId) {
       this.cancelPlacement();
       return;
     }
     this.togglePause();
+  }
+
+  /**
+   * R: pede para reiniciar; com a pergunta já na tela, R de novo confirma.
+   *
+   * A armadilha aqui é o toque duplo — apertar R duas vezes rápido é o gesto natural de quem está
+   * com pressa, e sem proteção ele jogaria a partida fora sem que a pergunta chegasse a ser lida.
+   * Quem decide se o segundo R vale é o próprio `ConfirmScreen`: ele guarda a carência e a aplica
+   * igual para a tecla e para o botão.
+   */
+  private handleRestartKey(event: KeyboardEvent): void {
+    if (isTypingTarget(event.target)) return;
+    if (event.altKey || event.ctrlKey || event.metaKey) return;
+    event.preventDefault();
+    if (this.restartConfirm) {
+      if (this.restartConfirm.armed()) this.restartConfirm.confirm();
+      return;
+    }
+    this.requestRestart();
+  }
+
+  /** Enter só faz sentido com uma pergunta aberta: ele responde "sim". */
+  private handleConfirmKey(event: KeyboardEvent): void {
+    if (!this.restartConfirm || isTypingTarget(event.target)) return;
+    event.preventDefault();
+    if (this.restartConfirm.armed()) this.restartConfirm.confirm();
+  }
+
+  /**
+   * Abre a pergunta do reinício, com a partida congelada por trás.
+   *
+   * Congelar importa: sem isso, o tempo que o jogador leva para ler a pergunta é tempo de onda
+   * andando — e a resposta "não" devolveria uma partida pior do que a que ele parou.
+   */
+  private requestRestart(): void {
+    if (this.match.status !== "running" || this.restartConfirm) return;
+    const host = getScreenHost(this.game);
+    // Com a gaveta de pausa (ou qualquer outra tela) aberta, o pedido vem de lá e é ela quem manda.
+    if (host.isOpen) return;
+    const wasPaused = this.clock.paused;
+    if (!wasPaused) this.setPaused(true);
+    const close = (): void => {
+      this.restartConfirm = null;
+      host.clear();
+      if (!wasPaused) this.setPaused(false);
+    };
+    const confirm = confirmScreen({
+      title: "REINICIAR FASE",
+      message: "A partida recomeça do zero: pérolas, Guardiões posicionados e ondas voltam ao início.",
+      confirmLabel: "REINICIAR",
+      icon: ICONS.refresh,
+      testId: "confirm-restart",
+      onCancel: close,
+      onConfirm: () => {
+        this.restartConfirm = null;
+        host.clear();
+        this.restartGame();
+      },
+    });
+    this.restartConfirm = confirm;
+    host.push(confirm);
   }
 
   /** Desiste do posicionamento (ESC, botão direito ou clique fora). */
@@ -1054,7 +1165,7 @@ export class GameScene extends Phaser.Scene {
       stats: snapshot.stats,
     };
     const progression = getProgression();
-    const outcome = progression.applyMatchResult(matchResult, this.level.objectives ?? []);
+    const outcome = progression.applyMatchResult(matchResult, objectivesFor(this.level, this.difficulty.id), this.level.objectives ?? []);
     this.unlockedNextLevelId = outcome.nextLevelId;
     this.showResultScreen(matchResult, outcome);
   }
@@ -1173,6 +1284,19 @@ export class GameScene extends Phaser.Scene {
     this.emitHud();
   }
 
+  /**
+   * A tecla de espaço, resolvida por quem tem a verdade: havendo onda para chamar, chama; não
+   * havendo, alterna a velocidade. Os dois nunca fazem sentido ao mesmo tempo.
+   */
+  private callWaveOrSpeed(): void {
+    if (this.match.status !== "running") return;
+    if (this.match.snapshot().canStartNextWave) {
+      this.startNextWave();
+      return;
+    }
+    this.setSpeed(this.clock.speed >= 2 ? 1 : 2);
+  }
+
   private setSpeed(speed: MatchSpeed): void {
     if (speed !== 1 && speed !== 2 && speed !== 3) return;
     this.clock.speed = speed;
@@ -1186,6 +1310,8 @@ export class GameScene extends Phaser.Scene {
   }
 
   private restartGame(): void {
+    // Contabiliza ANTES de trocar de cena: a partir daqui esta instância pode nem existir mais.
+    getProgression().recordRestart();
     this.resetGame();
   }
 

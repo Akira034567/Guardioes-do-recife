@@ -7,6 +7,7 @@ import { DEFAULT_UNLOCKED_GUARDIANS } from "../data/unlocks";
 import { LEVEL_IDS } from "../data/levels";
 import { DIFFICULTY_IDS } from "../data/difficulty";
 import { browserStorage, getAccounts } from "./accounts";
+import { attachCloudSync, getCloud } from "./cloud";
 
 let manager: SaveManager | null = null;
 
@@ -20,10 +21,14 @@ let manager: SaveManager | null = null;
 export function getSaveManager(): SaveManager {
   if (!manager) {
     const accounts = getAccounts();
+    // A conta na nuvem manda na chave quando existe: o save dela é o espelho local do documento do
+    // servidor, e não pode dividir arquivo com a conta local de mesmo nome.
+    const cloudKey = getCloud().saveKey();
+    const key = cloudKey ?? accounts.activeSaveKey();
     manager = new SaveManager(browserStorage(), {
-      key: accounts.activeSaveKey(),
+      key,
       // O save pré-versionamento é do APARELHO: só o convidado o herda, uma conta nova começa limpa.
-      legacyKey: accounts.active ? null : undefined,
+      legacyKey: cloudKey === null && !accounts.active ? undefined : null,
       registry: {
         levelIds: LEVEL_IDS,
         guardianIds: GUARDIAN_ORDER,
@@ -33,6 +38,8 @@ export function getSaveManager(): SaveManager {
         difficultyIds: DIFFICULTY_IDS,
       },
     });
+    // Toda gravação daqui em diante vira um empurrão atrasado para a nuvem (se houver conta lá).
+    attachCloudSync(manager);
   }
   return manager;
 }

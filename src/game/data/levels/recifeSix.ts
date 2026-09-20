@@ -29,6 +29,18 @@ export const RECIFE_SIX: LevelDefinition = {
     { id: "vidas", kind: "minLivesRemaining", value: 8 },
     { id: "especies", kind: "maxDistinctGuardians", value: 3 },
   ],
+  objectivesByDifficulty: {
+    dificil: [
+      { id: "completar", kind: "complete" },
+      { id: "elites", kind: "noEliteLeaks" },
+      { id: "vidas", kind: "minLivesRemaining", value: 12 },
+    ],
+    abissal: [
+      { id: "completar", kind: "complete" },
+      { id: "intacto", kind: "noLeaks" },
+      { id: "especies", kind: "maxDistinctGuardians", value: 2 },
+    ],
+  },
   waypoints: [
     { x: 607, y: -19 },
     { x: 607, y: 21 },

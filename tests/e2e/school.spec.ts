@@ -9,28 +9,49 @@ import { openGame, openHub } from "./helpers";
  * que isso aparece.
  */
 
-test("abre a Escola pelo menu e lê uma aula", async ({ page }) => {
+test("abre a Escola como aba do Álbum e lê uma aula", async ({ page }) => {
   await openHub(page);
   await page.getByTestId("hub-menu-toggle").click();
-  await page.getByTestId("hub-nav-school").click();
-
-  const panel = page.getByTestId("school-panel");
+  // A Escola saiu do menu lateral: hoje ela é uma aba do Álbum do Recife.
+  await page.getByTestId("hub-nav-collection").click();
+  const panel = page.getByTestId("collection-panel");
   await expect(panel).toBeVisible();
+  await page.getByTestId("album-tab-school").click();
+  await expect(panel).toHaveAttribute("data-tab", "school");
+
   // Save novo: só a aula que abriu por padrão conta como lida.
   await expect(panel).toHaveAttribute("data-read", "1");
-  await expect(page.getByTestId("school-progress")).toContainText("1/25");
+  await expect(page.getByTestId("album-progress")).toContainText("1 de 25");
 
-  // Os quatro cursos existem e a aula de um efeito de status abre com a regra dela.
-  for (const course of ["guardioes", "efeitos", "correnteza", "ameacas"]) {
-    await expect(page.getByTestId(`school-course-${course}`)).toBeVisible();
-  }
-  await expect(page.getByTestId("school-lesson-efeito-vulneravel")).toHaveAttribute("data-state", "new");
-  await page.getByTestId("school-lesson-efeito-vulneravel").click();
+  // Cada aula é uma carta da grade, e a do efeito abre com a regra dela.
+  const card = page.getByTestId("collection-card-efeito-vulneravel");
+  await expect(card).toHaveAttribute("data-state", "new");
+  await card.click();
   await expect(page.getByTestId("school-lesson")).toHaveAttribute("data-lesson", "efeito-vulneravel");
   await expect(page.getByTestId("school-rule")).toContainText("1,30");
   // Lida uma vez, deixa de ser nova — e o contador anda.
-  await expect(page.getByTestId("school-lesson-efeito-vulneravel")).toHaveAttribute("data-state", "read");
+  await expect(card).toHaveAttribute("data-state", "read");
   await expect(panel).toHaveAttribute("data-read", "2");
+});
+
+test("a Maestria também é aba do Álbum, com a árvore do Guardião escolhido", async ({ page }) => {
+  await openHub(page);
+  await page.getByTestId("hub-menu-toggle").click();
+  await page.getByTestId("hub-nav-collection").click();
+  await page.getByTestId("album-tab-mastery").click();
+  await expect(page.getByTestId("collection-panel")).toHaveAttribute("data-tab", "mastery");
+
+  await page.getByTestId("collection-card-pistol-shrimp").click();
+  const detail = page.getByTestId("mastery-detail");
+  await expect(detail).toHaveAttribute("data-guardian", "pistol-shrimp");
+  await expect(detail).toHaveAttribute("data-level", "0");
+  // A árvore vai do nó 1 até o nó 5 e abre nos dois ramos, com a arte da evolução final.
+  await expect(page.getByTestId("mastery-node-pistol-shrimp-1")).toBeVisible();
+  await expect(page.getByTestId("mastery-node-pistol-shrimp-5")).toBeVisible();
+  await expect(page.getByTestId("mastery-branch-pistol-shrimp-a")).toBeVisible();
+  await expect(page.getByTestId("mastery-branch-pistol-shrimp-b")).toBeVisible();
+  // Sem Conchas em caixa, comprar fica desligado — e nada some da tela por isso.
+  await expect(page.getByTestId("mastery-buy")).toBeDisabled();
 });
 
 test("a Escola é alcançável sem sair da partida", async ({ page }) => {
@@ -39,8 +60,10 @@ test("a Escola é alcançável sem sair da partida", async ({ page }) => {
   if (!pause) throw new Error("Controle pause não registrado");
   await clickGame(pause.x, pause.y);
   await page.getByTestId("pause-school").click();
-  await expect(page.getByTestId("school-panel")).toBeVisible();
-  await expect(page.getByTestId("school-lesson-corrente-mapa")).toBeVisible();
+  const panel = page.getByTestId("collection-panel");
+  await expect(panel).toBeVisible();
+  await expect(panel).toHaveAttribute("data-tab", "school");
+  await expect(page.getByTestId("collection-card-corrente-mapa")).toBeVisible();
 });
 
 test("ensina a correnteza quando ela existe, uma frase por vez", async ({ page }) => {
@@ -79,7 +102,7 @@ test("desligar as aulas em campo silencia a faixa e mantém o manual", async ({ 
   await page.addInitScript(() => {
     const key = "guardioes-do-recife.save";
     const raw = window.localStorage.getItem(key);
-    const save = raw ? JSON.parse(raw) : { saveVersion: 5 };
+    const save = raw ? JSON.parse(raw) : { saveVersion: 6 };
     save.settings = { ...(save.settings ?? {}), tutorialMoments: false };
     window.localStorage.setItem(key, JSON.stringify(save));
   });

@@ -8,9 +8,7 @@ import { LEVELS } from "../../data/levels";
 import { accountScreen } from "./screens/AccountScreen";
 import { achievementsScreen } from "./screens/AchievementsScreen";
 import { bestiaryScreen } from "./screens/BestiaryScreen";
-import { collectionScreen } from "./screens/CollectionScreen";
-import { masteryScreen } from "./screens/MasteryScreen";
-import { schoolScreen } from "./screens/SchoolScreen";
+import { collectionScreen, type AlbumTab } from "./screens/CollectionScreen";
 import { settingsScreen } from "./screens/SettingsScreen";
 import { storyIndexScreen } from "./screens/StoryScreen";
 import type { ShellNav, ShellSection } from "./shell";
@@ -40,10 +38,10 @@ export interface SectionRouter {
 
 /** O que a seção precisa saber além de qual é. */
 export interface SectionOptions {
-  /** Abre o álbum já com este Guardião escolhido. */
-  collectionFocus?: GuardianId;
-  /** Abre a Escola já nesta aula — o caminho que o momento em campo usa para levar ao manual. */
-  schoolFocus?: string;
+  /** Abre o álbum já com este Guardião (ou aula, ou Guardião da maestria) escolhido. */
+  collectionFocus?: GuardianId | string;
+  /** Abre o álbum já nesta aba; sem isto, ele abre nos Guardiões. */
+  albumTab?: AlbumTab;
 }
 
 /** A navegação lateral desta cena, pronta para entregar a qualquer tela. */
@@ -51,9 +49,10 @@ export function sectionNav(router: SectionRouter): ShellNav {
   return {
     onGoHub: () => openSection("hub", router),
     onGoMap: () => openSection("map", router),
-    onOpenSchool: () => openSection("school", router),
+    // Escola e Maestria não são mais seções: são abas do álbum, e é para lá que os dois atalhos vão.
+    onOpenSchool: () => openSection("collection", router, { albumTab: "school" }),
     onOpenCollection: () => openSection("collection", router),
-    onOpenMastery: () => openSection("mastery", router),
+    onOpenMastery: () => openSection("collection", router, { albumTab: "mastery" }),
     onOpenBestiary: () => openSection("bestiary", router),
     onOpenStories: () => openSection("stories", router),
     onOpenAchievements: () => openSection("achievements", router),
@@ -70,9 +69,7 @@ const SHELLS = new WeakMap<Phaser.Game, AppShellHandle>();
 
 /** O fundo de cada seção: cada uma empresta a arte de uma fase diferente, como antes. */
 const BACKDROPS: Record<ShellView, number> = {
-  school: 0,
   collection: 0,
-  mastery: 2,
   bestiary: 3,
   stories: 2,
   achievements: 5,
@@ -83,13 +80,9 @@ const BACKDROPS: Record<ShellView, number> = {
 function contentFor(section: ShellView, router: SectionRouter, options: SectionOptions, back: () => void, nav: ShellNav): ShellContent {
   const progression = getProgression();
   const screen =
-    section === "school"
-      ? schoolScreen(back, nav, { focus: options.schoolFocus }, true)
-      : section === "collection"
-      ? collectionScreen(progression, back, nav, { focus: options.collectionFocus }, true)
-      : section === "mastery"
-        ? masteryScreen(progression, back, nav, true)
-        : section === "bestiary"
+    section === "collection"
+      ? collectionScreen(progression, back, nav, { focus: options.collectionFocus, tab: options.albumTab }, true)
+      : section === "bestiary"
         ? bestiaryScreen(progression, back, nav, true)
         : section === "stories"
           ? storyIndexScreen(back, nav, (levelId) => router.isUnlocked(levelId), true)
@@ -116,9 +109,7 @@ function contentFor(section: ShellView, router: SectionRouter, options: SectionO
  * NÃO são recriados. Manter os nomes evita reescrever os testes por uma mudança que é de estrutura.
  */
 const NAV_PREFIX: Record<ShellView, string> = {
-  school: "school",
   collection: "album",
-  mastery: "mastery",
   bestiary: "bestiary",
   stories: "stories",
   achievements: "achievements",
@@ -127,9 +118,7 @@ const NAV_PREFIX: Record<ShellView, string> = {
 };
 
 const BACK_ID: Record<ShellView, string> = {
-  school: "school-back",
   collection: "collection-back",
-  mastery: "mastery-back",
   bestiary: "bestiary-back",
   stories: "story-index-back",
   achievements: "achievements-back",

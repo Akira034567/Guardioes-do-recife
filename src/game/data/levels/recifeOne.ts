@@ -28,6 +28,23 @@ export const RECIFE_ONE: LevelDefinition = {
     { id: "vidas", kind: "minLivesRemaining", value: 15 },
     { id: "poucos", kind: "maxGuardians", value: 3 },
   ],
+  /**
+   * Difícil e Abissal pedem OUTRA missão, não a mesma com inimigos mais duros. Aqui a virada é de
+   * "segure as vidas com pouca gente" para "não deixe passar NADA" — e o Abissal ainda tira a
+   * muleta de chamar a onda mais cedo para adiantar pérolas.
+   */
+  objectivesByDifficulty: {
+    dificil: [
+      { id: "completar", kind: "complete" },
+      { id: "intacto", kind: "noLeaks" },
+      { id: "especies", kind: "maxDistinctGuardians", value: 2 },
+    ],
+    abissal: [
+      { id: "completar", kind: "complete" },
+      { id: "vidas", kind: "minLivesRemaining", value: 13 },
+      { id: "paciencia", kind: "noEarlyCall" },
+    ],
+  },
   waypoints: [
     { x: -40, y: 315 },
     { x: 100, y: 310 },

@@ -13,7 +13,15 @@ export function hasReadLesson(id: string): boolean {
   return getSaveManager().progress.tutorial.seenLessons.includes(id);
 }
 
+/**
+ * Marca a aula como lida. Aula já lida NÃO grava de novo.
+ *
+ * Importa porque abrir uma carta da Escola é um gesto barato e repetido: cada `update()` reescreve
+ * o save inteiro, avisa os ouvintes e reagenda o envio para a nuvem. Sem esta guarda, passear pela
+ * grade viraria uma fila de gravações que não muda nada.
+ */
 export function markLessonRead(id: string): void {
+  if (hasReadLesson(id)) return;
   getSaveManager().update((draft) => {
     if (!draft.tutorial.seenLessons.includes(id)) draft.tutorial.seenLessons.push(id);
   });

@@ -645,6 +645,9 @@ export interface LevelObjectiveDefinition {
   value?: number;
 }
 
+/** Os três objetivos de uma fase numa dificuldade: concluir, e mais dois que valem as estrelas 2 e 3. */
+export type LevelObjectiveTrio = [LevelObjectiveDefinition, LevelObjectiveDefinition, LevelObjectiveDefinition];
+
 /** Uma rota da fase. A primeira é a principal e coincide com `waypoints`. */
 export interface PathDefinition {
   id: string;
@@ -723,7 +726,16 @@ export interface LevelDefinition {
   /** Bônus de conclusão próprio; ausente = `ECONOMY.levelClearBonus`. */
   levelClearBonus?: number;
   /** Três objetivos: o primeiro é concluir a fase, os outros dois valem as estrelas 2 e 3. */
-  objectives?: [LevelObjectiveDefinition, LevelObjectiveDefinition, LevelObjectiveDefinition];
+  objectives?: LevelObjectiveTrio;
+  /**
+   * Objetivos PRÓPRIOS de uma dificuldade, por id (`dificil`, `abissal`). Ausente = aquela
+   * dificuldade joga pelos mesmos objetivos do Normal.
+   *
+   * A chave é `string` e não `DifficultyId` de propósito: `data/difficulty.ts` importa este arquivo,
+   * então o caminho contrário fecharia um ciclo. Quem resolve o par fase+dificuldade é
+   * `core/progression/levelObjectives.ts`, e um id desconhecido cai no Normal.
+   */
+  objectivesByDifficulty?: Record<string, LevelObjectiveTrio>;
   /** Fase de campanha (padrão) ou Encontro, a fase curta onde um Guardião é achado (item 3). */
   kind?: "campaign" | "encounter";
   /** Id do Encontro concluído ao vencer esta fase; alimenta `unlocks.ts`. */

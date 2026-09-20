@@ -84,7 +84,7 @@ describe("stars", () => {
   it("keeps only the best run and ignores defeats", () => {
     const first = mergeLevelRecord(undefined, makeResult({ stats: { livesLost: 5, timeMs: 200_000, maxSimultaneousGuardians: 6 } }), [true, false, false]);
     const better = mergeLevelRecord(first.next, makeResult({ stats: { livesLost: 2, timeMs: 300_000, maxSimultaneousGuardians: 4 } }), [true, false, false]);
-    expect(better.next.best).toEqual({ livesLost: 2, durationMs: 200_000, guardiansUsed: 4, difficulty: "normal" });
+    expect(better.next.best).toEqual({ livesLost: 2, durationMs: 200_000, guardiansUsed: 4, difficulty: "normal", distinctGuardians: 1 });
 
     const defeat = mergeLevelRecord(better.next, makeResult({ victory: false }), [false, false, false]);
     expect(defeat.next).toEqual(better.next);

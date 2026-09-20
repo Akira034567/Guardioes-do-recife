@@ -29,6 +29,18 @@ export const RECIFE_TWO: LevelDefinition = {
     { id: "intacto", kind: "noLeaks" },
     { id: "rapido", kind: "underTimeMs", value: 360_000 },
   ],
+  objectivesByDifficulty: {
+    dificil: [
+      { id: "completar", kind: "complete" },
+      { id: "vidas", kind: "minLivesRemaining", value: 16 },
+      { id: "poucos", kind: "maxGuardians", value: 4 },
+    ],
+    abissal: [
+      { id: "completar", kind: "complete" },
+      { id: "elites", kind: "noEliteLeaks" },
+      { id: "sem-venda", kind: "noSell" },
+    ],
+  },
   waypoints: [
     { x: 397, y: 681 },
     { x: 397, y: 655 },

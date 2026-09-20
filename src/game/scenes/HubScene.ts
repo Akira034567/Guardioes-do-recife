@@ -24,6 +24,7 @@ import { fadeInScene, prefersReducedMotion, transitionTo } from "../systems/scen
 import { getSettings, onSettingsChanged } from "../systems/settings";
 import { getScreenHost } from "../ui/dom/host";
 import { openSection, sectionNav, type SectionRouter } from "../ui/dom/sections";
+import { takeCloudLinkEvent } from "../systems/cloud";
 import { hubScreen, type HubOverlay } from "../ui/dom/screens/HubScreen";
 import type { GuardianId } from "../types";
 
@@ -149,6 +150,9 @@ export class HubScene extends Phaser.Scene {
 
     fadeInScene(this, () => {
       this.game.canvas.dataset.hubReady = "true";
+      // Quem chegou pelo link do e-mail (confirmação ou troca de senha) cai direto no Minha Conta:
+      // é lá que ele confirma quem entrou e define a senha nova.
+      if (takeCloudLinkEvent()) openSection("account", this.router());
     });
   }
 

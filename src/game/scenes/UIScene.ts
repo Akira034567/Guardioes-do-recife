@@ -4,6 +4,7 @@ import { artTextureKey, artTextureKeyForFolder, fitImageToBox, GUARDIAN_ART, sol
 import { GAME_HEIGHT, GAME_WIDTH, HUD_BOTTOM, HUD_TOP } from "../constants";
 import { PLACEMENT_HINTS } from "../core/PlacementRules";
 import { ENEMIES, resolveEnemy } from "../data/enemies";
+import { difficultyOf } from "../data/difficulty";
 import { DEFAULT_LOADOUT, GUARDIANS } from "../data/guardians";
 import { EventBus, Events } from "../EventBus";
 import { statusIconKey, type StatusIcon } from "../assets/statusArt";
@@ -24,6 +25,15 @@ const TUTORIAL_HINT = { x: 330, width: 560, skipX: 330 + 560 / 2 - 48 } as const
 
 /** Quantas linhas de inimigo cabem na prévia da próxima onda. */
 const PREVIEW_ROWS = 4;
+
+/** Selo da dificuldade dentro da plaquinha da fase. */
+const DIFFICULTY_TAG = { width: 58, height: 20 } as const;
+
+/**
+ * Espaço do NOME da fase dentro da plaquinha: da margem esquerda do texto até onde o selo começa,
+ * com uma folga. É este número que o `fitLabel` respeita.
+ */
+const LEVEL_NAME_WIDTH = HUD_LAYOUT.levelPod.width - 38 - DIFFICULTY_TAG.width - 18;
 
 /**
  * Paleta dos painéis de vidro. Cada entrada é um estado inteiro (preenchimento, borda e brilho),
@@ -201,6 +211,7 @@ export class UIScene extends Phaser.Scene {
   private sellButton!: HudControl;
   private sellValue!: Phaser.GameObjects.Text;
   private pauseButton!: HudControl;
+  private restartButton!: HudControl;
   private muteButton!: HudControl;
   private skipButton!: HudControl;
   private skipBonus!: Phaser.GameObjects.Text;
@@ -218,10 +229,11 @@ export class UIScene extends Phaser.Scene {
   private bossBarFill!: Phaser.GameObjects.Image;
   private bossBarLabel!: Phaser.GameObjects.Text;
   private bossBarIcon!: Phaser.GameObjects.Image;
-  /** Nome da fase por cima do mapa, à esquerda. */
-  private levelChip!: Phaser.GameObjects.Image;
+  /** Plaquinha da fase na barra de cima: "FASE 3/6" em cima, o nome embaixo, o selo à direita. */
+  private levelChipCaption!: Phaser.GameObjects.Text;
   private levelChipText!: Phaser.GameObjects.Text;
-  private levelLabel!: Phaser.GameObjects.Text;
+  private difficultyTag!: Phaser.GameObjects.Image;
+  private difficultyText!: Phaser.GameObjects.Text;
   private debugToggle!: Phaser.GameObjects.Rectangle;
   private debugToggleText!: Phaser.GameObjects.Text;
   private debugPanel!: Phaser.GameObjects.Rectangle;
@@ -278,9 +290,19 @@ export class UIScene extends Phaser.Scene {
     EventBus.emit(Events.toggleDebug);
   };
 
+  /**
+   * ESPAÇO: chama a próxima onda; sem onda para chamar, alterna 1× e 2×.
+   *
+   * A ordem é essa de propósito. Durante a contagem, a coisa urgente é adiantar a onda (e ganhar o
+   * bônus); quando a onda já está em campo, o espaço fica ocioso e a pergunta que sobra é "quero
+   * isto mais rápido?". Uma tecla só, dois momentos que nunca coexistem.
+   *
+   * Quem DECIDE qual dos dois é a cena, não esta barra: aqui só existe um espelho do estado, e ele
+   * pode estar um quadro atrasado bem no instante em que a contagem começa.
+   */
   private readonly onSkipKey = (event: KeyboardEvent): void => {
     event.preventDefault();
-    EventBus.emit(Events.skipCountdown);
+    EventBus.emit(Events.callWaveOrSpeed);
   };
 
   /**
@@ -309,7 +331,7 @@ export class UIScene extends Phaser.Scene {
   // ── Barra de cima ────────────────────────────────────────────────────────────
 
   private createTopHud(): void {
-    const { topCenterY, pods, brand } = HUD_LAYOUT;
+    const { topCenterY, pods, brand, levelPod } = HUD_LAYOUT;
     this.add.image(GAME_WIDTH / 2, HUD_TOP / 2, hudPanel(this, GAME_WIDTH, HUD_TOP, { ...SKIN.bar, edgeBottom: "#4fd8ff" }));
 
     // Marca: a onda do logotipo é o mesmo pictograma das pílulas, só que maior.
@@ -324,25 +346,62 @@ export class UIScene extends Phaser.Scene {
       })
       .setOrigin(0, 0.5);
 
+    // Plaquinha da fase, logo depois da marca: onde estou e em que dificuldade.
+    //
+    // DUAS LINHAS, e não uma. "FASE 3/6 · TRÊS REDEMOINHOS" numa linha só não cabia ao lado do selo
+    // da dificuldade: a fonte encolhia até o piso de 7px e AINDA passava por baixo do selo. Em duas
+    // linhas — a posição em cima, o nome embaixo — cada uma fica no corpo em que dá para ler.
+    this.pod(levelPod.x, levelPod.width, "map", 20);
+    this.levelChipCaption = this.add
+      .text(levelPod.x + 38, topCenterY - 9, "", {
+        fontFamily: HUD_FONT.body,
+        fontSize: "10px",
+        fontStyle: "bold",
+        color: HUD_COLORS.textSoft,
+        letterSpacing: 0.6,
+      })
+      .setOrigin(0, 0.5);
+    this.levelChipText = this.add
+      .text(levelPod.x + 38, topCenterY + 8, "", {
+        fontFamily: HUD_FONT.strong,
+        fontSize: "12px",
+        color: HUD_COLORS.text,
+        letterSpacing: 0.3,
+      })
+      .setOrigin(0, 0.5);
+    // A etiqueta da dificuldade encosta na borda direita da pílula e ganha a COR da dificuldade:
+    // é o mesmo código de cor do mapa, então as duas telas falam a mesma língua.
+    //
+    // O `+ GLOW_PAD` é porque a textura do painel vem com a folga do brilho nas bordas: sem ele, a
+    // âncora da direita cai na borda da TEXTURA e o desenho fica deslocado para dentro.
+    this.difficultyTag = this.add
+      .image(levelPod.x + levelPod.width - 10 + GLOW_PAD, topCenterY, hudPanel(this, DIFFICULTY_TAG.width, DIFFICULTY_TAG.height, SKIN.button))
+      .setOrigin(1, 0.5);
+    this.difficultyText = this.add
+      .text(levelPod.x + levelPod.width - 10 - DIFFICULTY_TAG.width / 2, topCenterY + 1, "", {
+        fontFamily: HUD_FONT.strong,
+        fontSize: "10px",
+        color: HUD_COLORS.text,
+        letterSpacing: 0.4,
+      })
+      .setOrigin(0.5);
+
     // Pílula das pérolas.
     this.pod(pods.pearls.x, pods.pearls.width, "pearl", 22);
-    this.pearlText = this.podValue(pods.pearls.x + 44, "150", HUD_COLORS.pearl);
+    this.pearlText = this.podValue(pods.pearls.x + 42, "150", HUD_COLORS.pearl);
 
     // Pílula da vida do Recife: onda, "RECIFE", coração e contagem.
     this.pod(pods.reef.x, pods.reef.width, "waves", 22);
-    this.podCaption(pods.reef.x + 40, "RECIFE");
-    this.add.image(pods.reef.x + 112, topCenterY, hudIcon(this, "heart", 18, HUD_COLORS.danger));
-    this.healthText = this.podValue(pods.reef.x + 124, "20/20", HUD_COLORS.text);
+    this.podCaption(pods.reef.x + 38, "RECIFE");
+    this.add.image(pods.reef.x + 104, topCenterY, hudIcon(this, "heart", 18, HUD_COLORS.danger));
+    this.healthText = this.podValue(pods.reef.x + 116, "20/20", HUD_COLORS.text);
 
-    // Pílula da onda.
+    // Pílula da onda: em que onda estou e quanto falta para a próxima, no mesmo lugar.
     this.pod(pods.wave.x, pods.wave.width, "waves", 22);
-    this.podCaption(pods.wave.x + 40, "ONDA");
-    this.waveText = this.podValue(pods.wave.x + 88, "1/5", HUD_COLORS.text);
-
-    // Pílula da próxima onda: a legenda diz o que o número significa, como nas outras.
-    this.pod(pods.timer.x, pods.timer.width, "hourglass", 20);
-    this.podCaption(pods.timer.x + 40, "PRÓXIMA ONDA");
-    this.timerText = this.podValue(pods.timer.x + 176, "EM 10s", HUD_COLORS.cyanBright, 17);
+    this.podCaption(pods.wave.x + 38, "ONDA");
+    this.waveText = this.podValue(pods.wave.x + 80, "1/5", HUD_COLORS.text);
+    this.add.image(pods.wave.x + 114, topCenterY, hudIcon(this, "hourglass", 16, HUD_COLORS.cyan));
+    this.timerText = this.podValue(pods.wave.x + 126, "EM 10s", HUD_COLORS.cyanBright, 12);
 
     this.createTopButtons();
     this.createMessageToast();
@@ -401,6 +460,30 @@ export class UIScene extends Phaser.Scene {
 
   private createTopButtons(): void {
     const { topButtonY, speedButtonWidth, topButtonHeight, topButtonSize } = HUD_LAYOUT;
+
+    // Chamar a próxima onda: era o botão do canto de baixo e subiu para o lado da contagem, que é
+    // o número que faz o jogador querer apertá-lo.
+    this.skipButton = this.glassControl({
+      x: HUD_LAYOUT.skipButtonX,
+      y: HUD_LAYOUT.skipButtonY,
+      width: HUD_LAYOUT.skipButtonWidth,
+      height: topButtonHeight,
+      text: "PRÓXIMA ONDA",
+      fontSize: 10,
+      strong: true,
+      icon: "forward",
+      iconSize: 14,
+      tone: "primary",
+      labelOffsetX: 10,
+      maxLabelWidth: HUD_LAYOUT.skipButtonWidth - 32,
+      name: "nextWave",
+      onClick: () => EventBus.emit(Events.startNextWave),
+    });
+    this.skipBonus = this.add
+      .text(HUD_LAYOUT.skipButtonX + 10, HUD_LAYOUT.skipButtonY + 11, "", { fontFamily: HUD_FONT.strong, fontSize: "9px", color: HUD_COLORS.pearl })
+      .setOrigin(0.5);
+    this.skipButton.add(this.skipBonus);
+
     this.speedButton = this.glassControl({
       x: HUD_LAYOUT.speedButtonX,
       y: topButtonY,
@@ -411,6 +494,20 @@ export class UIScene extends Phaser.Scene {
       strong: true,
       name: "speed",
       onClick: () => EventBus.emit(Events.setSpeed, this.shownSpeed === 1 ? 2 : 1),
+    });
+
+    // REINICIAR: entre a velocidade e a pausa, como o jogador pediu. Nunca reinicia no primeiro
+    // toque — quem decide é a mesma confirmação da tecla R.
+    this.restartButton = this.glassControl({
+      x: HUD_LAYOUT.restartButtonX,
+      y: topButtonY,
+      width: topButtonSize,
+      height: topButtonHeight,
+      icon: "refresh",
+      iconSize: 19,
+      iconCentered: true,
+      name: "restart",
+      onClick: () => EventBus.emit(Events.requestRestart),
     });
 
     this.pauseButton = this.glassControl({
@@ -452,19 +549,11 @@ export class UIScene extends Phaser.Scene {
 
   // ── Faixa flutuante: fase, chefe e prévia da onda ────────────────────────────
 
+  /**
+   * A faixa flutuante perdeu a plaquinha da fase: ela subiu para a barra de cima, onde não repete a
+   * mesma informação duas vezes nem tapa o canto do mapa.
+   */
   private createOverlayStrip(): void {
-    const { levelChipX, levelChipY, levelChipHeight } = HUD_LAYOUT;
-    this.levelChip = this.add.image(levelChipX - GLOW_PAD, levelChipY, hudPanel(this, 240, levelChipHeight, SKIN.pod)).setOrigin(0, 0.5);
-    this.add.image(levelChipX + 16, levelChipY, hudIcon(this, "waves", 17, HUD_COLORS.cyan));
-    this.levelChipText = this.add
-      .text(levelChipX + 32, levelChipY, "", {
-        fontFamily: HUD_FONT.strong,
-        fontSize: "12px",
-        color: HUD_COLORS.text,
-        letterSpacing: 0.5,
-      })
-      .setOrigin(0, 0.5);
-
     this.createWavePreview();
     this.createBossBar();
   }
@@ -558,7 +647,6 @@ export class UIScene extends Phaser.Scene {
 
     this.createCards();
     this.createContextPanel();
-    this.createCommands();
     this.watchDockReentry();
   }
 
@@ -756,47 +844,6 @@ export class UIScene extends Phaser.Scene {
     this.sellButton.add(sellCoin, this.sellValue).setVisible(false);
   }
 
-  /**
-   * Bloco de comandos da direita.
-   *
-   * REINICIAR e FASES saíram daqui na V3.4: os dois jogam a partida fora e estavam a um toque de
-   * distância de PRÓXIMA ONDA, que é o botão mais apertado do jogo. Agora moram na gaveta de pausa,
-   * com confirmação, e PRÓXIMA ONDA fica com o bloco inteiro.
-   */
-  private createCommands(): void {
-    const { skipButtonX, skipButtonY, skipButtonWidth, commandButtonHeight } = HUD_LAYOUT;
-    this.levelLabel = this.add
-      .text(HUD_LAYOUT.commandLabelX, HUD_LAYOUT.commandLabelY, "RECIFE 1", {
-        fontFamily: HUD_FONT.strong,
-        fontSize: "10px",
-        color: HUD_COLORS.cyan,
-        letterSpacing: 0.6,
-      })
-      .setOrigin(0.5);
-
-    this.skipButton = this.glassControl({
-      x: skipButtonX,
-      y: skipButtonY,
-      width: skipButtonWidth,
-      height: commandButtonHeight,
-      text: "PRÓXIMA ONDA",
-      fontSize: 10,
-      strong: true,
-      icon: "forward",
-      iconSize: 14,
-      tone: "primary",
-      labelOffsetX: 12,
-      maxLabelWidth: skipButtonWidth - 32,
-      name: "nextWave",
-      onClick: () => EventBus.emit(Events.startNextWave),
-    });
-    this.skipBonus = this.add
-      .text(skipButtonX + 12, skipButtonY + 14, "", { fontFamily: HUD_FONT.strong, fontSize: "9px", color: HUD_COLORS.pearl })
-      .setOrigin(0.5);
-    this.skipButton.add(this.skipBonus);
-
-  }
-
   // ── Tutorial ─────────────────────────────────────────────────────────────────
 
   /**
@@ -899,7 +946,7 @@ export class UIScene extends Phaser.Scene {
     this.healthText.setColor(snapshot.reefHealth <= 6 ? HUD_COLORS.danger : HUD_COLORS.text);
     this.waveText.setText(`${snapshot.wave}/${snapshot.totalWaves}`);
     this.timerText.setText(
-      snapshot.waveState === "countdown" ? `EM ${snapshot.countdownSeconds}s` : snapshot.waveState === "victory" ? "CONCLUÍDO" : "EM CURSO",
+      snapshot.waveState === "countdown" ? `EM ${snapshot.countdownSeconds}s` : snapshot.waveState === "victory" ? "FIM" : "EM CURSO",
     );
     this.messageText.setText(snapshot.message);
     // O balão só existe quando há o que dizer: vazio, ele some junto com o texto.
@@ -909,6 +956,8 @@ export class UIScene extends Phaser.Scene {
     this.muteButton.icon?.setTexture(hudIcon(this, snapshot.muted ? "muted" : "sound", 20, snapshot.muted ? HUD_COLORS.textDim : HUD_COLORS.text));
     this.muteButton.skin(hudPanel(this, topButtonSize, topButtonHeight, snapshot.muted ? SKIN.buttonOff : SKIN.button));
 
+    // Reiniciar não faz sentido com a partida já decidida: a tela de resultado tem o botão dela.
+    this.restartButton.setVisible(snapshot.gameOver === null);
     const canCall = snapshot.canSkipCountdown && !snapshot.gameOver;
     this.skipButton.setVisible(canCall);
     const bonus = snapshot.earlyCallBonus > 0;
@@ -937,16 +986,38 @@ export class UIScene extends Phaser.Scene {
     this.renderDebugState(snapshot.debug);
   }
 
-  /** Nome da fase nos dois lugares: a plaquinha por cima do mapa e o rótulo dos comandos. */
+  /**
+   * A plaquinha da fase na barra de cima: onde estou e em QUE DIFICULDADE.
+   *
+   * A dificuldade é a novidade que mais faltava. O Difícil e o Abissal mudam a missão da fase, não
+   * só os números dos inimigos — sem o selo, o jogador só descobria em qual estava voltando ao mapa.
+   * A cor é a mesma de `data/difficulty.ts`, então o selo aqui e a trilha do mapa se reconhecem.
+   */
   private renderLevelLabels(snapshot: HudSnapshot): void {
     const name = snapshot.levelName.toUpperCase();
-    this.levelLabel.setText(snapshot.levelIndex < 0 ? `ENCONTRO · ${name}` : `FASE ${snapshot.levelIndex + 1}/${snapshot.levelCount} · ${name}`);
+    const caption = snapshot.levelIndex < 0 ? "ENCONTRO" : `FASE ${snapshot.levelIndex + 1}/${snapshot.levelCount}`;
+    if (this.levelChipText.text !== name) {
+      this.levelChipCaption.setText(caption);
+      this.levelChipText.setText(name);
+      // Para ANTES da etiqueta da dificuldade, com folga: passando disso, a fonte encolhe em vez
+      // de o nome da fase encostar no selo.
+      this.fitLabel(this.levelChipText, LEVEL_NAME_WIDTH, 12);
+    }
 
-    const chip = snapshot.levelIndex < 0 ? `ENCONTRO · ${name}` : `RECIFE ${snapshot.levelIndex + 1} · ${name}`;
-    if (this.levelChipText.text === chip) return;
-    this.levelChipText.setText(chip);
-    const width = Math.ceil(32 + this.levelChipText.width + 16 - HUD_LAYOUT.levelChipX);
-    this.levelChip.setTexture(hudPanel(this, width, HUD_LAYOUT.levelChipHeight, SKIN.pod));
+    const difficulty = difficultyOf(snapshot.difficulty);
+    if (this.difficultyText.text === difficulty.name.toUpperCase()) return;
+    this.difficultyText.setText(difficulty.name.toUpperCase());
+    this.difficultyText.setColor(difficulty.id === "normal" ? HUD_COLORS.textSoft : difficulty.accent);
+    this.difficultyTag.setTexture(
+      hudPanel(this, DIFFICULTY_TAG.width, DIFFICULTY_TAG.height, {
+        ...SKIN.button,
+        radius: 9,
+        border: difficulty.accent,
+        borderTop: difficulty.accent,
+        glow: difficulty.id === "normal" ? "rgba(0, 0, 0, 0)" : `${difficulty.accent}55`,
+        glowBlur: difficulty.id === "normal" ? 0 : 10,
+      }),
+    );
   }
 
   /**
