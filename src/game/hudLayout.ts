@@ -14,8 +14,21 @@ const POD_HEIGHT = 40;
 const TOP_CENTER = HUD_TOP / 2;
 
 const DESKTOP_HUD = {
+  /**
+   * HUD COMPACTO (celular). O canvas de 1280 px aparece a ~0,54× num telefone deitado: um texto de
+   * 12 px vira 6 px de verdade, ilegível. No compacto sai todo texto de apoio ("RECIFE", "ONDA",
+   * papel da carta, legenda das medidas) e fica o que o jogador lê de relance — pictograma e
+   * número —, em corpo grande. Ver `buildMobileHud`.
+   */
+  compact: false,
   /** Marca do jogo na barra de cima. No celular ela sai: o espaço vira botão maior. */
   showBrand: true,
+  /** Plaquinha "FASE 1/6 · RECIFE COSTEIRO · NORMAL". No celular sai: a pausa já diz onde se está. */
+  showLevelPod: true,
+  /** Reiniciar na barra de cima. No celular ele mora só na gaveta de pausa (com confirmação). */
+  showRestart: true,
+  /** Tela cheia na barra de cima. No celular só aparece onde o navegador deixa (não no iPhone). */
+  showFullscreen: true,
   /** Folga de toque em volta de cada botão do HUD, além do desenho. */
   hitSlop: 0,
   /** Linhas da descrição do ramo no painel do Guardião em foco. */
@@ -73,6 +86,9 @@ const DESKTOP_HUD = {
   messageWidth: 420,
   /** Botões da direita: chamar onda, 1×/2×, reiniciar, pausa, tela cheia e som. */
   topButtonY: TOP_CENTER,
+  /** Corpo do número das pílulas (pérolas, vida, onda) e do rótulo da contagem. */
+  podValueSize: 17,
+  timerSize: 12,
   topButtonSize: 42,
   topButtonHeight: 40,
   /** Botão "PRÓXIMA ONDA", logo depois da pílula da onda: o chamado fica ao lado da contagem. */
@@ -150,39 +166,84 @@ const DESKTOP_HUD = {
 export type HudLayout = Readonly<typeof DESKTOP_HUD>;
 
 /**
- * HUD DO CELULAR. Num telefone deitado o canvas de 1280 px aparece a ~0,58×: o botão de 42 px do
- * desktop vira um alvo de 24 px, menor que um dedo. As FAIXAS continuam com a mesma altura
+ * HUD DO CELULAR. Num telefone deitado o canvas de 1280 px aparece a ~0,54×: o botão de 42 px do
+ * desktop vira um alvo de 23 px, e o texto de 11 px, 6 px. As FAIXAS continuam com a mesma altura
  * (`HUD_TOP`/`HUD_BOTTOM`) — mudar isso tiraria canteiros de fases já feitas de baixo do HUD —, mas
- * dentro delas tudo que se toca cresce: a marca do jogo sai (o ícone do app já diz o nome) e os
- * botões ganham o espaço dela, com folga de toque além do desenho.
+ * dentro delas o HUD é outro (`compact`):
+ *
+ * - Barra de cima: só pérolas, vida, onda/contagem e os botões que se usam jogando (chamar onda,
+ *   velocidade, pausa, som). A plaquinha da fase e o reiniciar vão para a gaveta de pausa; a tela
+ *   cheia só aparece onde o navegador a oferece (o iPhone não oferece).
+ * - Cartas: retrato grande e custo. Nome e papel aparecem no painel ao lado quando a carta é tocada.
+ * - Painel: nome, nível e as medidas em número grande; os botões de melhorar e vender com 46 px.
  */
-const MOBILE_HUD: HudLayout = {
-  ...DESKTOP_HUD,
-  showBrand: false,
-  hitSlop: 4,
-  panelDescriptionLines: 1,
-  confirmPlacement: true,
-  platformSnap: 72,
-  levelPod: { x: 10, width: 222 },
-  pods: {
-    pearls: { x: 240, width: 110 },
-    reef: { x: 358, width: 162 },
-    wave: { x: 528, width: 182 },
-  },
-  wavePodWideWidth: 332,
-  topButtonSize: 70,
-  topButtonHeight: 60,
-  skipButtonX: 788,
-  skipButtonWidth: 144,
-  speedButtonX: 904,
-  speedButtonWidth: 80,
-  restartButtonX: 986,
-  pauseButtonX: 1062,
-  fullscreenButtonX: 1138,
-  muteButtonX: 1214,
-  optionButtonY: GAME_HEIGHT - 28,
-  optionButtonHeight: 44,
-};
+function buildMobileHud(): HudLayout {
+  const fullscreen = canOfferFullscreen();
+  // Botões da direita para a esquerda: som, pausa, (tela cheia), velocidade, chamar onda.
+  const button = 72;
+  const gap = 8;
+  const mute = GAME_WIDTH - 10 - button / 2;
+  const pause = mute - button - gap;
+  const fullscreenX = fullscreen ? pause - button - gap : pause;
+  const speedWidth = 84;
+  const speed = fullscreenX - button / 2 - gap - speedWidth / 2;
+  const skipWidth = 212;
+  const skip = speed - speedWidth / 2 - gap - skipWidth / 2;
+  // As três pílulas repartem o que sobra até o botão de chamar (mais espaço sem tela cheia).
+  const podsRight = skip - skipWidth / 2 - gap;
+  const podsSpace = podsRight - 10 - gap * 2;
+  const pearlsWidth = Math.round(podsSpace * 0.28);
+  const reefWidth = Math.round(podsSpace * 0.3);
+  const pearls = { x: 10, width: pearlsWidth };
+  const reef = { x: pearls.x + pearlsWidth + gap, width: reefWidth };
+  const wave = { x: reef.x + reefWidth + gap, width: podsRight - (reef.x + reefWidth + gap) };
+  return {
+    ...DESKTOP_HUD,
+    compact: true,
+    showBrand: false,
+    showLevelPod: false,
+    showRestart: false,
+    showFullscreen: fullscreen,
+    hitSlop: 6,
+    panelDescriptionLines: 2,
+    confirmPlacement: true,
+    platformSnap: 72,
+    podHeight: 54,
+    podValueSize: 27,
+    timerSize: 22,
+    pods: { pearls, reef, wave },
+    // Sem o botão de chamar, a pílula da onda estica até onde ele começava.
+    wavePodWideWidth: skip + skipWidth / 2 - wave.x,
+    messageY: HUD_TOP + 80,
+    messageWidth: 640,
+    topButtonSize: button,
+    topButtonHeight: 56,
+    skipButtonX: skip,
+    skipButtonWidth: skipWidth,
+    speedButtonX: speed,
+    speedButtonWidth: speedWidth,
+    restartButtonX: -1000,
+    pauseButtonX: pause,
+    fullscreenButtonX: fullscreen ? fullscreenX : -1000,
+    muteButtonX: mute,
+    bossBarY: HUD_TOP + 34,
+    bossBarWidth: 420,
+    wavePreviewY: HUD_TOP + 10,
+    cardHeight: 100,
+    optionButtonY: GAME_HEIGHT - 29,
+    optionButtonHeight: 46,
+  };
+}
+
+/**
+ * Tela cheia de ELEMENTO: o Android deixa, o iPhone não (o Safari do iPhone só põe vídeo em tela
+ * cheia). Aberto pelo ícone, o jogo já está em tela cheia e o botão sobraria.
+ */
+function canOfferFullscreen(): boolean {
+  if (typeof document === "undefined") return false;
+  const standalone = document.documentElement.classList.contains("is-standalone");
+  return Boolean(document.fullscreenEnabled) && !standalone;
+}
 
 /**
  * Qual HUD vale nesta abertura. `?hud=mobile|desktop` força (é o que a sonda e2e do HUD do celular
@@ -192,13 +253,13 @@ const MOBILE_HUD: HudLayout = {
 function pickLayout(): HudLayout {
   if (typeof document === "undefined") return DESKTOP_HUD;
   const forced = new URLSearchParams(window.location.search).get("hud");
-  if (forced === "mobile") return MOBILE_HUD;
+  if (forced === "mobile") return buildMobileHud();
   if (forced === "desktop" || navigator.webdriver) return DESKTOP_HUD;
-  return document.documentElement.classList.contains("is-touch") ? MOBILE_HUD : DESKTOP_HUD;
+  return document.documentElement.classList.contains("is-touch") ? buildMobileHud() : DESKTOP_HUD;
 }
 
 export const HUD_LAYOUT: HudLayout = pickLayout();
-export { DESKTOP_HUD, MOBILE_HUD };
+export { DESKTOP_HUD };
 
 /** Centro da carta na posição `slot` (0..4) do esquadrão. */
 export function cardCenterX(slot: number): number {

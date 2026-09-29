@@ -3,6 +3,9 @@ import { GAME_WIDTH } from "../../constants";
 import { getSettings, onSettingsChanged, UI_SCALE_FACTOR } from "../../systems/settings";
 import "./ui.css";
 
+/** Menor escala das telas HTML num aparelho de toque (ver `align`). */
+const TOUCH_SCALE_FLOOR = 0.75;
+
 /**
  * Uma tela em HTML por cima do canvas. `render` devolve o conteúdo já montado; `onClose` roda quando
  * a tela sai (por `pop`, `replace` ou `clear`).
@@ -112,7 +115,11 @@ export class ScreenHost {
     this.root.style.width = `${bounds.width}px`;
     this.root.style.height = `${bounds.height}px`;
     const settings = getSettings();
-    const fit = Math.max(0.55, bounds.width / GAME_WIDTH);
+    // No celular deitado o canvas tem ~690 px: a escala "fiel" (0,54) deixava o texto de 12 px com
+    // 6 px de verdade. O piso maior só vale para toque; as consultas de container de `ui.css`
+    // (tela baixa/estreita) é que rearrumam cada tela para o corpo maior caber.
+    const floor = document.documentElement.classList.contains("is-touch") ? TOUCH_SCALE_FLOOR : 0.55;
+    const fit = Math.max(floor, bounds.width / GAME_WIDTH);
     this.root.style.setProperty("--gr-scale", String(fit * UI_SCALE_FACTOR[settings.uiScale]));
     this.root.dataset.contrast = settings.highContrast ? "high" : "normal";
   };

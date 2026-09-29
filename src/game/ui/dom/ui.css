@@ -5259,3 +5259,97 @@
 .gr-world[data-region="canais-profundos"] .gr-world__backdrop {
   background: radial-gradient(circle at 50% 0%, #0b4a72 0%, #041a2d 70%);
 }
+
+/* ==========================================================================
+   v4.1 — celular deitado, menus.
+   ========================================================================== */
+
+/*
+ * O menu ☰ do Recife é uma GAVETA por cima do cenário, e não a coluna do mapa: a regra de tela
+ * estreita (que tira o rótulo e deixa só o pictograma) não serve para ela. Sem rótulo sobravam oito
+ * retângulos largos com um ícone miúdo no meio e nada escrito. Aqui ela volta a ser lista: ícone e
+ * nome, alinhados à esquerda, na altura do dedo.
+ */
+@container (max-width: 760px) {
+  .gr-hub__side {
+    width: calc(236px * var(--gr-scale));
+    padding: calc(58px * var(--gr-scale)) calc(10px * var(--gr-scale)) calc(10px * var(--gr-scale));
+  }
+
+  .gr-hub__side .gr-world__nav {
+    gap: calc(5px * var(--gr-scale));
+  }
+
+  .gr-hub__side .gr-world__nav-item {
+    justify-content: flex-start;
+    gap: calc(12px * var(--gr-scale));
+    padding: calc(6px * var(--gr-scale)) calc(12px * var(--gr-scale));
+    font-size: calc(13px * var(--gr-scale));
+  }
+
+  .gr-hub__side .gr-world__nav-item span:not(.gr-icon) {
+    display: inline;
+  }
+
+  .gr-hub__side .gr-world__nav-item .gr-icon--lg {
+    width: calc(22px * var(--gr-scale));
+    height: calc(22px * var(--gr-scale));
+    color: var(--gr-cyan);
+  }
+
+  .gr-hub__side .gr-world__nav-item--on .gr-icon--lg {
+    color: #f2fbff;
+  }
+}
+
+/*
+ * MAPA NO CELULAR DEITADO (tela baixa). A tela inteira rola, e o ENTRAR NA FASE — a única ação que
+ * importa ali — caía abaixo da dobra. Ele passa a GRUDAR no rodapé visível, e a ficha perde o que é
+ * leitura longa (a foto e o parágrafo de briefing): nome, missão, números e ameaças continuam.
+ */
+@container (max-height: 460px) {
+  .gr-world__shot,
+  .gr-world__detail-line {
+    display: none;
+  }
+
+  .gr-world__detail {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1.25fr);
+    align-items: start;
+    padding-bottom: calc(64px * var(--gr-scale));
+    position: relative;
+  }
+
+  /* As abas das regiões que ainda não abriram tapavam as fases do topo do mapa: fica só a atual,
+     com as setas, e a frase de efeito dela sai. */
+  .gr-world__region--locked,
+  .gr-world__region-tag {
+    display: none;
+  }
+
+  .gr-world__enter {
+    position: sticky;
+    bottom: calc(10px * var(--gr-scale));
+    grid-column: 1 / -1;
+    justify-self: end;
+    z-index: 5;
+    margin-bottom: calc(-54px * var(--gr-scale));
+    font-size: calc(16px * var(--gr-scale));
+    padding: calc(12px * var(--gr-scale)) calc(26px * var(--gr-scale));
+  }
+}
+
+/*
+ * Controle deslizante dentro da GAVETA de pausa: a linha é estreita, e o controle (190 px) passava
+ * por cima do rótulo ("Volume geral" quebrava em duas linhas por baixo dele). Na gaveta ele desce
+ * para uma linha só dele, com o valor à direita do rótulo.
+ */
+.gr-pause__settings .gr-config__row:has(.gr-slider) {
+  flex-wrap: wrap;
+  row-gap: calc(4px * var(--gr-scale));
+}
+
+.gr-pause__settings .gr-config__row .gr-slider {
+  order: 3;
+  flex: 1 1 100%;
+}
