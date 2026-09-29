@@ -18,7 +18,7 @@ export function storyScreen(sequence: StorySequence, onFinish: () => void): Scre
   return {
     id: "story",
     render() {
-      const root = h("div", {});
+      const root = h("div", { class: "gr-story" });
       const panel = h("div", { class: "gr-panel gr-panel--story", testId: "story-panel", dataStory: sequence.id });
       root.append(panel);
 
@@ -29,14 +29,33 @@ export function storyScreen(sequence: StorySequence, onFinish: () => void): Scre
 
       const redraw = (): void => {
         const slide = sequence.slides[index];
+        panel.classList.toggle("gr-panel--comic", Boolean(slide.image));
+        panel.classList.remove("gr-panel--zoom");
         const parts: Node[] = [
           h("span", { class: "gr-badge", text: `${index + 1} de ${sequence.slides.length}` }),
           h("h1", { class: "gr-title", text: sequence.title }),
         ];
         if (slide.speaker) parts.push(h("p", { class: "gr-subtitle", text: slide.speaker }));
+        // Página de quadrinho: a imagem é o capítulo e a transcrição fica como texto alternativo.
+        // Tocar na página alterna entre caber na tela e a largura cheia (celular deitado).
+        const body = slide.image
+          ? h(
+              "button",
+              {
+                class: "gr-story__page",
+                type: "button",
+                testId: "story-page",
+                "aria-label": "Ampliar a página",
+                onClick: () => panel.classList.toggle("gr-panel--zoom"),
+              },
+              h("img", { class: "gr-story__image", src: slide.image, alt: slide.text, testId: "story-text" }),
+            )
+          : h("p", { class: "gr-story__text", testId: "story-text", text: slide.text });
+        const next = sequence.slides[index + 1];
+        if (next?.image) new Image().src = next.image;
         panel.replaceChildren(
           ...parts,
-          h("p", { class: "gr-story__text", testId: "story-text", text: slide.text }),
+          body,
           h(
             "div",
             { class: "gr-actions" },
@@ -96,10 +115,26 @@ function stateOf(sequence: StorySequence, isUnlocked: (levelId: string) => boole
   return isUnlocked(levelId) ? "pending" : "locked";
 }
 
-/** Capa do capítulo: por enquanto, a arte do Guardião que fala nele, em silhueta até ser vivido. */
-function coverArt(sequence: StorySequence): string | null {
+/** Arte do Guardião que fala no capítulo, em silhueta até ser vivido. */
+function guardianArt(sequence: StorySequence): string | null {
   if (!sequence.guardianId) return null;
   return artPath(sequence.guardianId, GUARDIAN_ART[sequence.guardianId].base, "idle");
+}
+
+/** Capa do capítulo: a primeira página do quadrinho, quando ele tem uma; senão, o Guardião. */
+function coverArt(sequence: StorySequence): { src: string; comic: boolean } | null {
+  const image = sequence.slides.find((slide) => slide.image)?.image;
+  if (image) return { src: image, comic: true };
+  const art = guardianArt(sequence);
+  return art ? { src: art, comic: false } : null;
+}
+
+/** As primeiras frases do capítulo, para a ficha: a transcrição de uma página inteira é longa demais. */
+function preview(sequence: StorySequence): string {
+  const text = sequence.slides[0].text;
+  if (text.length <= 160) return text;
+  const cut = text.lastIndexOf(". ", 160);
+  return cut > 40 ? text.slice(0, cut + 1) : `${text.slice(0, 157)}…`;
 }
 
 /**
@@ -252,7 +287,7 @@ function card(sequence: StorySequence, state: StoryState, chosen: boolean, onCli
       "span",
       { class: "gr-album__card-art" },
       art
-        ? h("img", { class: `gr-album__art${read ? "" : " gr-node__art--unknown"}`, src: art, alt: "" })
+        ? h("img", { class: `gr-album__art${art.comic ? " gr-album__art--comic" : ""}${read ? "" : " gr-node__art--unknown"}`, src: art.src, alt: "" })
         : h("span", { class: "gr-icon gr-album__art-icon", html: ICONS.book }),
       state === "locked" ? h("span", { class: "gr-icon gr-icon--lg gr-album__card-lock", html: ICONS.lock }) : null,
     ),
@@ -300,7 +335,9 @@ function sheet(sequence: StorySequence, state: StoryState, host: ScreenHost): HT
     h(
       "div",
       { class: "gr-album__banner" },
-      art ? h("img", { class: `gr-album__banner-art${read ? "" : " gr-node__art--unknown"}`, src: art, alt: "" }) : h("span", { class: "gr-icon gr-album__banner-icon", html: ICONS.book }),
+      art
+        ? h("img", { class: `gr-album__banner-art${art.comic ? " gr-album__art--comic" : ""}${read ? "" : " gr-node__art--unknown"}`, src: art.src, alt: "" })
+        : h("span", { class: "gr-icon gr-album__banner-icon", html: ICONS.book }),
     ),
     h(
       "div",
@@ -310,7 +347,7 @@ function sheet(sequence: StorySequence, state: StoryState, host: ScreenHost): HT
       h("p", { class: "gr-subtitle", text: state === "locked" ? STATE_LABELS.locked : sequence.summary }),
     ),
     read
-      ? h("p", { class: "gr-album__sheet-line", testId: "story-preview", text: sequence.slides[0].text })
+      ? h("p", { class: "gr-album__sheet-line", testId: "story-preview", text: preview(sequence) })
       : h("p", { class: "gr-album__sheet-line", text: state === "pending" ? "Este capítulo está prestes a acontecer. Jogue a fase para vivê-lo." : "Avance na campanha para chegar até aqui." }),
     read && quote
       ? h(
@@ -329,7 +366,7 @@ function sheet(sequence: StorySequence, state: StoryState, host: ScreenHost): HT
         h("span", { class: "gr-album__section-title", text: "O capítulo" }),
         row(ICONS.coral, "Onde", level?.name ?? "Fora das fases"),
         row(ICONS.timer, "Quando", MOMENT_LABELS[sequence.trigger.type]),
-        row(ICONS.book, "Falas", String(sequence.slides.length)),
+        row(ICONS.book, sequence.slides.some((slide) => slide.image) ? "Páginas" : "Falas", String(sequence.slides.length)),
       ),
       guardian
         ? h(
@@ -339,7 +376,7 @@ function sheet(sequence: StorySequence, state: StoryState, host: ScreenHost): HT
             h(
               "span",
               { class: "gr-album__voice-row" },
-              h("img", { class: `gr-album__voice-art${read ? "" : " gr-node__art--unknown"}`, src: coverArt(sequence) ?? "", alt: "" }),
+              h("img", { class: `gr-album__voice-art${read ? "" : " gr-node__art--unknown"}`, src: guardianArt(sequence) ?? "", alt: "" }),
               h(
                 "span",
                 { class: "gr-album__career-text" },

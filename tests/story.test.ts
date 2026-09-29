@@ -1,3 +1,5 @@
+import { existsSync } from "node:fs";
+import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 import { LEVEL_IDS } from "../src/game/data/levels";
 import { STORY_SEQUENCES, storyFor, storySequence } from "../src/game/data/story";
@@ -20,6 +22,14 @@ describe("story sequences", () => {
     }
   });
 
+  it("points every comic page at a file that exists", () => {
+    for (const sequence of STORY_SEQUENCES) {
+      for (const slide of sequence.slides) {
+        if (slide.image) expect(existsSync(resolve("public", slide.image)), slide.image).toBe(true);
+      }
+    }
+  });
+
   it("opens every level with a chapter", () => {
     for (const levelId of LEVEL_IDS) {
       expect(storyFor({ type: "levelIntro", levelId }), levelId).toBeDefined();
@@ -27,7 +37,7 @@ describe("story sequences", () => {
   });
 
   it("finds a sequence by id and by trigger", () => {
-    expect(storySequence("abertura")?.title).toBe("A maré que mudou");
+    expect(storySequence("abertura")?.title).toBe("Primeira Corrente");
     expect(storySequence("nao-existe")).toBeUndefined();
     expect(storyFor({ type: "levelOutro", levelId: "recife-6" })?.id).toBe("recife-protegido");
     expect(storyFor({ type: "levelOutro", levelId: "recife-1" })).toBeUndefined();

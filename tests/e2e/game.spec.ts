@@ -235,7 +235,7 @@ test("level select only opens unlocked levels", async ({ page }) => {
   await page.getByTestId("map-enter").click();
   await expect(page.getByTestId("story-panel")).toHaveAttribute("data-story", "abertura");
   await page.getByTestId("story-next").click();
-  await expect(page.getByTestId("story-text")).toContainText("corrente virar");
+  await expect(page.getByTestId("story-text")).toHaveAttribute("alt", /corrente não mudou sozinha/);
   await page.getByTestId("story-skip").click();
   await expect(page.getByTestId("prep-panel")).toHaveAttribute("data-level", "recife-1");
   await expect(page.getByTestId("prep-objectives")).toContainText("Proteja o Recife");

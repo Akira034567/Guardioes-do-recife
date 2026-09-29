@@ -504,6 +504,61 @@
   max-width: calc(560px * var(--gr-scale));
 }
 
+/* O painel ocupa a altura da tela para a página de quadrinho caber inteira. */
+.gr-story {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.gr-panel--comic {
+  width: min(100%, calc(560px * var(--gr-scale)));
+  height: 100%;
+  padding: calc(14px * var(--gr-scale)) calc(16px * var(--gr-scale));
+  gap: calc(10px * var(--gr-scale));
+}
+
+.gr-panel--comic .gr-title {
+  font-size: calc(24px * var(--gr-scale));
+}
+
+.gr-story__page {
+  flex: 1 1 auto;
+  min-height: 0;
+  width: 100%;
+  display: flex;
+  justify-content: center;
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: zoom-in;
+}
+
+.gr-story__image {
+  height: 100%;
+  max-width: 100%;
+  object-fit: contain;
+  border-radius: calc(6px * var(--gr-scale));
+  box-shadow: 0 calc(6px * var(--gr-scale)) calc(18px * var(--gr-scale)) rgba(0, 10, 18, 0.5);
+}
+
+/* Ampliada: a página na largura do painel, e o painel rola. É o jeito de ler no celular deitado. */
+.gr-panel--zoom {
+  justify-content: flex-start;
+}
+
+.gr-panel--zoom .gr-story__page {
+  flex: none;
+  cursor: zoom-out;
+}
+
+.gr-panel--zoom .gr-story__image {
+  width: 100%;
+  height: auto;
+}
+
 /* ---------------------------------------------------------------- mapa do Recife */
 
 /*
@@ -1903,6 +1958,31 @@
 .gr-album__banner-art.gr-node__art--unknown,
 .gr-album__voice-art.gr-node__art--unknown {
   filter: brightness(0) opacity(0.45);
+}
+
+/* Capa de quadrinho: a primeira página recortada pelo topo, onde fica o título da fase. */
+.gr-album__art.gr-album__art--comic,
+.gr-album__banner-art.gr-album__art--comic {
+  width: 100%;
+  height: 100%;
+  max-width: none;
+  max-height: none;
+  object-fit: cover;
+  object-position: top;
+  border-radius: inherit;
+  filter: none;
+}
+
+.gr-album__card-art:has(.gr-album__art--comic),
+.gr-album__banner:has(.gr-album__art--comic) {
+  overflow: hidden;
+  border-radius: calc(10px * var(--gr-scale));
+}
+
+/* Silhueta de uma página inteira é um retângulo preto: o capítulo não vivido fica embaçado. */
+.gr-album__art.gr-album__art--comic.gr-node__art--unknown,
+.gr-album__banner-art.gr-album__art--comic.gr-node__art--unknown {
+  filter: blur(calc(5px * var(--gr-scale))) brightness(0.45) saturate(0.6);
 }
 
 .gr-album__card-lock {
