@@ -71,6 +71,7 @@ import type {
 import { trackSceneLoad } from "../systems/splash";
 import { HUD_LAYOUT } from "../hudLayout";
 import { PinchZoom } from "../systems/PinchZoom";
+import { centerCameraOnWorld, MAX_STAGE_EXTENT, mirrorAround, onStageResize, WIDE_STAGE } from "../systems/stage";
 import { regionOfLevel } from "../data/regions";
 import { GateView, LightFogLayer, WhirlpoolView } from "../objects/MapDeviceViews";
 import { lightRadiusOf } from "../core/GuardianBehaviors";
@@ -316,6 +317,14 @@ export class GameScene extends Phaser.Scene {
     };
 
     this.drawEnvironment();
+    if (WIDE_STAGE) {
+      // Celular: palco mais largo que o mundo. O mundo fica no meio e a câmera acompanha o palco.
+      centerCameraOnWorld(this);
+      onStageResize(this, () => {
+        this.pinch?.reset();
+        centerCameraOnWorld(this);
+      });
+    }
     this.createCurrentMotes();
     this.createPlatforms();
     this.selectionGraphic = this.add.graphics().setDepth(DEPTH.effects);
@@ -1961,8 +1970,11 @@ export class GameScene extends Phaser.Scene {
     if (this.level.backgroundKey && this.textures.exists(this.level.backgroundKey)) {
       const levelBackground = this.add.image(GAME_WIDTH / 2, playfieldCenterY, this.level.backgroundKey).setDepth(DEPTH.background);
       levelBackground.setScale(GAME_WIDTH / levelBackground.width);
+      // A arte cobre só o campo (1280x634). No palco largo do celular, sem barras de HUD, o resto da
+      // tela mostra a arte espelhada em volta — emenda sem costura, e a original não sai do lugar.
+      mirrorAround(this, levelBackground);
     } else {
-      drawLevelBackdrop(this, this.level);
+      drawLevelBackdrop(this, this.level, WIDE_STAGE ? MAX_STAGE_EXTENT : 0);
     }
 
     // O nome da fase é da `UIScene`: ela desenha a plaquinha no mesmo canto, na pele do HUD.

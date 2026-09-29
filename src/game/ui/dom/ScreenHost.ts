@@ -1,5 +1,5 @@
 import type Phaser from "phaser";
-import { GAME_WIDTH } from "../../constants";
+import { GAME_HEIGHT, GAME_WIDTH } from "../../constants";
 import { getSettings, onSettingsChanged, UI_SCALE_FACTOR } from "../../systems/settings";
 import "./ui.css";
 
@@ -119,7 +119,10 @@ export class ScreenHost {
     // 6 px de verdade. O piso maior só vale para toque; as consultas de container de `ui.css`
     // (tela baixa/estreita) é que rearrumam cada tela para o corpo maior caber.
     const floor = document.documentElement.classList.contains("is-touch") ? TOUCH_SCALE_FLOOR : 0.55;
-    const fit = Math.max(floor, bounds.width / GAME_WIDTH);
+    // Pela ALTURA também: no palco largo do celular (EXPAND) a largura passa de 1280 e só a altura
+    // diz o tamanho real de um pixel do jogo. No desktop (FIT) as duas contas dão o mesmo número.
+    const gameScale = Math.min(bounds.width / GAME_WIDTH, bounds.height / GAME_HEIGHT);
+    const fit = Math.max(floor, gameScale);
     this.root.style.setProperty("--gr-scale", String(fit * UI_SCALE_FACTOR[settings.uiScale]));
     this.root.dataset.contrast = settings.highContrast ? "high" : "normal";
   };

@@ -12,6 +12,7 @@ import { setCloudLinkEvent } from "./game/systems/cloud";
 import { adoptCloudLinkSession } from "./game/systems/session";
 import { armMobileShell, registerServiceWorker } from "./game/systems/mobileShell";
 import { setSplashProgress } from "./game/systems/splash";
+import { WIDE_STAGE } from "./game/systems/stage";
 import { installImageFallback } from "./game/ui/dom/imageFallback";
 
 // O bundle chegou: a barra da entrada anda o primeiro trecho. O resto é o `preload` da BootScene.
@@ -35,7 +36,9 @@ const game = new Phaser.Game({
   backgroundColor: "#063a55",
   scene: [BootScene, HubScene, LevelSelectScene, GameScene, UIScene],
   scale: {
-    mode: Phaser.Scale.FIT,
+    // Celular deitado: EXPAND — a altura fica em 720 e a largura cresce até a proporção da tela, e o
+    // jogo ocupa a tela inteira em vez de um retângulo 16:9 no meio (ver `systems/stage.ts`).
+    mode: WIDE_STAGE ? Phaser.Scale.EXPAND : Phaser.Scale.FIT,
     autoCenter: Phaser.Scale.CENTER_BOTH,
     width: GAME_WIDTH,
     height: GAME_HEIGHT,

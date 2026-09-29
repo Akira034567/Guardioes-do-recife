@@ -1,6 +1,7 @@
 import Phaser from "phaser";
 import { preloadReefArt, REEF_BACKDROP_KEY } from "../assets/reefArt";
 import { GAME_HEIGHT, GAME_WIDTH, HUB_DEPTH } from "../constants";
+import { coverStageWithWorld, onStageResize, WIDE_STAGE } from "../systems/stage";
 import type { LevelProgressApi } from "../core/LevelProgress";
 import { guardianRank } from "../core/reef/guardianRank";
 import { reefGrowth, type ReefGrowth } from "../core/reef/growth";
@@ -110,6 +111,10 @@ export class HubScene extends Phaser.Scene {
     const progression = getProgression();
     this.growth = reefGrowth(progression.progress);
     this.cameras.main.setBackgroundColor("#02141f");
+    if (WIDE_STAGE) {
+      coverStageWithWorld(this);
+      onStageResize(this, () => coverStageWithWorld(this));
+    }
 
     this.backdrop = drawHubBackdrop(this, { vitality: this.growth.vitality, reduced: this.reduced });
     this.bubbles = new HubBubbles(this, { vitality: this.growth.vitality });
@@ -168,8 +173,9 @@ export class HubScene extends Phaser.Scene {
     for (const view of this.decorationViews) view.tick(now, reduced);
 
     const pointer = this.input.activePointer;
-    const inside = pointer.x >= 0 && pointer.x <= GAME_WIDTH && pointer.y >= 0 && pointer.y <= GAME_HEIGHT;
-    const world = inside ? { x: (pointer.x / GAME_WIDTH) * 100, y: (pointer.y / GAME_HEIGHT) * 100 } : null;
+    // `worldX`, e não `x`: no palco largo do celular a câmera está deslocada e o mundo fica no meio.
+    const inside = pointer.worldX >= 0 && pointer.worldX <= GAME_WIDTH && pointer.worldY >= 0 && pointer.worldY <= GAME_HEIGHT;
+    const world = inside ? { x: (pointer.worldX / GAME_WIDTH) * 100, y: (pointer.worldY / GAME_HEIGHT) * 100 } : null;
 
     const snapshots = this.life?.tick(delta, { cover: this.coverForLife(), pointer: reduced ? null : world }) ?? [];
     for (const snapshot of snapshots) {
@@ -288,7 +294,7 @@ export class HubScene extends Phaser.Scene {
     for (const snapshot of snapshots) {
       const view = this.guardianViews.get(snapshot.guardianId as GuardianId);
       if (!view) continue;
-      const distance = Phaser.Math.Distance.Between(pointer.x, pointer.y, view.x, view.y);
+      const distance = Phaser.Math.Distance.Between(pointer.worldX, pointer.worldY, view.x, view.y);
       if (distance < 60 && (!best || distance < best.distance)) best = { target: { kind: "guardian", view }, distance };
     }
     // Lugar nenhum entra aqui: quem cuida deles é o alvo em HTML, por cima do desenho. Se o cursor

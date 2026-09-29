@@ -5265,41 +5265,46 @@
    ========================================================================== */
 
 /*
- * O menu ☰ do Recife é uma GAVETA por cima do cenário, e não a coluna do mapa: a regra de tela
- * estreita (que tira o rótulo e deixa só o pictograma) não serve para ela. Sem rótulo sobravam oito
- * retângulos largos com um ícone miúdo no meio e nada escrito. Aqui ela volta a ser lista: ícone e
- * nome, alinhados à esquerda, na altura do dedo.
+ * O menu ☰ do Recife é uma GAVETA por cima do cenário, e não a coluna do mapa: no toque ela é uma
+ * lista enxuta — ícone e nome, na altura do dedo — sem a marca e a frase do rodapé, que empurravam
+ * os últimos itens para fora da tela. (Antes, a regra de tela estreita deixava só retângulos largos
+ * com um ícone miúdo no meio.)
  */
-@container (max-width: 760px) {
-  .gr-hub__side {
-    width: calc(236px * var(--gr-scale));
-    padding: calc(58px * var(--gr-scale)) calc(10px * var(--gr-scale)) calc(10px * var(--gr-scale));
-  }
+html.is-touch .gr-hub__side {
+  width: calc(236px * var(--gr-scale) + env(safe-area-inset-left, 0px));
+  padding: calc(58px * var(--gr-scale)) calc(10px * var(--gr-scale)) calc(10px * var(--gr-scale))
+    calc(10px * var(--gr-scale) + env(safe-area-inset-left, 0px));
+}
 
-  .gr-hub__side .gr-world__nav {
-    gap: calc(5px * var(--gr-scale));
-  }
+html.is-touch .gr-hub__side .gr-world__brand,
+html.is-touch .gr-hub__side .gr-world__side-foot {
+  display: none;
+}
 
-  .gr-hub__side .gr-world__nav-item {
-    justify-content: flex-start;
-    gap: calc(12px * var(--gr-scale));
-    padding: calc(6px * var(--gr-scale)) calc(12px * var(--gr-scale));
-    font-size: calc(13px * var(--gr-scale));
-  }
+html.is-touch .gr-hub__side .gr-world__nav {
+  gap: calc(5px * var(--gr-scale));
+}
 
-  .gr-hub__side .gr-world__nav-item span:not(.gr-icon) {
-    display: inline;
-  }
+html.is-touch .gr-hub__side .gr-world__nav-item {
+  justify-content: flex-start;
+  gap: calc(12px * var(--gr-scale));
+  min-height: calc(40px * var(--gr-scale));
+  padding: calc(6px * var(--gr-scale)) calc(12px * var(--gr-scale));
+  font-size: calc(13px * var(--gr-scale));
+}
 
-  .gr-hub__side .gr-world__nav-item .gr-icon--lg {
-    width: calc(22px * var(--gr-scale));
-    height: calc(22px * var(--gr-scale));
-    color: var(--gr-cyan);
-  }
+html.is-touch .gr-hub__side .gr-world__nav-item .gr-world__nav-label {
+  display: inline;
+}
 
-  .gr-hub__side .gr-world__nav-item--on .gr-icon--lg {
-    color: #f2fbff;
-  }
+html.is-touch .gr-hub__side .gr-world__nav-item .gr-icon--lg {
+  width: calc(22px * var(--gr-scale));
+  height: calc(22px * var(--gr-scale));
+  color: var(--gr-cyan);
+}
+
+html.is-touch .gr-hub__side .gr-world__nav-item--on .gr-icon--lg {
+  color: #f2fbff;
 }
 
 /*
@@ -5352,4 +5357,201 @@
 .gr-pause__settings .gr-config__row .gr-slider {
   order: 3;
   flex: 1 1 100%;
+}
+
+/* O nome curto é só da barra de abas do celular (abaixo). */
+.gr-world__nav-short {
+  display: none;
+}
+
+/*
+ * BARRA DE ABAS DO CELULAR. No toque, o menu das telas de fora da partida sai da coluna da esquerda
+ * — onde, estreito, virava uma fila de pictogramas mais altos que largos — e vira a barra de baixo
+ * de todo app: oito abas dividindo a largura, pictograma em cima e nome curto embaixo, a aba atual
+ * acesa. O VOLTAR sai junto: com todas as seções a um toque, ele só repetia uma delas. A tela
+ * "crua" (Configurações aberta pela pausa, só com o voltar) continua como era.
+ */
+html.is-touch .gr-world__layout:has(> .gr-world__side:not(.gr-world__side--bare)),
+html.is-touch .gr-album__layout:has(> .gr-world__side:not(.gr-world__side--bare)) {
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr) auto;
+  gap: 0;
+  padding: calc(10px * var(--gr-scale)) calc(16px * var(--gr-scale)) 0;
+  overflow: hidden;
+}
+
+html.is-touch .gr-world__layout > .gr-world__main,
+html.is-touch .gr-album__layout > .gr-album__main {
+  grid-row: 1;
+  grid-column: 1;
+  overflow-y: auto;
+  overflow-x: clip;
+  min-height: 0;
+  padding-bottom: calc(10px * var(--gr-scale));
+  overscroll-behavior: contain;
+}
+
+html.is-touch .gr-world__layout > .gr-world__main > * {
+  flex-shrink: 0;
+}
+
+html.is-touch .gr-world__layout > .gr-world__side:not(.gr-world__side--bare),
+html.is-touch .gr-album__layout > .gr-world__side:not(.gr-world__side--bare) {
+  grid-row: 2;
+  grid-column: 1;
+  display: flex;
+  flex-direction: row;
+  flex-wrap: nowrap;
+  align-items: stretch;
+  justify-content: center;
+  gap: 0;
+  margin: 0 calc(-16px * var(--gr-scale));
+  padding: calc(4px * var(--gr-scale)) calc(12px * var(--gr-scale)) calc(5px * var(--gr-scale));
+  background: linear-gradient(180deg, rgba(4, 30, 47, 0.94), rgba(2, 14, 24, 0.98));
+  border-top: 1px solid rgba(117, 223, 244, 0.22);
+  box-shadow: 0 calc(-8px * var(--gr-scale)) calc(24px * var(--gr-scale)) rgba(0, 0, 0, 0.35);
+}
+
+html.is-touch :is(.gr-world__layout, .gr-album__layout) > .gr-world__side:not(.gr-world__side--bare) .gr-world__back,
+html.is-touch :is(.gr-world__layout, .gr-album__layout) > .gr-world__side:not(.gr-world__side--bare) .gr-world__brand,
+html.is-touch :is(.gr-world__layout, .gr-album__layout) > .gr-world__side:not(.gr-world__side--bare) .gr-world__side-foot {
+  display: none;
+}
+
+html.is-touch :is(.gr-world__layout, .gr-album__layout) > .gr-world__side:not(.gr-world__side--bare) .gr-world__nav {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: nowrap;
+  flex: 1 1 auto;
+  max-width: calc(980px * var(--gr-scale));
+  gap: calc(2px * var(--gr-scale));
+  padding: 0;
+  overflow: visible;
+}
+
+html.is-touch :is(.gr-world__layout, .gr-album__layout) > .gr-world__side:not(.gr-world__side--bare) .gr-world__nav-item {
+  position: relative;
+  flex: 1 1 0;
+  min-width: 0;
+  min-height: calc(50px * var(--gr-scale));
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: calc(3px * var(--gr-scale));
+  padding: calc(5px * var(--gr-scale)) calc(2px * var(--gr-scale)) calc(4px * var(--gr-scale));
+  background: transparent;
+  border: 0;
+  border-radius: calc(12px * var(--gr-scale));
+  box-shadow: none;
+  transform: none;
+  color: rgba(182, 227, 255, 0.62);
+  transition: color 120ms ease, background 120ms ease;
+}
+
+html.is-touch :is(.gr-world__layout, .gr-album__layout) > .gr-world__side:not(.gr-world__side--bare) .gr-world__nav-item .gr-icon--lg {
+  width: calc(24px * var(--gr-scale));
+  height: calc(24px * var(--gr-scale));
+}
+
+html.is-touch :is(.gr-world__layout, .gr-album__layout) > .gr-world__side:not(.gr-world__side--bare) .gr-world__nav-label {
+  display: none;
+}
+
+html.is-touch :is(.gr-world__layout, .gr-album__layout) > .gr-world__side:not(.gr-world__side--bare) .gr-world__nav-short {
+  display: block;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: max(10px, calc(11px * var(--gr-scale)));
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+/* A aba atual: pictograma aceso, nome claro e um traço de luz em cima, como nas abas do sistema. */
+html.is-touch :is(.gr-world__layout, .gr-album__layout) > .gr-world__side:not(.gr-world__side--bare) .gr-world__nav-item--on {
+  color: #f2fbff;
+  background: radial-gradient(ellipse 70% 90% at 50% 0%, rgba(117, 223, 244, 0.2), transparent 75%);
+}
+
+html.is-touch :is(.gr-world__layout, .gr-album__layout) > .gr-world__side:not(.gr-world__side--bare) .gr-world__nav-item--on .gr-icon--lg {
+  color: var(--gr-cyan);
+  filter: drop-shadow(0 0 calc(6px * var(--gr-scale)) rgba(117, 223, 244, 0.7));
+}
+
+html.is-touch :is(.gr-world__layout, .gr-album__layout) > .gr-world__side:not(.gr-world__side--bare) .gr-world__nav-item--on::before {
+  content: "";
+  position: absolute;
+  top: calc(-4px * var(--gr-scale));
+  left: 30%;
+  right: 30%;
+  height: calc(3px * var(--gr-scale));
+  border-radius: 0 0 999px 999px;
+  background: var(--gr-cyan);
+  box-shadow: 0 0 calc(10px * var(--gr-scale)) rgba(117, 223, 244, 0.8);
+}
+
+html.is-touch :is(.gr-world__layout, .gr-album__layout) > .gr-world__side:not(.gr-world__side--bare) .gr-world__nav-item:active {
+  background: rgba(117, 223, 244, 0.12);
+}
+
+/*
+ * PALCO LARGO DO CELULAR. O canvas agora vai de lado a lado, por baixo do notch; as telas HTML é
+ * que se afastam do recorte. Diálogos mantêm o respiro de sempre (ou o do notch, o que for maior);
+ * as telas cheias (mapa, álbum, preparação…) ganham só o do notch, e o fundo delas — que é da
+ * própria `.gr-screen` — continua até a borda.
+ */
+html.is-touch .gr-screen {
+  padding-left: max(calc(24px * var(--gr-scale)), env(safe-area-inset-left, 0px));
+  padding-right: max(calc(24px * var(--gr-scale)), env(safe-area-inset-right, 0px));
+}
+
+html.is-touch .gr-screen[data-screen="map"],
+html.is-touch .gr-screen[data-screen="shell"],
+html.is-touch .gr-screen[data-screen="collection"],
+html.is-touch .gr-screen[data-screen="bestiary"],
+html.is-touch .gr-screen[data-screen="story-index"],
+html.is-touch .gr-screen[data-screen="achievements"],
+html.is-touch .gr-screen[data-screen="settings"],
+html.is-touch .gr-screen[data-screen="preparation"] {
+  padding-left: env(safe-area-inset-left, 0px);
+  padding-right: env(safe-area-inset-right, 0px);
+}
+
+/* A barra de abas passa por baixo do notch (o fundo dela vai até a borda, as abas não). */
+html.is-touch .gr-world__layout > .gr-world__side:not(.gr-world__side--bare),
+html.is-touch .gr-album__layout > .gr-world__side:not(.gr-world__side--bare) {
+  margin-left: calc(-16px * var(--gr-scale) - env(safe-area-inset-left, 0px));
+  margin-right: calc(-16px * var(--gr-scale) - env(safe-area-inset-right, 0px));
+  padding-left: calc(12px * var(--gr-scale) + env(safe-area-inset-left, 0px));
+  padding-right: calc(12px * var(--gr-scale) + env(safe-area-inset-right, 0px));
+}
+
+/*
+ * O hub: os lugares são alvos em HTML por cima do cenário PINTADO, em porcentagem do mundo de
+ * 1280x720. No palco largo do celular a cena do hub aproxima a câmera até o cenário cobrir a largura
+ * (corta um pouco em cima e embaixo, onde não há lugar nenhum). A camada dos lugares faz a MESMA
+ * conta — largura toda, 16:9, centrada na altura — para cada alvo continuar em cima do seu desenho.
+ * No desktop a camada já é 16:9 e isto dá exatamente o `inset: 0` de antes.
+ */
+.gr-hub__spots {
+  inset: auto;
+  left: 0;
+  top: 50%;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  transform: translateY(-50%);
+}
+
+/* O botão ☰, os contadores e a gaveta do hub se afastam do notch (o cenário passa por baixo dele). */
+html.is-touch .gr-hub__menu-toggle {
+  left: calc(14px * var(--gr-scale) + env(safe-area-inset-left, 0px));
+}
+
+html.is-touch .gr-hub__counters {
+  right: calc(18px * var(--gr-scale) + env(safe-area-inset-right, 0px));
+}
+
+html.is-touch .gr-hub__card {
+  margin-right: env(safe-area-inset-right, 0px);
 }

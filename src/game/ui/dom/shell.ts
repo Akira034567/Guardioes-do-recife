@@ -50,15 +50,19 @@ interface ShellOptions {
   footer?: HTMLElement | null;
 }
 
-const ITEMS: ReadonlyArray<{ section: ShellSection; icon: string; label: string; open: (nav: ShellNav) => void }> = [
-  { section: "hub", icon: ICONS.coral, label: "Meu Recife", open: (nav) => nav.onGoHub() },
-  { section: "map", icon: ICONS.compass, label: "Mapa do Recife", open: (nav) => nav.onGoMap() },
-  { section: "collection", icon: ICONS.fish, label: "Álbum do Recife", open: (nav) => nav.onOpenCollection() },
-  { section: "bestiary", icon: ICONS.spiky, label: "Ameaças", open: (nav) => nav.onOpenBestiary() },
-  { section: "stories", icon: ICONS.book, label: "História", open: (nav) => nav.onOpenStories() },
-  { section: "achievements", icon: ICONS.trophy, label: "Conquistas", open: (nav) => nav.onOpenAchievements() },
-  { section: "account", icon: ICONS.account, label: "Minha Conta", open: (nav) => nav.onOpenAccount() },
-  { section: "settings", icon: ICONS.gear, label: "Configurações", open: (nav) => nav.onOpenSettings() },
+/**
+ * `short` é o nome na barra de abas do celular (embaixo, estilo app): oito abas dividem a largura
+ * da tela, e "Álbum do Recife" não cabe onde cabe "Álbum".
+ */
+const ITEMS: ReadonlyArray<{ section: ShellSection; icon: string; label: string; short: string; open: (nav: ShellNav) => void }> = [
+  { section: "hub", icon: ICONS.coral, label: "Meu Recife", short: "Recife", open: (nav) => nav.onGoHub() },
+  { section: "map", icon: ICONS.compass, label: "Mapa do Recife", short: "Mapa", open: (nav) => nav.onGoMap() },
+  { section: "collection", icon: ICONS.fish, label: "Álbum do Recife", short: "Álbum", open: (nav) => nav.onOpenCollection() },
+  { section: "bestiary", icon: ICONS.spiky, label: "Ameaças", short: "Ameaças", open: (nav) => nav.onOpenBestiary() },
+  { section: "stories", icon: ICONS.book, label: "História", short: "História", open: (nav) => nav.onOpenStories() },
+  { section: "achievements", icon: ICONS.trophy, label: "Conquistas", short: "Conquistas", open: (nav) => nav.onOpenAchievements() },
+  { section: "account", icon: ICONS.account, label: "Minha Conta", short: "Conta", open: (nav) => nav.onOpenAccount() },
+  { section: "settings", icon: ICONS.gear, label: "Configurações", short: "Ajustes", open: (nav) => nav.onOpenSettings() },
 ];
 
 /** Os nomes que o menu do mapa sempre teve; a tela do mapa continua passando estes. */
@@ -142,7 +146,8 @@ export function shellSidebar(active: ShellSection, nav: ShellNav, options: Shell
             },
           },
           h("span", { class: "gr-icon gr-icon--lg", html: item.icon }),
-          h("span", { text: item.label.toUpperCase() }),
+          h("span", { class: "gr-world__nav-label", text: item.label.toUpperCase() }),
+          h("span", { class: "gr-world__nav-short", text: item.short }),
         );
       }),
     ),

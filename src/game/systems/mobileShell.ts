@@ -1,4 +1,5 @@
 import { EventBus, Events } from "../EventBus";
+import { safeInsetsCss } from "./stage";
 
 /**
  * O JOGO COMO APP NO CELULAR — tudo que a página faz para não parecer página.
@@ -59,23 +60,6 @@ export function setMatchActive(active: boolean): void {
   }
 }
 
-/** Recuos da área segura (`env(safe-area-inset-*)`), lidos de uma sonda invisível. */
-function safeInsets(): { top: number; right: number; bottom: number; left: number } {
-  let probe = document.getElementById("gr-safe-probe");
-  if (!probe) {
-    probe = document.createElement("div");
-    probe.id = "gr-safe-probe";
-    probe.setAttribute("aria-hidden", "true");
-    probe.style.cssText =
-      "position:fixed;left:0;top:0;width:0;height:0;visibility:hidden;pointer-events:none;" +
-      "padding:env(safe-area-inset-top,0px) env(safe-area-inset-right,0px) env(safe-area-inset-bottom,0px) env(safe-area-inset-left,0px)";
-    document.body.appendChild(probe);
-  }
-  const style = getComputedStyle(probe);
-  const px = (value: string): number => Number.parseFloat(value) || 0;
-  return { top: px(style.paddingTop), right: px(style.paddingRight), bottom: px(style.paddingBottom), left: px(style.paddingLeft) };
-}
-
 /**
  * O PALCO NO TAMANHO DA TELA DE VERDADE.
  *
@@ -96,10 +80,13 @@ function fitStageToScreen(stage: HTMLElement): void {
   const shortSide = Math.min(screen.width, screen.height) || Infinity;
   const width = Math.min(window.innerWidth, viewport?.width ?? Infinity, landscape ? longSide : shortSide);
   const height = Math.min(window.innerHeight, viewport?.height ?? Infinity, landscape ? shortSide : longSide);
-  const inset = safeInsets();
+  const inset = safeInsetsCss();
+  // De lado a lado, SEM descontar o notch: o fundo do jogo passa por baixo dele, e quem se afasta
+  // do recorte é o HUD (`hudEdges`) e as telas HTML (`padding` em `ui.css`). Em cima e embaixo o
+  // palco para na área segura — a barrinha de início é gesto do sistema, e nada se toca ali.
   stage.style.top = `${Math.round((viewport?.offsetTop ?? 0) + inset.top)}px`;
-  stage.style.left = `${Math.round((viewport?.offsetLeft ?? 0) + inset.left)}px`;
-  stage.style.width = `${Math.max(0, Math.floor(width - inset.left - inset.right))}px`;
+  stage.style.left = `${Math.round(viewport?.offsetLeft ?? 0)}px`;
+  stage.style.width = `${Math.max(0, Math.floor(width))}px`;
   stage.style.height = `${Math.max(0, Math.floor(height - inset.top - inset.bottom))}px`;
 }
 

@@ -71,9 +71,11 @@ html.is-touch #ui-layer {
 }
 
 /*
- * ÁREA SEGURA. No iPhone deitado, o notch come ~47px de um lado e a barrinha de início ~21px
- * embaixo. A barrinha é um gesto do sistema — nenhum site consegue desligá-la —, então o jogo
- * inteiro (canvas e telas) vive DENTRO da área segura e nenhum botão fica embaixo dela.
+ * ÁREA SEGURA. No iPhone deitado, o notch come ~47px de cada lado e a barrinha de início ~21px
+ * embaixo. A barrinha é um gesto do sistema — nenhum site consegue desligá-la —, então em cima e
+ * embaixo o jogo para na área segura e nenhum botão fica embaixo dela. Dos LADOS o jogo vai até a
+ * borda (o fundo passa por baixo do notch): quem se afasta do recorte é o HUD (`hudEdges` em
+ * `systems/stage.ts`) e as telas HTML (`padding` em `ui/dom/ui.css`).
  *
  * É posição (`inset`), e não `padding`: o Phaser mede o pai com `getBoundingClientRect`, que
  * inclui o padding, e o canvas continuaria encostando na borda.
@@ -81,9 +83,10 @@ html.is-touch #ui-layer {
 html.is-touch #game {
   position: fixed;
   top: env(safe-area-inset-top, 0px);
-  right: env(safe-area-inset-right, 0px);
+  /* De lado a lado: o fundo passa por baixo do notch; HUD e telas é que se afastam dele. */
+  right: 0;
   bottom: env(safe-area-inset-bottom, 0px);
-  left: env(safe-area-inset-left, 0px);
+  left: 0;
   width: auto;
   height: auto;
   background: transparent;
