@@ -4496,14 +4496,9 @@
   }
 }
 
-/* 2. Recorte da tela (notch, ilha, cantos redondos). A camada segue o canvas, que
-      pode encostar na borda física em tela cheia. */
-.gr-screen {
-  padding-left: env(safe-area-inset-left, 0);
-  padding-right: env(safe-area-inset-right, 0);
-  padding-top: env(safe-area-inset-top, 0);
-  padding-bottom: env(safe-area-inset-bottom, 0);
-}
+/* 2. Recorte da tela (notch, ilha, cantos redondos): quem cuida é o `#game` em `style.css`,
+      que no celular já vive DENTRO da área segura. Aqui antes havia um `padding: env(...)` que,
+      por vir depois do padding normal da `.gr-screen`, o zerava em todo lugar sem recorte. */
 
 /* 3. Canvas baixo (celular deitado, janela espremida). O menu lateral vira uma
       fileira em cima e o miolo passa a rolar, em vez de cortar o conteúdo. */
@@ -5244,4 +5239,23 @@
   .gr-pause__drawer {
     width: 100%;
   }
+}
+
+/* ==========================================================================
+   v4 — Canais Profundos no mapa. Sem arte pintada ainda: o fundo é desenhado
+   aqui, fundo escuro com dois braços de canal claros e rochas nas bordas.
+   Quando a arte chegar, é só dar `backgroundKey` à região em `regions.ts`.
+   ========================================================================== */
+.gr-world__map--procedural[data-region="canais-profundos"] {
+  background:
+    radial-gradient(ellipse 18% 30% at 12% 20%, rgba(58, 70, 92, 0.85), transparent 70%),
+    radial-gradient(ellipse 22% 26% at 88% 82%, rgba(52, 62, 84, 0.85), transparent 70%),
+    radial-gradient(ellipse 30% 20% at 50% 92%, rgba(40, 52, 74, 0.9), transparent 70%),
+    radial-gradient(ellipse 60% 18% at 50% 42%, rgba(120, 200, 235, 0.16), transparent 72%),
+    radial-gradient(ellipse 60% 16% at 50% 68%, rgba(120, 200, 235, 0.12), transparent 72%),
+    linear-gradient(180deg, #0b3a5c 0%, #072843 55%, #041a2d 100%);
+}
+
+.gr-world[data-region="canais-profundos"] .gr-world__backdrop {
+  background: radial-gradient(circle at 50% 0%, #0b4a72 0%, #041a2d 70%);
 }

@@ -1,12 +1,15 @@
-import { LEVEL_IDS } from "./levels";
+import { DIFFICULTY_GATE_LEVEL_IDS } from "./levels";
 
 /**
  * Conquistas (item 37). Cada uma é só dado: um jeito de medir, uma meta e as Conchas que paga.
  * A avaliação é pura (`core/progression/achievements.ts`) e roda no fim de cada partida.
  */
 
-/** Quantas fases a campanha tem hoje: as conquistas de "campanha inteira" acompanham sozinhas. */
-const CAMPAIGN_LEVELS = LEVEL_IDS.length;
+/**
+ * As conquistas de "campanha inteira" medem o Recife Costeiro — é o que as descrições prometem, e
+ * contar os Canais Profundos (v4) tiraria de volta a meta de quem já a tinha cumprido.
+ */
+const CAMPAIGN_LEVELS = DIFFICULTY_GATE_LEVEL_IDS.length;
 
 /**
  * Teto de vidas perdidas do "Sopro de vida". Um único número, num lugar só: se a façanha ficar dura
@@ -222,7 +225,7 @@ export const ACHIEVEMENTS: AchievementDefinition[] = [
   {
     id: "sem-recomeco",
     name: "Sem recomeço",
-    description: "Conclua a campanha inteira sem nunca reiniciar uma fase.",
+    description: "Conclua o Recife Costeiro inteiro sem nunca reiniciar uma fase.",
     category: "especiais",
     measure: { type: "campaignWithoutRestart" },
     target: CAMPAIGN_LEVELS,
@@ -232,7 +235,7 @@ export const ACHIEVEMENTS: AchievementDefinition[] = [
   {
     id: "dupla-do-recife",
     name: "Dupla do Recife",
-    description: "Vença todas as fases usando no máximo duas espécies de Guardião em cada.",
+    description: "Vença todas as fases do Recife Costeiro usando no máximo duas espécies de Guardião em cada.",
     category: "especiais",
     measure: { type: "campaignBest", stat: "distinctGuardians", max: 2 },
     target: CAMPAIGN_LEVELS,

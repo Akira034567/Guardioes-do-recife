@@ -13,7 +13,7 @@ import { GUARDIAN_UNLOCKS } from "../src/game/data/unlocks";
 describe("encounter registry", () => {
   it("mantém os Encontros fora da campanha, mas jogáveis por id", () => {
     expect(ENCOUNTERS).toHaveLength(4);
-    expect(LEVELS).toHaveLength(6);
+    expect(LEVELS).toHaveLength(16);
     for (const encounter of ENCOUNTERS) {
       expect(LEVEL_IDS).not.toContain(encounter.level.id);
       expect(getLevel(encounter.level.id), "jogável por id").toBe(encounter.level);

@@ -44,6 +44,200 @@ const page = (fase: number, number: number, text: string): StorySlide => ({
  * Os ids vêm da primeira versão, em texto, destes capítulos: o save guarda o que já foi lido por
  * eles, então trocar o id faria o capítulo reaparecer para quem já o viu.
  */
+/*
+ * Canais Profundos (v4). Capítulos só em texto por enquanto: quando as páginas de quadrinho
+ * chegarem, é trocar cada slide por `page(...)` mantendo os ids.
+ */
+const CANAIS_STORY: StorySequence[] = [
+  {
+    id: "canais-descida",
+    title: "Para Baixo do Recife",
+    summary: "A baleia apontou para o fundo. Os Guardiões descem.",
+    guardianId: "sea-turtle",
+    trigger: { type: "levelIntro", levelId: "canais-1" },
+    slides: [
+      { speaker: "Tartaruga", text: "A baleia não fugia de nós. Fugia do que acordou lá embaixo, nos Canais Profundos." },
+      { speaker: "Camarão", text: "Canais? Tipo... mais de um caminho? Ao mesmo tempo?" },
+      { text: "Na Boca do Canal a água se divide em dois braços em volta de uma ilha comprida. O cardume da maré negra já desce pelos dois." },
+      { speaker: "Baiacu", text: "Então a gente defende os dois lados. Fácil. ...Fácil, né?" },
+    ],
+  },
+  {
+    id: "canais-eclusa",
+    title: "A Eclusa Velha",
+    summary: "Uma alavanca do Recife antigo ainda funciona.",
+    guardianId: "pistol-shrimp",
+    trigger: { type: "levelIntro", levelId: "canais-2" },
+    slides: [
+      { text: "No fundo do canal, uma eclusa de pedra do Recife antigo. A alavanca ainda gira." },
+      { speaker: "Tartaruga", text: "Ela escolhe por onde a água corre. O canal reto é rápido; o sinuoso é longo." },
+      { speaker: "Camarão", text: "Então a gente manda eles para onde a nossa mira está. Gostei dessa alavanca." },
+      { text: "Algo brilha dentro da eclusa, preso entre as pedras: uma concha fechada, guardando alguma coisa." },
+    ],
+  },
+  {
+    id: "canais-ostra",
+    title: "A Tesoureira",
+    summary: "Da eclusa sai uma Ostra que guardou o Recife antigo.",
+    guardianId: "oyster",
+    trigger: { type: "levelOutro", levelId: "canais-2" },
+    slides: [
+      { text: "Quando a última onda passa, a concha presa na eclusa se abre." },
+      { speaker: "Ostra", text: "Cem marés guardando as pérolas do Recife antigo. Achei que ninguém mais viria." },
+      { speaker: "Baiacu", text: "Você... dá pérolas? Pra gente? De graça?" },
+      { speaker: "Ostra", text: "Dou para quem defende. E quem guarda um pouco, ganha mais. A Ostra se junta aos Guardiões." },
+    ],
+  },
+  {
+    id: "canais-mare",
+    title: "Maré Virada",
+    summary: "A corrente que ajuda agora vai atrapalhar daqui a pouco.",
+    guardianId: "jellyfish",
+    trigger: { type: "levelIntro", levelId: "canais-3" },
+    slides: [
+      { text: "Três fileiras de canal, e a maré mudando de ideia o tempo todo." },
+      { speaker: "Água-viva", text: "Sinto a lua puxando. A corrente vai virar — e o que ela segurava, ela vai empurrar." },
+      { speaker: "Camarão", text: "Então a gente se prepara antes de ela virar. Ninguém pega o Recife de surpresa." },
+    ],
+  },
+  {
+    id: "canais-nevoa",
+    title: "Névoa de Lodo",
+    summary: "O lodo do fundo sobe em nuvens, e o Recife fica cego.",
+    guardianId: "dolphin",
+    trigger: { type: "levelIntro", levelId: "canais-4" },
+    slides: [
+      { text: "O lodo do fundo sobe em nuvens. De tempos em tempos, os Guardiões não enxergam além do próprio nariz." },
+      { speaker: "Golfinho", text: "Meu sonar ainda ouve, mas os olhos de vocês vão falhar. Fiquem perto uns dos outros." },
+      { speaker: "Baiacu", text: "E os ladrões? Adoram o escuro, né?" },
+      { text: "No meio da névoa, uma luz pequena pisca e se apaga. Alguém está tentando sinalizar." },
+    ],
+  },
+  {
+    id: "canais-lanterna",
+    title: "A Luz no Lodo",
+    summary: "Quem piscava na névoa era o Peixe-Lanterna.",
+    guardianId: "lanternfish",
+    trigger: { type: "levelOutro", levelId: "canais-4" },
+    slides: [
+      { text: "A névoa baixa. A luz que piscava aparece de novo — agora bem perto." },
+      { speaker: "Peixe-Lanterna", text: "Eu acendo o caminho. Quem nada na minha luz enxerga através de qualquer lodo." },
+      { speaker: "Golfinho", text: "Ouvidos e olhos. Agora o Recife tem os dois." },
+      { text: "O Peixe-Lanterna se junta aos Guardiões." },
+    ],
+  },
+  {
+    id: "canais-farol",
+    title: "O Farol Afundado",
+    summary: "A água gira em volta da luz velha — e algo enorme espreita.",
+    guardianId: "sea-turtle",
+    trigger: { type: "levelIntro", levelId: "canais-5" },
+    slides: [
+      { text: "Um farol do Recife antigo, afundado há séculos. A água gira em volta dele em espiral." },
+      { speaker: "Tartaruga", text: "O redemoinho devolve quem passa. Use isso: cada volta é mais uma chance de acertar." },
+      { speaker: "Camarão", text: "Tem uma sombra comprida lá no fundo... Parece uma moreia. Uma moreia GIGANTE." },
+    ],
+  },
+  {
+    id: "canais-labirinto",
+    title: "Labirinto de Pedra",
+    summary: "Três canais, duas eclusas — e uma sombra que plana.",
+    guardianId: "pufferfish",
+    trigger: { type: "levelIntro", levelId: "canais-6" },
+    slides: [
+      { text: "As pedras do fundo formam um labirinto de três canais. Duas eclusas decidem por onde a maré negra passa." },
+      { speaker: "Baiacu", text: "Três caminhos?! Eu só consigo inchar num lugar por vez!" },
+      { speaker: "Tartaruga", text: "Então feche o que você não consegue defender." },
+      { text: "Uma sombra enorme plana sobre o labirinto sem bater as asas." },
+    ],
+  },
+  {
+    id: "canais-arraia",
+    title: "A Asa do Canal",
+    summary: "A sombra que planava era a Arraia-Manta.",
+    guardianId: "manta-ray",
+    trigger: { type: "levelOutro", levelId: "canais-6" },
+    slides: [
+      { speaker: "Arraia-Manta", text: "Plano por estes canais desde antes das eclusas. Onde eu passo, a água desacelera." },
+      { speaker: "Camarão", text: "E você vai para onde a gente precisar?" },
+      { speaker: "Arraia-Manta", text: "Uma vez por maré. Escolha bem. A Arraia-Manta se junta aos Guardiões." },
+    ],
+  },
+  {
+    id: "canais-corredeira",
+    title: "Corredeira",
+    summary: "A água mais rápida dos Canais.",
+    guardianId: "shark",
+    trigger: { type: "levelIntro", levelId: "canais-7" },
+    slides: [
+      { text: "Um canal comprido que desce em zigue-zague. Nas corredeiras, a corrente dobra de força." },
+      { speaker: "Tubarão", text: "Rápido demais para pensar? Então pense antes." },
+      { speaker: "Arraia-Manta", text: "E se a maré virar no meio, eu mudo de lugar. Deixem comigo." },
+    ],
+  },
+  {
+    id: "canais-breu",
+    title: "Breu Azul",
+    summary: "Onde a luz do sol não chega.",
+    guardianId: "lanternfish",
+    trigger: { type: "levelIntro", levelId: "canais-8" },
+    slides: [
+      { text: "O fundo mais escuro dos Canais. A névoa quase não sai, e os camuflados nadam à vontade." },
+      { speaker: "Peixe-Lanterna", text: "Aqui o esquadrão inteiro precisa caber na minha luz." },
+      { text: "No breu, algo corta a água em linha reta — rápido demais para ver." },
+    ],
+  },
+  {
+    id: "canais-espada",
+    title: "A Lâmina do Canal",
+    summary: "Quem cortava o breu era o Peixe-Espada.",
+    guardianId: "swordfish",
+    trigger: { type: "levelOutro", levelId: "canais-8" },
+    slides: [
+      { speaker: "Peixe-Espada", text: "Não persigo ninguém. Espero a fila se alinhar e atravesso todos de uma vez." },
+      { speaker: "Tubarão", text: "Finalmente alguém que entende de caça." },
+      { speaker: "Peixe-Espada", text: "A Rainha dos Canais está no trono. Eu vou com vocês. O Peixe-Espada se junta aos Guardiões." },
+    ],
+  },
+  {
+    id: "canais-encruzilhada",
+    title: "Encruzilhada",
+    summary: "Todos os canais se encontram aqui.",
+    guardianId: "dolphin",
+    trigger: { type: "levelIntro", levelId: "canais-9" },
+    slides: [
+      { text: "Dois canais se cruzam no meio do fundo, cada um vindo de um lado." },
+      { speaker: "Golfinho", text: "Tudo o que vimos até aqui volta de uma vez: maré, névoa, redemoinho — e cardumes inteiros de elite." },
+      { speaker: "Camarão", text: "No cruzamento não existe lado seguro. Então não vamos deixar nenhum lado." },
+    ],
+  },
+  {
+    id: "canais-trono",
+    title: "O Trono da Moreia",
+    summary: "A Moreia-Rainha espera no fundo dos Canais.",
+    guardianId: "swordfish",
+    trigger: { type: "levelIntro", levelId: "canais-10" },
+    slides: [
+      { text: "No fundo dos Canais, entre dois braços de água que se abraçam, o trono da Moreia-Rainha." },
+      { speaker: "Peixe-Espada", text: "Ela nunca aparece duas vezes no mesmo lugar. Quando se fere, mergulha para o outro canal." },
+      { speaker: "Tartaruga", text: "Então protegemos os dois lados. Até o fim." },
+    ],
+  },
+  {
+    id: "canais-livres",
+    title: "Os Canais São Nossos",
+    summary: "A Rainha cai, e o fundo revela algo ainda mais escuro.",
+    guardianId: "sea-turtle",
+    trigger: { type: "levelOutro", levelId: "canais-10" },
+    slides: [
+      { text: "A Moreia-Rainha recua para o fundo e some. As correntes dos Canais voltam ao seu ritmo." },
+      { speaker: "Ostra", text: "Faz cem marés que a água não corre tão limpa por aqui." },
+      { speaker: "Peixe-Lanterna", text: "Mas olhem lá embaixo... a luz não chega. Nem a minha." },
+      { speaker: "Tartaruga", text: "O Abismo Azul. É de lá que a maré negra vem. E é para lá que vamos." },
+    ],
+  },
+];
+
 export const STORY_SEQUENCES: StorySequence[] = [
   {
     id: "abertura",
@@ -127,6 +321,7 @@ export const STORY_SEQUENCES: StorySequence[] = [
       page(6, 3, "Pela primeira vez, a baleia fala. Baleia: Ele... acordou. Camarão: ...quem? Baiacu: O que aconteceu? Tartaruga: Do que ela está fugindo? Baleia: Eu não estava indo para o Recife. Eu estava saindo do Abismo. Ela não causou isso de propósito. Ela também está tentando escapar. Lá embaixo, nas profundezas... algo muito maior desperta. O perigo ainda não acabou. Essa foi apenas a primeira parte da nossa jornada. Abismo Azul: em breve..."),
     ],
   },
+  ...CANAIS_STORY,
 ];
 
 export function storySequence(id: string): StorySequence | undefined {

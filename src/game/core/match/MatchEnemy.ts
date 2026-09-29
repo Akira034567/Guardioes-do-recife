@@ -39,8 +39,8 @@ export class MatchEnemy implements AbilityEnemy {
   constructor(
     readonly id: string,
     readonly definition: ResolvedEnemyDefinition,
-    readonly route: RoutePath,
-    readonly pathId: string,
+    public route: RoutePath,
+    public pathId: string,
   ) {
     const start = route.getPointAtDistance(0);
     this.x = start.x;
@@ -100,6 +100,18 @@ export class MatchEnemy implements AbilityEnemy {
     const point = this.route.getPointAtDistance(this.pathDistance);
     this.x = point.x;
     this.y = point.y;
+  }
+
+  /**
+   * Muda de canal no MESMO ponto do percurso (fração da rota), como quem mergulha numa passagem e
+   * reaparece do outro lado. A Moreia-Rainha faz isso ao mudar de fase.
+   */
+  switchRoute(route: RoutePath, pathId: string): void {
+    const progress = this.route.getProgress(this.pathDistance);
+    this.route = route;
+    this.pathId = pathId;
+    this.clearBlocked();
+    this.setPathDistance(progress * route.totalLength);
   }
 
   /** Cura (regeneração); nunca passa da vida máxima. */

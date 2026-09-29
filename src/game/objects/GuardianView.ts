@@ -583,6 +583,81 @@ export class GuardianView extends Phaser.GameObjects.Container {
         graphic.fillCircle(19, -5, 2);
         break;
       }
+      // ── Canais Profundos (v4): desenho vetorial até a arte das pranchas chegar.
+      case "oyster": {
+        // Concha entreaberta com a pérola; Banco dourado, Madrepérola violeta.
+        const pearl = branchId === "a" && upgradeLevel > 0 ? 0xffd76a : branchId === "b" && upgradeLevel > 0 ? (upgradeLevel > 1 ? 0x2a1f3d : 0xb8a2ff) : 0xfffaf0;
+        graphic.fillStyle(0x8a6f7d, 1);
+        graphic.fillEllipse(0, 6, 56, 26);
+        graphic.fillStyle(primary, 1);
+        graphic.fillEllipse(0, -6, 52, 24);
+        graphic.lineStyle(2, 0x6d5563, 0.9);
+        for (const offset of [-14, -4, 6, 16]) graphic.lineBetween(offset, -16, offset * 0.6, 4);
+        graphic.fillStyle(0x3c2433, 1);
+        graphic.fillEllipse(0, 2, 34, 8);
+        graphic.fillStyle(pearl, 1);
+        graphic.fillCircle(0, 0, 7);
+        graphic.fillStyle(0xffffff, 0.8);
+        graphic.fillCircle(-2, -2, 2.5);
+        break;
+      }
+      case "lanternfish": {
+        // Corpo escuro, boca grande e a isca acesa na ponta da antena.
+        const glow = branchId === "b" && upgradeLevel > 0 ? 0x7fe7ff : accent;
+        graphic.fillStyle(glow, 0.18);
+        graphic.fillCircle(18, -30, 22 + upgradeLevel * 5);
+        graphic.fillStyle(primary, 1);
+        graphic.fillEllipse(0, 0, 48, 34);
+        graphic.fillTriangle(-22, 0, -38, -12, -38, 12);
+        graphic.fillStyle(0x0d1f33, 1);
+        graphic.fillEllipse(16, 7, 16, 9);
+        graphic.fillStyle(0xf2f2f2, 1);
+        for (const tooth of [10, 15, 20]) graphic.fillTriangle(tooth, 3, tooth + 3, 3, tooth + 1.5, 8);
+        graphic.lineStyle(2, 0x9cc7e6, 1);
+        graphic.lineBetween(6, -15, 12, -26);
+        graphic.lineBetween(12, -26, 18, -30);
+        graphic.fillStyle(glow, 1);
+        graphic.fillCircle(18, -30, 6);
+        graphic.fillStyle(0xffffff, 1);
+        graphic.fillCircle(8, -5, 4);
+        graphic.fillStyle(0x092333, 1);
+        graphic.fillCircle(9, -5, 2);
+        break;
+      }
+      case "manta-ray": {
+        // Losango de asas largas visto de cima, cauda fina e as barrigas claras nas pontas.
+        const edge = branchId === "a" && upgradeLevel > 0 ? 0x8ff0ff : branchId === "b" && upgradeLevel > 0 ? 0x5a7dff : accent;
+        graphic.fillStyle(primary, 1);
+        graphic.fillTriangle(-34, 2, 0, -18, 0, 18);
+        graphic.fillTriangle(34, 2, 0, -18, 0, 18);
+        graphic.fillEllipse(0, 0, 26, 30);
+        graphic.lineStyle(2, 0x243553, 1);
+        graphic.lineBetween(0, 16, -4, 36);
+        graphic.lineStyle(2, edge, 0.9);
+        graphic.lineBetween(-34, 2, 0, -18);
+        graphic.lineBetween(34, 2, 0, -18);
+        graphic.fillStyle(0xe6f4ff, 0.8);
+        graphic.fillCircle(-8, -12, 3);
+        graphic.fillCircle(8, -12, 3);
+        break;
+      }
+      case "swordfish": {
+        // Corpo fusiforme, vela dorsal e a espada longa; Estocada laranja, Esgrima rosa.
+        const blade = branchId === "a" && upgradeLevel > 0 ? 0xffb35a : branchId === "b" && upgradeLevel > 0 ? 0xff6a8a : accent;
+        graphic.fillStyle(primary, 1);
+        graphic.fillEllipse(-4, 0, 50, 20);
+        graphic.fillTriangle(-16, -8, 8, -8, -6, -26);
+        graphic.fillTriangle(-28, 0, -42, -12, -42, 12);
+        graphic.fillStyle(blade, 1);
+        graphic.fillTriangle(20, -3, 20, 3, 46 + upgradeLevel * 4, 0);
+        graphic.fillStyle(0xd8f1ff, 1);
+        graphic.fillEllipse(-2, 5, 34, 7);
+        graphic.fillStyle(0xffffff, 1);
+        graphic.fillCircle(12, -3, 3.5);
+        graphic.fillStyle(0x092333, 1);
+        graphic.fillCircle(13, -3, 1.8);
+        break;
+      }
       default:
         graphic.fillStyle(primary, 1);
         graphic.fillEllipse(0, 0, 50, 30);

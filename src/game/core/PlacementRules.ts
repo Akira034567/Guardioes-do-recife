@@ -12,7 +12,13 @@ export const PLAYFIELD_BOUNDS = {
 } as const;
 
 export interface PlacementContext {
+  /** Rota principal. */
   route: RoutePath;
+  /**
+   * Todas as rotas da fase (Canais Profundos têm várias). Ausente = só a principal. As regras
+   * medem sempre contra a rota MAIS PRÓXIMA do toque: água livre precisa estar longe de todas.
+   */
+  routes?: ReadonlyArray<{ id: string; route: RoutePath }>;
   /** Plataformas de pedra da fase. */
   platforms: readonly Vec2[];
   /** Todos os Guardiões já posicionados. */
@@ -30,6 +36,19 @@ export interface PlacementValidation {
   /** Distância ao longo da rota, quando a unidade fica em cima dela. */
   routeDistance: number | null;
   progress: number;
+  /** Rota a que `routeDistance` se refere (a mais próxima do toque). */
+  pathId?: string;
+}
+
+/** A rota mais próxima de um ponto, entre todas as da fase. */
+export function closestRoute(context: PlacementContext, point: Vec2): { id: string; route: RoutePath; closest: ReturnType<RoutePath["getClosestPoint"]> } {
+  const routes = context.routes && context.routes.length > 0 ? context.routes : [{ id: "main", route: context.route }];
+  let best = { id: routes[0].id, route: routes[0].route, closest: routes[0].route.getClosestPoint(point) };
+  for (const candidate of routes.slice(1)) {
+    const closest = candidate.route.getClosestPoint(point);
+    if (closest.distance < best.closest.distance) best = { id: candidate.id, route: candidate.route, closest };
+  }
+  return best;
 }
 
 export const PLACEMENT_HINTS: Record<PlacementMode, string> = {
@@ -51,7 +70,7 @@ function near(point: Vec2, others: readonly Vec2[], distance: number): boolean {
 export function validateWaterPlacement(context: PlacementContext, point: Vec2): PlacementValidation {
   const result: PlacementValidation = { valid: true, reason: "Posição válida", x: point.x, y: point.y, routeDistance: null, progress: 0 };
   if (!insidePlayfield(point)) return { ...result, valid: false, reason: "Fora da área jogável" };
-  const closest = context.route.getClosestPoint(point);
+  const { closest } = closestRoute(context, point);
   result.progress = closest.progress;
   if (closest.distance < PLACEMENT.waterRouteClearance) return { ...result, valid: false, reason: "Muito perto da rota" };
   if (near(point, context.platforms, PLACEMENT.separation)) return { ...result, valid: false, reason: "Plataforma ocupa este espaço" };
@@ -60,7 +79,7 @@ export function validateWaterPlacement(context: PlacementContext, point: Vec2): 
 }
 
 export function validateRoutePlacement(context: PlacementContext, point: Vec2): PlacementValidation {
-  const closest = context.route.getClosestPoint(point);
+  const { id, route, closest } = closestRoute(context, point);
   const result: PlacementValidation = {
     valid: true,
     reason: "Posição válida",
@@ -68,9 +87,10 @@ export function validateRoutePlacement(context: PlacementContext, point: Vec2): 
     y: closest.point.y,
     routeDistance: closest.routeDistance,
     progress: closest.progress,
+    pathId: id,
   };
   if (closest.distance > PLACEMENT.routeClearance) return { ...result, valid: false, reason: "Toque dentro da correnteza" };
-  if (closest.routeDistance < PLACEMENT.routeEndClearance || closest.routeDistance > context.route.totalLength - PLACEMENT.routeEndClearance) {
+  if (closest.routeDistance < PLACEMENT.routeEndClearance || closest.routeDistance > route.totalLength - PLACEMENT.routeEndClearance) {
     return { ...result, valid: false, reason: "Muito perto da entrada ou do Recife" };
   }
   if (near(closest.point, context.routeUnits, PLACEMENT.routeSeparation)) {
@@ -83,7 +103,7 @@ export function validateRoutePlacement(context: PlacementContext, point: Vec2): 
 export function validateMarginPlacement(context: PlacementContext, point: Vec2): PlacementValidation {
   const result: PlacementValidation = { valid: true, reason: "Posição válida", x: point.x, y: point.y, routeDistance: null, progress: 0 };
   if (!insidePlayfield(point)) return { ...result, valid: false, reason: "Fora da área jogável" };
-  const closest = context.route.getClosestPoint(point);
+  const { closest } = closestRoute(context, point);
   result.progress = closest.progress;
   if (closest.distance < PLACEMENT.marginMin) return { ...result, valid: false, reason: "Em cima da correnteza: fique na beira" };
   if (closest.distance > PLACEMENT.marginMax) return { ...result, valid: false, reason: "Longe demais da correnteza" };
@@ -134,7 +154,7 @@ export function validateAnyPlacement(
  * margem sem nenhum controle novo.
  */
 export function validateAmbushPlacement(context: PlacementContext, point: Vec2): PlacementValidation {
-  const closest = context.route.getClosestPoint(point);
+  const { id, route, closest } = closestRoute(context, point);
   const result: PlacementValidation = {
     valid: true,
     reason: "Posição válida",
@@ -142,12 +162,13 @@ export function validateAmbushPlacement(context: PlacementContext, point: Vec2):
     y: point.y,
     routeDistance: closest.routeDistance,
     progress: closest.progress,
+    pathId: id,
   };
   if (closest.distance > PLACEMENT.ambushReach) return { ...result, valid: false, reason: "Toque perto da correnteza" };
-  if (closest.routeDistance < PLACEMENT.routeEndClearance || closest.routeDistance > context.route.totalLength - PLACEMENT.routeEndClearance) {
+  if (closest.routeDistance < PLACEMENT.routeEndClearance || closest.routeDistance > route.totalLength - PLACEMENT.routeEndClearance) {
     return { ...result, valid: false, reason: "Muito perto da entrada ou do Recife" };
   }
-  const tangent = context.route.getTangentAtDistance(closest.routeDistance);
+  const tangent = route.getTangentAtDistance(closest.routeDistance);
   const length = Math.hypot(tangent.x, tangent.y) || 1;
   // Normal da rota. O sinal vem do lado em que o jogador tocou; em cima da linha, cai no lado de cima.
   const normalX = -tangent.y / length;

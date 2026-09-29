@@ -10,7 +10,7 @@ export type PearlSource =
   | "SellRefund";
 
 /** Destino de cada pérola gasta. */
-export type PearlSink = "Place" | "Upgrade";
+export type PearlSink = "Place" | "Upgrade" | "Theft";
 
 export interface EconomySnapshot {
   pearls: number;

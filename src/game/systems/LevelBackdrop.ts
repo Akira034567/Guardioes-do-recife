@@ -1,5 +1,6 @@
 import Phaser from "phaser";
 import { DEPTH, GAME_HEIGHT, GAME_WIDTH, HUD_BOTTOM, HUD_TOP } from "../constants";
+import { resolveLevelPaths } from "../core/WaveDefinitions";
 import type { LevelDefinition } from "../types";
 
 /** Gerador determinístico simples para espalhar detalhes sem depender de Math.random. */
@@ -52,22 +53,59 @@ export function drawLevelBackdrop(scene: Phaser.Scene, level: LevelDefinition): 
 
   // Canal da rota: areia larga, faixa clara e brilho central. As camadas são
   // opacas com cores pré-misturadas para que as juntas arredondadas não apareçam.
+  // Nos Canais Profundos há várias rotas: cada camada é pintada em TODAS antes da seguinte, senão a
+  // areia de um canal cobriria o brilho do outro onde eles se cruzam.
+  const paths = resolveLevelPaths(level);
   const strokeRoute = (width: number, color: number): void => {
-    graphics.lineStyle(width, color, 1);
-    graphics.beginPath();
-    level.waypoints.forEach((point, index) => {
-      if (index === 0) graphics.moveTo(point.x, point.y);
-      else graphics.lineTo(point.x, point.y);
-    });
-    graphics.strokePath();
-    graphics.fillStyle(color, 1);
-    level.waypoints.forEach((point) => graphics.fillCircle(point.x, point.y, width / 2));
+    for (const path of paths) {
+      graphics.lineStyle(width, color, 1);
+      graphics.beginPath();
+      path.waypoints.forEach((point, index) => {
+        if (index === 0) graphics.moveTo(point.x, point.y);
+        else graphics.lineTo(point.x, point.y);
+      });
+      graphics.strokePath();
+      graphics.fillStyle(color, 1);
+      path.waypoints.forEach((point) => graphics.fillCircle(point.x, point.y, width / 2));
+    }
   };
   const sandColor = mixColor(theme.water, theme.sand, 0.55);
   const pathColor = mixColor(sandColor, theme.path, 0.62);
+  // Muro de pedra do canal: só nas fases de várias rotas, que é onde "canal" precisa ser lido.
+  if (paths.length > 1) strokeRoute(140, mixColor(theme.water, theme.rock, 0.7));
   strokeRoute(118, sandColor);
   strokeRoute(88, pathColor);
   strokeRoute(30, mixColor(pathColor, 0xffffff, 0.16));
+
+  // Redemoinhos: espiral pintada no leito (o giro animado é da cena, por cima).
+  for (const whirlpool of level.whirlpools ?? []) {
+    graphics.fillStyle(mixColor(pathColor, 0x0b2a44, 0.55), 1);
+    graphics.fillCircle(whirlpool.x, whirlpool.y, whirlpool.radius * 0.9);
+    for (let arm = 0; arm < 3; arm += 1) {
+      graphics.lineStyle(3, 0xbff4ff, 0.35);
+      graphics.beginPath();
+      for (let step = 0; step <= 24; step += 1) {
+        const t = step / 24;
+        const angle = arm * ((Math.PI * 2) / 3) + t * Math.PI * 2.2;
+        const radius = whirlpool.radius * 0.85 * (1 - t);
+        const px = whirlpool.x + Math.cos(angle) * radius;
+        const py = whirlpool.y + Math.sin(angle) * radius;
+        if (step === 0) graphics.moveTo(px, py);
+        else graphics.lineTo(px, py);
+      }
+      graphics.strokePath();
+    }
+  }
+
+  // Comportas: o pilar de pedra onde a alavanca fica (a alavanca em si é da cena).
+  for (const gate of level.gates ?? []) {
+    graphics.fillStyle(0x000000, 0.25);
+    graphics.fillEllipse(gate.x + 3, gate.y + 12, 60, 26);
+    graphics.fillStyle(mixColor(theme.rock, 0x000000, 0.2), 1);
+    graphics.fillRoundedRect(gate.x - 24, gate.y - 20, 48, 40, 10);
+    graphics.lineStyle(2, 0xffd76a, 0.45);
+    graphics.strokeRoundedRect(gate.x - 24, gate.y - 20, 48, 40, 10);
+  }
 
   // Correntes: tinta translúcida e riscos no sentido do fluxo.
   level.currents.forEach((zone) => {

@@ -30,6 +30,19 @@ Abra `http://localhost:5173`. O jogo usa mouse e touch em layout horizontal 16:9
 - A carta da fase abre a história de abertura (na primeira vez) e depois a preparação: objetivos, dificuldade, ameaças conhecidas e as cinco vagas do esquadrão.
 - Concluir objetivos rende estrelas e Conchas, a moeda permanente gasta fora da partida.
 
+### Canais Profundos (v4)
+
+A segunda região: dez fases (`canais-1` … `canais-10`, em `src/game/data/levels/canais/`) que continuam a cadeia depois do Coração do Recife. São fases longas, de 19 a 30 ondas, com mecânicas próprias:
+
+- **Canais bifurcados**: `paths` com vários canais; cada grupo de onda escolhe o seu (`pathId`). Canteiro, bloqueio e faixa de margem medem contra o canal **mais próximo**; o bloqueio só pega quem vem pelo mesmo canal, exceto no tronco comum.
+- **Comportas** (`gates`): alavanca tocável que decide o canal dos grupos `pathId: "gate:<id>"`; a porta de pedra aparece no canal fechado e a alavanca tranca por alguns segundos depois de virar.
+- **Maré que vira** (`flipEveryMs` na corrente): o sentido inverte em ciclos, com aviso 3s antes.
+- **Redemoinhos** (`whirlpools`): devolvem quem passa rota acima (chefes imunes, elites pela metade, cada inimigo uma vez a cada 9s por redemoinho). Os `dormant` só giram quando tocados.
+- **Modificadores de onda**: `fog` (alcance ×0,8 fora da luz do Peixe-Lanterna), `strongCurrents`, `eliteAll` e `noEarlyStart` (onda de chefe que não pode ser chamada antes).
+- **Inimigos novos**: Baiacu Corrompido (infla ao levar dano e estoura espinhos), Ladrão do Recife (tinta que atrasa Guardiões e rouba 12 pérolas se chegar ao coral), Tartaruga Corrompida (tanque que blinda os vizinhos), Carregador (solta quatro Peixinhos ao morrer) e a **Moreia-Rainha**, chefe em três fases que troca de canal e chama escolta.
+- Difícil e Abissal continuam abrindo ao fechar o **Recife Costeiro** (`DIFFICULTY_GATE_LEVEL_IDS`): contar os Canais trancaria de volta as dificuldades de quem já as tinha.
+- Arte: os fundos ainda são procedurais. `art/levels/canais-N/guia.png` tem a posição exata de rotas, pedras, comportas e redemoinhos para pintar por cima (ver `art/levels/README.md`).
+
 ### Dificuldade: três campanhas, não três multiplicadores
 
 Fechar a campanha no Normal abre o **Difícil**; fechá-la no Difícil abre o **Abissal** (`core/progression/difficultyUnlocks.ts`). O que mudou na V3.5 é que isso deixou de ser invisível e deixou de ser só "os bichos batem mais forte":
@@ -171,6 +184,12 @@ Menus são HTML por cima do canvas (`src/game/ui/dom`), alinhados ao jogo e esca
 - **Atalhos de teclado**: `1`–`5` escolhem a carta da vaga; `ESPAÇO` chama a próxima onda e, quando não há onda para chamar, alterna 1×/2× (uma tecla, dois momentos que nunca coexistem); `R` pede para reiniciar; `Enter` ou `R` de novo confirmam; `ESC` cancela a confirmação, desfaz a seleção ou abre a pausa, nessa ordem. A confirmação nasce **desarmada** por 600 ms (`ConfirmScreen`): o segundo `R` de um toque duplo é o mesmo gesto que abriu a pergunta, não a resposta dela.
 - **Tela cheia**: quem vai para tela cheia é o `#game` inteiro (`scale.fullscreenTarget`), não o canvas. Sem isso o Phaser move só o canvas para um `<div>` próprio e a camada HTML fica de fora — era por isso que o jogo "travava" ao pausar e ao passar de fase em tela cheia: a gaveta e o painel de resultado estavam abertos (bloqueando o input, como toda tela modal) e invisíveis.
 - **Celular**: no primeiro toque de um aparelho de toque o jogo pede tela cheia (`systems/immersive.ts`), que é a única forma de tirar a barra do navegador de cima do HUD em paisagem; desligável em Configurações (`immersiveMobile`). Em tela estreita o menu lateral e as abas do Álbum viram pictogramas de 44 px e o álbum passa a uma coluna só.
+- **App no celular (v4)**: tudo que é só de toque fica atrás de `html.is-touch` (marcado no `<head>`), então o desktop não muda.
+  - Instalável: `manifest.webmanifest` (tela cheia, paisagem, ícone maskable), ícones gerados por `scripts/make-app-icons.py` a partir de `art/brand/icon-source.png`, e um service worker (`public/sw.js`, carimbado com a versão do build) que deixa o app abrir sem rede.
+  - Entrada animada: `#boot-splash` no `index.html` (aparece antes do JS), com a barra de água ligada ao carregamento (`systems/splash.ts`). A arte horizontal vai em `public/assets/brand/splash.jpg`; sem ela, a entrada mostra o nome em texto. Carregamentos depois da entrada mostram uma mini-barra.
+  - Sempre deitado: em pé, o aviso "Gire o celular" cobre o jogo e a partida pausa. A partida também pausa ao sair do app, e a tela não apaga durante a partida (`wakeLock`).
+  - **A barrinha do iPhone** é um gesto do sistema e nenhum site consegue desligá-la. O jogo inteiro vive DENTRO da área segura (`#game` posicionado por `env(safe-area-inset-*)`), então nenhum botão fica embaixo dela; e instalado pela tela de início não existe a barra do Safari que "subia" ao tocar embaixo. Um convite (uma vez por aparelho) ensina a instalar.
+  - HUD próprio (`MOBILE_HUD` em `hudLayout.ts`): sem a marca, botões ~1,6× maiores, área de toque maior que o desenho, e **posicionar pede dois toques** (o primeiro mostra onde e o alcance, o segundo confirma); o toque perto de uma pedra gruda nela. Dois dedos dão zoom (até 1,8×) e arrastam o mapa (`systems/PinchZoom.ts`). `?hud=mobile|desktop` força um dos dois; os testes automatizados usam o do desktop.
 - **Registro do HUD**: `ui/UiRegistry.ts` guarda a posição de cada controle por nome (`pause`, `speed:2`, `card:first`, `upgrade:a`, ...). O tutorial usa para destacar e os testes e2e para achar um botão sem coordenada escrita à mão (`window.__grUi`).
 - **Carga de arte**: o boot traz só a forma base dos nove Guardiões; as evoluções entram na `GameScene`, apenas para o esquadrão da partida.
 
@@ -187,10 +206,15 @@ Menus são HTML por cima do canvas (`src/game/ui/dom`), alinhados ao jogo e esca
 | Tartaruga-Marinha — Guardiã do Recife | correnteza | controle de rota | Casco (segura 3 → 5 por tempo limitado, turbulência, Repulsa Ancestral) | Correnteza (zona de corrente contrária -25%, Corrente Forte empurra pela rota) |
 | Peixe-Pedra — Emboscador da Corrente | borda da correnteza | emboscada recorrente: camufla, arma ao detectar, dá o bote em área com veneno e recomeça | Jardim Tóxico (Toxina Viva deixa nuvem que envenena e atrasa; Jardim Abissal espalha a toxina de quem morre nela) | Predador de Emboscada (Espinhos Cortantes trocam área por dano que ignora armadura; Caçador da Corrente trava o alvo forte e cobra pela vida máxima dele) |
 | Golfinho — Mensageiro do Recife | água livre | suporte: pulso de sonar (revela, +5% dano recebido) | Coro (buff temporizado; +2% por espécie diferente; Coro II dá bônus temático) | Sonar (pulso maior, marca prioridade; Eco Perfeito coordena aliados) |
+| Ostra — Tesoureira do Canal | plataforma | economia: rende pérolas o tempo todo | Banco de Pérolas (mais renda; juros de 5% sobre o caixa ao fim da onda, até 30) | Madrepérola (pérola que ignora armadura; Pérola Negra com estilhaços) |
+| Peixe-Lanterna — Farol das Profundezas | água livre ou margem | visão: luz que revela camuflados e fura a névoa | Isca (fascina os mais adiantados, que quase param; vulnerabilidade no nível 2) | Farol (luz maior e bônus de alcance/dano para os vizinhos) |
+| Arraia-Manta — Asa do Canal | água livre ou margem | controle em área: varre a FAIXA entre ela e o alvo e deixa lento | Planar (muda de lugar de graça uma vez por onda: selecione e toque na água) | Arrasto (empurra a faixa rota acima) |
+| Peixe-Espada — Lâmina do Canal | margem | perfuração: estocada em linha reta que atravessa a fila | Estocada (executa quem não é chefe abaixo de 15–22% de vida) | Esgrimista (ignora armadura, +35–60% em elite e chefe, rompe escudo) |
 
 - Cada unidade escolhe **um** ramo no primeiro upgrade e só pode seguir nele (dois upgrades por unidade). O anel colorido sob o Guardião mostra o ramo e os marcadores mostram o nível. O painel de upgrade mostra sempre os dois ramos: o escolhido com o próximo passo e o outro marcado como **bloqueado**.
 - As formas (base e quatro upgrades) são persistentes: o sprite só troca quando o upgrade é comprado; o idle apenas flutua.
-- O HUD leva **cinco** Guardiões por partida. Até existir a tela de seleção, `?guardians=shark,sea-turtle,stonefish,dolphin,pistol-shrimp` escolhe o esquadrão (ids: `pistol-shrimp`, `jellyfish`, `pufferfish`, `reef-crab`, `ink-octopus`, `shark`, `sea-turtle`, `stonefish`, `dolphin`).
+- O HUD leva **cinco** Guardiões por partida. Até existir a tela de seleção, `?guardians=shark,sea-turtle,stonefish,dolphin,pistol-shrimp` escolhe o esquadrão (ids: `pistol-shrimp`, `jellyfish`, `pufferfish`, `reef-crab`, `ink-octopus`, `shark`, `sea-turtle`, `stonefish`, `dolphin`, `oyster`, `lanternfish`, `manta-ray`, `swordfish`).
+- Os quatro Guardiões dos Canais se juntam ao vencer `canais-2`, `canais-4`, `canais-6` e `canais-8`. A arte deles ainda não chegou (`pending: true` em `guardianArt.ts`): em campo são desenhados em vetor e, nas telas HTML, o retrato vira uma silhueta. As specs das pranchas estão em `art/guardians/<pasta>/README.md`.
 
 ### Camada de controle
 
@@ -200,7 +224,7 @@ Slow, stun, knockback, bloqueio, marca, veneno e vulnerabilidade passam por `src
 
 ## Inimigos
 
-Peixinho (cardume), Peixe Invasor, Peixe-Flecha, Peixe-Agulha, Cascudo (armadura), Moreia Sombria (elite, resiste a controle) e Quebra-Marés (chefe, inverte a corrente, não pode ser bloqueado).
+Peixinho (cardume), Peixe Invasor, Peixe-Flecha, Peixe-Agulha, Cascudo (armadura), Moreia Sombria (elite, resiste a controle) e Quebra-Marés (chefe, engrossa a corrente, não pode ser bloqueado). Nos Canais Profundos: Baiacu Corrompido, Ladrão do Recife, Tartaruga Corrompida, Carregador e a Moreia-Rainha (chefe em três fases).
 
 Cada inimigo é só dados (`ENEMIES` + `ENEMY_BALANCE`). Além dos números, a definição aceita `tags`, `resistances`, `immunities`, `art` e **habilidades** (`abilities`), despachadas por tipo em `core/EnemyAbilities.ts`: `regen`, `enrageBelowHp`, `shieldAllies`, `disruptGuardians`, `stealth`, `splitOnDeath`, `phaseChangeAtHp`, `speedBurst` e `reverseCurrents` (a inversão de corrente do Quebra-Marés). Nenhum código olha o id do inimigo.
 
@@ -211,7 +235,9 @@ Cada inimigo é só dados (`ENEMIES` + `ENEMY_BALANCE`). Além dos números, a d
 
 ## Balanceamento
 
-> **As suítes de balanceamento estão desligadas.** A chave é `BALANCE_SUITES_ON`, em `tests/balanceSwitch.ts`: hoje `false`, ela pula `balance-sim.test.ts`, `balance-lab.test.ts` e as 22 sondas de `e2e/balance.spec.ts`. Continuam rodando sempre `match-golden.test.ts` (congela o resultado de cada build e pega deriva do motor) e `balance.test.ts` (tabela de preços). Para voltar ao balanceamento, troque a constante para `true`.
+> A chave das suítes de balanceamento é `BALANCE_SUITES_ON`, em `tests/balanceSwitch.ts` (hoje `true`): ela liga `balance-sim.test.ts`, `balance-lab.test.ts` e as sondas de `e2e/balance.spec.ts`. `match-golden.test.ts` (congela o resultado de cada build e pega deriva do motor) e `balance.test.ts` (tabela de preços) rodam sempre.
+>
+> Os roteiros dos Canais Profundos ficam em `tests/balance-builds-canais.ts`: até três por fase (dano clássico, controle, e um esquadrão só com Guardiões que o jogador já teria), e toda fase tem pelo menos dois vencendo.
 
 Critério de vencibilidade: toda fase deve ser vencível perdendo poucas vidas com builds diversas, sem ficar fácil demais. Os roteiros de compra ficam em `tests/balance-builds.ts` (dois ou mais por fase) e são verificados de duas formas:
 

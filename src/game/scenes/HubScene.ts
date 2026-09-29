@@ -27,6 +27,8 @@ import { openSection, sectionNav, type SectionRouter } from "../ui/dom/sections"
 import { takeCloudLinkEvent } from "../systems/cloud";
 import { hubScreen, type HubOverlay } from "../ui/dom/screens/HubScreen";
 import type { GuardianId } from "../types";
+import { trackSceneLoad } from "../systems/splash";
+import { maybeShowInstallHint } from "../systems/mobileShell";
 
 /**
  * Meu Recife: a tela inicial e a casa do jogador.
@@ -99,9 +101,12 @@ export class HubScene extends Phaser.Scene {
       draft.reef.lastSeenStage = reefGrowth(draft).stage;
     });
     preloadReefArt(this, progression.progress.reef.placed.map((placed) => placed.defId));
+    trackSceneLoad(this);
   }
 
   create(): void {
+    // Celular no navegador: convida (uma vez) a instalar — é o que tira a barra do Safari da frente.
+    this.time.delayedCall(1500, maybeShowInstallHint);
     const progression = getProgression();
     this.growth = reefGrowth(progression.progress);
     this.cameras.main.setBackgroundColor("#02141f");

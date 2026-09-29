@@ -75,6 +75,12 @@ export interface GuardianArtProfile {
   swapAbilityAndImpact?: boolean;
   /** `false` quando a variante não tem `portrait.png` (o card do HUD fica oculto). */
   hasPortrait?: boolean;
+  /**
+   * A arte ainda não chegou (só as pastas com `.gitkeep`). O jogo não pede os arquivos — seriam
+   * dezenas de 404 na abertura — e o Guardião aparece no desenho vetorial de `GuardianView`. Quando
+   * a prancha for fatiada, basta apagar esta linha.
+   */
+  pending?: boolean;
 }
 
 export const GUARDIAN_ART: Record<GuardianId, GuardianArtProfile> = {
@@ -235,7 +241,85 @@ export const GUARDIAN_ART: Record<GuardianId, GuardianArtProfile> = {
       ],
     },
   },
+  // ── Canais Profundos (v4): pastas prontas, arte a caminho (ver `art/guardians/<pasta>/README.md`).
+  oyster: {
+    scale: 0.7,
+    effectScale: 0.4,
+    assetFolder: "ostra",
+    abilityFile: "ability",
+    pending: true,
+    base: { folder: "base", ability: "projectile" },
+    branches: {
+      a: [
+        { folder: "banco_1", ability: "projectile" },
+        { folder: "banco_2", ability: "projectile" },
+      ],
+      b: [
+        { folder: "madreperola_1", ability: "projectile" },
+        { folder: "madreperola_2", ability: "projectile" },
+      ],
+    },
+  },
+  lanternfish: {
+    scale: 0.72,
+    effectScale: 0.45,
+    assetFolder: "peixe_lanterna",
+    abilityFile: "ability",
+    pending: true,
+    base: { folder: "base", ability: "projectile" },
+    branches: {
+      a: [
+        { folder: "isca_1", ability: "ring" },
+        { folder: "isca_2", ability: "ring" },
+      ],
+      b: [
+        { folder: "farol_1", ability: "ring" },
+        { folder: "farol_2", ability: "ring" },
+      ],
+    },
+  },
+  "manta-ray": {
+    scale: 0.78,
+    effectScale: 0.55,
+    assetFolder: "arraia",
+    abilityFile: "ability",
+    pending: true,
+    base: { folder: "base", ability: "beam" },
+    branches: {
+      a: [
+        { folder: "planar_1", ability: "beam" },
+        { folder: "planar_2", ability: "beam" },
+      ],
+      b: [
+        { folder: "arrasto_1", ability: "ring" },
+        { folder: "arrasto_2", ability: "ring" },
+      ],
+    },
+  },
+  swordfish: {
+    scale: 0.74,
+    effectScale: 0.5,
+    assetFolder: "peixe_espada",
+    abilityFile: "ability",
+    pending: true,
+    base: { folder: "base", ability: "beam" },
+    branches: {
+      a: [
+        { folder: "estocada_1", ability: "beam" },
+        { folder: "estocada_2", ability: "beam" },
+      ],
+      b: [
+        { folder: "esgrima_1", ability: "beam" },
+        { folder: "esgrima_2", ability: "beam" },
+      ],
+    },
+  },
 };
+
+/** A arte deste Guardião já pode ser pedida ao servidor (não está `pending`). */
+export function artReady(guardianId: GuardianId): boolean {
+  return !GUARDIAN_ART[guardianId].pending;
+}
 
 export interface ArtProgress {
   branchId: BranchId | null;
@@ -346,7 +430,9 @@ export const GUARDIAN_ART_ASSETS: ReadonlyArray<{ key: string; path: string; gua
 );
 
 export function preloadGuardianArt(scene: Phaser.Scene): void {
-  GUARDIAN_ART_ASSETS.forEach(({ key, path }) => scene.load.image(key, path));
+  GUARDIAN_ART_ASSETS.forEach(({ key, path, guardianId }) => {
+    if (artReady(guardianId)) scene.load.image(key, path);
+  });
   if (!scene.textures.exists(STONEFISH_HIDDEN_KEY)) scene.load.image(STONEFISH_HIDDEN_KEY, STONEFISH_HIDDEN_PATH);
 }
 
@@ -355,7 +441,7 @@ export function preloadGuardianArt(scene: Phaser.Scene): void {
  * posicionamento precisam; as formas evoluídas entram quando a fase abre, pelo esquadrão escolhido.
  */
 export const GUARDIAN_BASE_ART_ASSETS: ReadonlyArray<{ key: string; path: string; guardianId: GuardianId }> = [
-  ...GUARDIAN_ART_ASSETS.filter(({ guardianId, key }) => key.startsWith(`${guardianId}-${GUARDIAN_ART[guardianId].base.folder}-`)),
+  ...GUARDIAN_ART_ASSETS.filter(({ guardianId, key }) => artReady(guardianId) && key.startsWith(`${guardianId}-${GUARDIAN_ART[guardianId].base.folder}-`)),
   // A pedra do Peixe-Pedra entra no boot e não na dieta por esquadrão: ela é o REPOUSO das cinco
   // variantes, então já faz falta na forma base. São 14 KB — não é ela que pesa na abertura.
   { key: STONEFISH_HIDDEN_KEY, path: STONEFISH_HIDDEN_PATH, guardianId: "stonefish" as GuardianId },
@@ -365,7 +451,7 @@ export const GUARDIAN_BASE_ART_ASSETS: ReadonlyArray<{ key: string; path: string
 export function guardianUpgradeArtAssets(guardianIds: readonly GuardianId[]): ReadonlyArray<{ key: string; path: string }> {
   const wanted = new Set(guardianIds);
   const baseKeys = new Set(GUARDIAN_BASE_ART_ASSETS.map((asset) => asset.key));
-  return GUARDIAN_ART_ASSETS.filter((asset) => wanted.has(asset.guardianId) && !baseKeys.has(asset.key));
+  return GUARDIAN_ART_ASSETS.filter((asset) => wanted.has(asset.guardianId) && artReady(asset.guardianId) && !baseKeys.has(asset.key));
 }
 
 /** Carrega as formas evoluídas do esquadrão desta partida. */

@@ -249,6 +249,70 @@ export const MASTERY: Record<GuardianId, GuardianMastery> = {
       "Sonar: acrescenta uma eco-onda extra, pequena, ao fim do pulso.",
     ),
   },
+  oyster: {
+    guardianId: "oyster",
+    nodes: [
+      node(1, "Concha Rápida", "−4% no intervalo entre as rendas.", { abilityCooldownMultiplier: 0.96 }),
+      node(2, "Pérola Pesada", "+4% de dano no tiro.", { damageMultiplier: 1.04 }),
+      node(3, "Olhar Longo", "+3% de alcance.", { rangeMultiplier: 1.03 }),
+      node(4, "Mão Firme", "+4% de cadência.", { attackSpeedMultiplier: 1.04 }),
+    ],
+    capstone: capstone(
+      "tesouro-do-canal",
+      "Tesouro do Canal",
+      "A concha dela nunca fecha vazia.",
+      "Banco: o teto de juros por onda sobe um pouco.",
+      "Madrepérola: os estilhaços da Pérola Negra alcançam um pouco mais longe.",
+    ),
+  },
+  lanternfish: {
+    guardianId: "lanternfish",
+    nodes: [
+      node(1, "Chama Larga", "+4% de alcance (e de luz).", { rangeMultiplier: 1.04 }),
+      node(2, "Brilho Duradouro", "+4% na duração dos efeitos que ele aplica.", { debuffDurationMultiplier: 1.04 }),
+      node(3, "Pulso Curto", "−4% na recarga da isca.", { abilityCooldownMultiplier: 0.96 }),
+      node(4, "Olho Aceso", "+4% na duração do fascínio.", { controlDurationMultiplier: 1.04 }),
+    ],
+    capstone: capstone(
+      "sol-do-abismo",
+      "Sol do Abismo",
+      "A luz dele fica no lugar um instante depois de passar.",
+      "Isca: um inimigo a mais fascinado por vez.",
+      "Farol: a luz cresce mais um pouco a cada aliado aceso.",
+    ),
+  },
+  "manta-ray": {
+    guardianId: "manta-ray",
+    nodes: [
+      node(1, "Envergadura", "+3% de alcance.", { rangeMultiplier: 1.03 }),
+      node(2, "Asa Pesada", "+4% de dano na faixa.", { damageMultiplier: 1.04 }),
+      node(3, "Esteira Fria", "+4% na duração da lentidão.", { debuffDurationMultiplier: 1.04 }),
+      node(4, "Batida Forte", "+4% na distância do empurrão.", { pushDistanceMultiplier: 1.04 }),
+    ],
+    capstone: capstone(
+      "senhora-dos-canais",
+      "Senhora dos Canais",
+      "Onde ela passa, a água lembra.",
+      "Planar: pode planar duas vezes na mesma onda.",
+      "Arrasto: o empurrão também deixa um rastro lento.",
+    ),
+  },
+  swordfish: {
+    guardianId: "swordfish",
+    nodes: [
+      node(1, "Fio da Lâmina", "+4% de dano.", { damageMultiplier: 1.04 }),
+      node(2, "Recuo Curto", "+4% de cadência.", { attackSpeedMultiplier: 1.04 }),
+      node(3, "Estocada Longa", "+3% de alcance.", { rangeMultiplier: 1.03 }),
+      node(4, "Olho do Duelo", "+3% de dano (a lâmina continua lenta).", { damageMultiplier: 1.03 }),
+    ],
+    capstone: capstone(
+      "lamina-do-canal",
+      "Lâmina do Canal",
+      "A estocada não perde força ao atravessar.",
+      "Estocada: o limiar de execução sobe um pouco.",
+      "Esgrimista: o bônus contra chefe vale também contra quem tem escudo.",
+    ),
+  },
 };
 
 /** Catálogo na ordem do jogo. */

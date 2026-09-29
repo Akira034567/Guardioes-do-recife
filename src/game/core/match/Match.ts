@@ -1,9 +1,9 @@
-import { ECONOMY, PLACEMENT } from "../../data/balance";
+import { ECONOMY, FOG, PLACEMENT, TIDE_WARNING_MS } from "../../data/balance";
 import { ENEMIES, scaleEnemy } from "../../data/enemies";
-import { applyElite, ELITES, type EliteId } from "../../data/elites";
+import { applyElite, eliteAllowedFor, ELITES, type EliteId } from "../../data/elites";
 import { GUARDIANS } from "../../data/guardians";
 import { goldenAwardWaveIndex, goldenBoostFor } from "../../data/goldenFish";
-import type { EnemyId, GuardianDefinition, GuardianId, LevelDefinition, PlayerId, TeamId } from "../../types";
+import type { EnemyId, GuardianDefinition, GuardianId, LevelDefinition, PlayerId, TeamId, WaveModifier } from "../../types";
 import { resolveAura, type AuraSource } from "../Auras";
 import { BlockingSystem } from "../Blocking";
 import { BossEncounter, type BossEncounterEvent } from "../BossEncounter";
@@ -11,11 +11,16 @@ import { controlTier } from "../CrowdControl";
 import { CurrentSystem, zoneFromFlowField } from "../CurrentSystem";
 import { InteractableSystem, type InteractableRuntime } from "../Interactables";
 import { Economy, type PearlSink, type PearlSource } from "../Economy";
-import { EnemyAbilitySystem, type EnemyAbilityEvent, type EnemyAbilityWorld } from "../EnemyAbilities";
+import { EnemyAbilitySystem, pearlsStolenBy, type EnemyAbilityEvent, type EnemyAbilityWorld } from "../EnemyAbilities";
+import { MapDevices } from "../MapDevices";
 import type { FlowField } from "../FlowField";
 import {
   flowFieldsFor,
+  interestFor,
+  isLit,
   updateChorus,
+  updateLight,
+  updateLure,
   updateFrenzy,
   updateMark,
   updatePushWave,
@@ -97,6 +102,15 @@ export class Match {
   /** Rota principal (compatibilidade); todas as rotas ficam em `routes`. */
   readonly route: RoutePath;
   readonly routes: ReadonlyMap<string, RoutePath>;
+  /** As rotas em lista, na ordem da fase (para o posicionamento medir contra todas). */
+  private readonly routeList: ReadonlyArray<{ id: string; route: RoutePath }>;
+  /** Comportas e redemoinhos (Canais Profundos); vazio nas fases sem nenhum. */
+  readonly devices: MapDevices;
+  /** Modificadores da onda em curso (névoa, maré forte, elite em todos). */
+  private activeModifiers: WaveModifier[] = [];
+  /** Viradas de maré já anunciadas / já avisadas (para cada aviso sair uma vez só). */
+  private tideFlips = 0;
+  private tideWarnedFor = -1;
   /** Um caixa no modo compartilhado; um por jogador no individual. */
   private readonly economies = new Map<PlayerId, Economy>();
   readonly economyMode: "shared" | "individual";
@@ -151,6 +165,8 @@ export class Match {
     const paths = resolveLevelPaths(level);
     this.routes = new Map(paths.map((path) => [path.id, new RoutePath(path.waypoints)]));
     this.route = this.routes.get(paths[0].id) as RoutePath;
+    this.routeList = paths.map((path) => ({ id: path.id, route: this.routes.get(path.id) as RoutePath }));
+    this.devices = new MapDevices(level.gates ?? [], level.whirlpools ?? []);
     this.economyMode = options.economyMode ?? "shared";
     if (this.economyMode === "individual") {
       // Cada jogador começa com o caixa cheio: a fase não fica mais pobre por ter mais gente.
@@ -282,6 +298,7 @@ export class Match {
   placementContext(): PlacementContext {
     return {
       route: this.route,
+      routes: this.routeList,
       platforms: this.level.placements,
       guardians: this.guardianList,
       routeUnits: this.routeUnits,
@@ -307,7 +324,7 @@ export class Match {
       totalWaves: this.scheduler.totalWaves,
       waveState: this.scheduler.state,
       countdownSeconds: this.scheduler.countdownSeconds,
-      canStartNextWave: this.statusValue === "running" && this.scheduler.state === "countdown",
+      canStartNextWave: this.statusValue === "running" && this.scheduler.state === "countdown" && !this.upcomingForbidsEarlyStart(),
       guardianCount: this.guardianList.length,
       upgradeCount: this.guardianList.reduce((total, guardian) => total + guardian.upgradeLevel, 0),
       aliveEnemies: this.enemyList.filter((enemy) => !enemy.dead && !enemy.reachedGoal).length,
@@ -347,6 +364,30 @@ export class Match {
         tappable: runtime.definition.goal.type === "taps" || runtime.definition.goal.type === "reveal",
         hint: this.interactableHint(runtime),
       })),
+      gates: this.devices.gateStates().map((gate) => ({
+        id: gate.definition.id,
+        label: gate.definition.label,
+        x: gate.definition.x,
+        y: gate.definition.y,
+        openRouteId: gate.definition.routes[gate.open],
+        open: gate.open,
+        routes: gate.definition.routes,
+        routeLabels: gate.definition.routeLabels,
+        doors: gate.definition.doors,
+        readyInMs: Math.max(0, gate.readyAt - this.nowMs),
+      })),
+      whirlpools: this.devices.whirlpoolStates().map((whirlpool) => ({
+        id: whirlpool.definition.id,
+        label: whirlpool.definition.label,
+        x: whirlpool.definition.x,
+        y: whirlpool.definition.y,
+        radius: whirlpool.definition.radius,
+        dormant: Boolean(whirlpool.definition.dormant),
+        active: this.nowMs <= whirlpool.activeUntil,
+        readyInMs: Math.max(0, whirlpool.readyAt - this.nowMs),
+      })),
+      fog: this.fogActive,
+      tideFlipInMs: this.currents.tide(this.nowMs).nextFlipInMs,
       stats: this.stats.snapshot(this.economySnapshot(playerId)),
     };
   }
@@ -468,6 +509,10 @@ export class Match {
         return this.crownGuardian(command);
       case "interact":
         return this.interact(command);
+      case "useMapDevice":
+        return this.useMapDevice(command.deviceId);
+      case "relocateGuardian":
+        return this.relocateGuardian(command);
       case "debug.damageEnemy":
         this.stats.cheated = true;
         this.debugDamage(command.enemyId, command.amount);
@@ -531,7 +576,7 @@ export class Match {
     } else {
       const validation = validateAnyPlacement(freeModes, this.placementContext(), { x: command.x, y: command.y });
       if (!validation.valid) return { ok: false, reason: "invalidPlacement", message: validation.reason };
-      placement = { x: validation.x, y: validation.y, routeDistance: validation.routeDistance, platformId: null };
+      placement = { x: validation.x, y: validation.y, routeDistance: validation.routeDistance, platformId: null, pathId: validation.pathId ?? null };
     }
 
     this.spend(definition.cost, "Place", playerId);
@@ -667,8 +712,115 @@ export class Match {
     return { ok: true, instanceId: guardian.id };
   }
 
+  /** A próxima onda vem com `noEarlyStart`: ela chega na hora dela, e ninguém a chama antes. */
+  private upcomingForbidsEarlyStart(): boolean {
+    return this.scheduler.upcomingWave?.modifiers.some((modifier) => modifier.type === "noEarlyStart") ?? false;
+  }
+
+  /** A onda em curso tem névoa (para a cena desenhar o véu). */
+  get fog(): boolean {
+    return this.fogActive;
+  }
+
+  private get fogActive(): boolean {
+    return this.activeModifiers.some((modifier) => modifier.type === "fog");
+  }
+
+  // ------------------------------------------------ Canais Profundos: aparelhos
+
+  /** Toque numa comporta (vira o canal) ou num redemoinho dormente (acorda). */
+  private useMapDevice(deviceId: string): CommandResult {
+    const result = this.devices.use(deviceId, this.nowMs);
+    if (!result.ok) {
+      if (result.reason === "cooldown") {
+        return { ok: false, reason: "deviceCooldown", message: `Ainda girando: espere ${Math.ceil((result.readyInMs ?? 0) / 1000)}s.` };
+      }
+      if (result.reason === "alwaysOn") return { ok: false, reason: "interactableDone", message: "Este redemoinho já gira sozinho." };
+      return { ok: false, reason: "notFound", message: "Nada para mexer aqui." };
+    }
+    if (result.kind === "gate") {
+      const gate = this.devices.gateStates().find((candidate) => candidate.definition.id === deviceId);
+      if (gate) {
+        this.stats.abilitiesUsed += 1;
+        this.emit({ type: "gateToggled", now: this.nowMs, id: deviceId, label: gate.definition.label, routeId: result.routeId, x: gate.definition.x, y: gate.definition.y });
+      }
+    } else {
+      const whirlpool = this.devices.whirlpoolStates().find((candidate) => candidate.definition.id === deviceId);
+      if (whirlpool) {
+        this.stats.abilitiesUsed += 1;
+        this.emit({
+          type: "whirlpoolAwakened",
+          now: this.nowMs,
+          id: deviceId,
+          label: whirlpool.definition.label,
+          x: whirlpool.definition.x,
+          y: whirlpool.definition.y,
+          activeUntil: result.activeUntil,
+        });
+      }
+    }
+    return { ok: true };
+  }
+
+  /** Arraia, Planar: muda de lugar de graça, uma vez por onda, para qualquer ponto válido dela. */
+  private relocateGuardian(command: Extract<MatchCommand, { type: "relocateGuardian" }>): CommandResult {
+    const guardian = this.guardian(command.instanceId);
+    if (!guardian) return { ok: false, reason: "notFound", message: "Guardião não encontrado." };
+    if (guardian.ownerId !== (command.playerId ?? DEFAULT_PLAYER_ID)) return { ok: false, reason: "notOwner", message: "Este Guardião não é seu." };
+    if (!guardian.stats.relocate) return { ok: false, reason: "cannotRelocate", message: `${guardian.definition.shortName} não muda de lugar.` };
+    if (guardian.relocatedOnWave === this.scheduler.currentWaveIndex) {
+      return { ok: false, reason: "cannotRelocate", message: "Ela já planou nesta onda." };
+    }
+    const context = { ...this.placementContext(), guardians: this.guardianList.filter((other) => other !== guardian) };
+    const validation = validateAnyPlacement(freeModesOf(guardian.definition), context, { x: command.x, y: command.y });
+    if (!validation.valid) return { ok: false, reason: "invalidPlacement", message: validation.reason };
+    const from = { x: guardian.x, y: guardian.y };
+    if (guardian.platformId) this.platformOccupants.delete(guardian.platformId);
+    guardian.moveTo({ x: validation.x, y: validation.y, routeDistance: validation.routeDistance, platformId: null, pathId: validation.pathId ?? null });
+    guardian.relocatedOnWave = this.scheduler.currentWaveIndex;
+    for (const unit of this.routeUnits) {
+      if (unit.guardianId !== guardian.id) continue;
+      unit.x = guardian.x;
+      unit.y = guardian.y;
+    }
+    this.emit({ type: "guardianRelocated", now: this.nowMs, id: guardian.id, guardianId: guardian.guardianId, x: guardian.x, y: guardian.y, fromX: from.x, fromY: from.y });
+    return { ok: true, instanceId: guardian.id };
+  }
+
+  /** Início de onda: liga névoa, maré forte e o que mais a onda trouxer. */
+  private applyWaveModifiers(waveIndex: number): void {
+    const hadFog = this.fogActive;
+    this.activeModifiers = this.scheduler.wave(waveIndex)?.modifiers ?? [];
+    const strong = this.activeModifiers.find((modifier): modifier is Extract<WaveModifier, { type: "strongCurrents" }> => modifier.type === "strongCurrents");
+    this.currents.setAmplified("wave:strongCurrents", strong ? { strength: strong.multiplier, drift: strong.multiplier } : null);
+    if (this.fogActive !== hadFog) this.emit({ type: "fogChanged", now: this.nowMs, on: this.fogActive });
+  }
+
+  /** Fim de onda: a névoa baixa e a maré forte acalma. */
+  private clearWaveModifiers(): void {
+    const hadFog = this.fogActive;
+    this.activeModifiers = [];
+    this.currents.setAmplified("wave:strongCurrents", null);
+    if (hadFog) this.emit({ type: "fogChanged", now: this.nowMs, on: false });
+  }
+
+  /** Maré que vira: avisa `TIDE_WARNING_MS` antes e anuncia a virada. */
+  private updateTide(): void {
+    const tide = this.currents.tide(this.nowMs);
+    if (!tide.flips || tide.nextFlipInMs === null) return;
+    if (tide.flipCount !== this.tideFlips) {
+      this.tideFlips = tide.flipCount;
+      this.emit({ type: "tideFlipped", now: this.nowMs, flipCount: tide.flipCount });
+    }
+    if (tide.nextFlipInMs <= TIDE_WARNING_MS && this.tideWarnedFor !== tide.flipCount) {
+      this.tideWarnedFor = tide.flipCount;
+      this.emit({ type: "tideWarning", now: this.nowMs, inMs: tide.nextFlipInMs });
+    }
+  }
+
   private startNextWave(): CommandResult {
     if (this.scheduler.state !== "countdown") return { ok: false, reason: "notInCountdown", message: "A onda já está em curso." };
+    if (this.upcomingForbidsEarlyStart()) return { ok: false, reason: "noEarlyStart", message: "Esta maré chega na hora dela." };
     const remainingMs = this.scheduler.countdownMs;
     if (!this.scheduler.skipCountdown()) return { ok: false, reason: "notInCountdown", message: "A onda já está em curso." };
     this.stats.earlyWaveCalls += 1;
@@ -693,8 +845,12 @@ export class Match {
     const alive = this.enemyList.filter((enemy) => !enemy.dead && !enemy.reachedGoal).length;
     for (const event of this.scheduler.tick(deltaMs, alive)) {
       if (event.type === "spawn") {
-        this.spawnEnemy(event.enemyId, { pathId: event.pathId, pathDistance: 0 }, event.eliteId);
+        // `eliteAll`: a onda inteira vem de elite (menos chefe e cardume — ver `eliteAllowedFor`).
+        const eliteAll = this.activeModifiers.find((modifier): modifier is Extract<WaveModifier, { type: "eliteAll" }> => modifier.type === "eliteAll");
+        const eliteId = event.eliteId ?? (eliteAll && eliteAllowedFor(ENEMIES[event.enemyId]) ? eliteAll.elite : null);
+        this.spawnEnemy(event.enemyId, { pathId: event.pathId, pathDistance: 0 }, eliteId);
       } else if (event.type === "waveStarted") {
+        this.applyWaveModifiers(event.waveIndex);
         // Chamar a onda antes da hora rende pérolas por segundo poupado (taxa 0 = desligado).
         this.earn(Math.floor((event.earlyStartMs / 1000) * ECONOMY.earlyStartBonusPerSecond), "EarlyWaveBonus", DEFAULT_PLAYER_ID);
         this.emit({
@@ -706,6 +862,8 @@ export class Match {
         });
       } else if (event.type === "waveCleared") {
         this.stats.wavesCompleted += 1;
+        this.clearWaveModifiers();
+        this.payInterest();
         const bonus = this.earn(event.reward, "WaveReward", DEFAULT_PLAYER_ID);
         this.emit({ type: "waveCompleted", now: this.nowMs, waveIndex: event.waveIndex, bonus });
         this.maybeAwardGoldenFish(event.waveIndex);
@@ -717,7 +875,14 @@ export class Match {
     }
 
     this.currents.update(this.nowMs);
+    this.updateTide();
     this.syncGuardianCurrents();
+    if (!this.devices.isEmpty) {
+      for (const pulse of this.devices.tickWhirlpools(this.nowMs, this.enemyList)) {
+        const { id, x, y, radius } = pulse.runtime.definition;
+        this.emit({ type: "whirlpoolPulled", now: this.nowMs, id, x, y, radius, pulledIds: pulse.pulled.map((enemy) => enemy.id) });
+      }
+    }
     if (!this.interactables.isEmpty) {
       const finished = this.interactables.tick(this.nowMs, {
         wave: this.scheduler.currentWave,
@@ -753,6 +918,8 @@ export class Match {
     for (const guardian of this.guardianList) {
       updatePushWave(guardian, this.enemyList, hooks);
       updateSonar(guardian, this.enemyList, this.guardianList, hooks);
+      updateLight(guardian, this.enemyList, hooks);
+      updateLure(guardian, this.enemyList, hooks);
     }
     const damage = (enemy: MatchEnemy, amount: number, options?: DamageOptions) => this.damage(enemy, amount, options);
     // Área, splash e corrente alcançam os pontos fracos de graça, por usarem o mesmo conjunto.
@@ -782,12 +949,14 @@ export class Match {
   ): void {
     const base = eliteId ? applyElite(ENEMIES[enemyId], ELITES[eliteId]) : ENEMIES[enemyId];
     const definition = scaleEnemy(base, this.level.enemyScaling, this.level.enemyOverrides?.[enemyId]);
-    const route = this.routes.get(at.pathId) ?? this.route;
-    const enemy = new MatchEnemy(`E${++this.enemySerial}`, definition, route, at.pathId);
+    // `gate:<id>` vira o canal que a comporta deixa aberto AGORA.
+    const pathId = this.routes.has(this.devices.resolvePath(at.pathId)) ? this.devices.resolvePath(at.pathId) : MAIN_PATH_ID;
+    const route = this.routes.get(pathId) ?? this.route;
+    const enemy = new MatchEnemy(`E${++this.enemySerial}`, definition, route, pathId);
     if (at.pathDistance > 0) enemy.setPathDistance(at.pathDistance);
     this.enemyList.push(enemy);
     this.abilitySystem.register(enemy, this.abilityWorld());
-    this.emit({ type: "enemySpawned", now: this.nowMs, id: enemy.id, enemyId, x: enemy.x, y: enemy.y, pathId: at.pathId });
+    this.emit({ type: "enemySpawned", now: this.nowMs, id: enemy.id, enemyId, x: enemy.x, y: enemy.y, pathId });
     this.onBossEvents(this.bossEncounter.onSpawn(enemy), enemy);
     this.spawnWeakPoints(enemy);
   }
@@ -808,6 +977,7 @@ export class Match {
           });
           break;
         case "bossPhaseChanged":
+          this.applyBossPhase(enemy, event.phase);
           this.emit({
             type: "bossPhaseChanged",
             now: this.nowMs,
@@ -835,6 +1005,35 @@ export class Match {
     }
   }
 
+  /**
+   * O que a fase nova do chefe faz no mapa: chamar escolta (nasce logo atrás dele, no mesmo canal)
+   * e/ou mergulhar para o outro canal, no mesmo ponto do percurso.
+   */
+  private applyBossPhase(boss: MatchEnemy, phase: import("../../types").BossPhase): void {
+    if (boss.dead || boss.reachedGoal) return;
+    if (phase.switchPath && this.routeList.length > 1) {
+      const index = this.routeList.findIndex((entry) => entry.id === boss.pathId);
+      const next = this.routeList[(index + 1) % this.routeList.length];
+      boss.switchRoute(next.route, next.id);
+      this.emit({ type: "bossSwitchedPath", now: this.nowMs, id: boss.id, pathId: next.id, x: boss.x, y: boss.y });
+    }
+    for (const escort of phase.summon ?? []) {
+      for (let index = 0; index < escort.count; index += 1) {
+        this.spawnEnemy(escort.enemyId, { pathId: boss.pathId, pathDistance: Math.max(0, boss.pathDistance - 40 - index * 22) });
+      }
+    }
+  }
+
+  /** Ostra, Banco II: juros no fim da onda, sobre o que está GUARDADO (antes do bônus da onda). */
+  private payInterest(): void {
+    for (const guardian of this.guardianList) {
+      const amount = interestFor(guardian, this.pearls(guardian.ownerId === ALLY_PLAYER_ID ? DEFAULT_PLAYER_ID : guardian.ownerId));
+      if (amount <= 0) continue;
+      this.earn(amount, "GuardianGeneration", DEFAULT_PLAYER_ID);
+      this.emit({ type: "interestPaid", now: this.nowMs, id: guardian.id, x: guardian.x, y: guardian.y, amount });
+    }
+  }
+
   /** Contexto que as habilidades de inimigo enxergam (item 6): sem Phaser, sem acesso à cena. */
   private abilityWorld(): EnemyAbilityWorld<MatchEnemy> {
     return {
@@ -849,6 +1048,24 @@ export class Match {
   }
 
   private onAbilityEvent(event: EnemyAbilityEvent): void {
+    if (event.type === "inflated") {
+      this.emit({ type: "enemyInflated", now: this.nowMs, id: event.enemyId, on: event.on });
+      return;
+    }
+    if (event.type === "popped") {
+      const enemy = this.enemyList.find((candidate) => candidate.id === event.enemyId);
+      const pop = enemy?.abilities.find((ability) => ability.type === "inflateOnHit");
+      this.emit({
+        type: "spikesPopped",
+        now: this.nowMs,
+        id: event.enemyId,
+        x: enemy?.x ?? 0,
+        y: enemy?.y ?? 0,
+        radius: pop && pop.type === "inflateOnHit" ? pop.pop.radius : 0,
+        guardianIds: event.guardianIds,
+      });
+      return;
+    }
     if (event.type !== "currentsAmplified") return;
     const boss = this.enemy(event.enemyId);
     this.emit({ type: "currentsAmplified", now: this.nowMs, amplified: event.amplified, bossName: boss?.definition.name ?? null });
@@ -859,6 +1076,12 @@ export class Match {
     this.bossEncounter.onRemoved(enemy);
     const damage = this.invincible ? 0 : Math.round(enemy.definition.reefDamage * enemy.mods.reefDamage);
     this.reefValue = Math.max(0, this.reefValue - damage);
+    // Ladrão do Recife: além das vidas, leva pérolas do caixa (nunca deixa o caixa negativo).
+    const stolen = this.invincible ? 0 : Math.min(pearlsStolenBy(enemy), this.pearls());
+    if (stolen > 0) {
+      this.spend(stolen, "Theft", DEFAULT_PLAYER_ID);
+      this.emit({ type: "pearlsStolen", now: this.nowMs, enemyId: enemy.definition.id, amount: stolen });
+    }
     this.stats.recordLeak(enemy.definition.id, damage, controlTier(enemy.definition));
     this.emit({
       type: "enemyReachedGoal",
@@ -1074,9 +1297,14 @@ export class Match {
       const chorus = updateChorus(guardian, this.guardianList, this.nowMs, (event) => this.emit({ type: "behavior", now: this.nowMs, event }));
       if (chorus) sources.push(chorus);
     }
-    this.guardianList.forEach((guardian) =>
-      guardian.setAura(resolveAura({ id: guardian.id, guardianId: guardian.guardianId, x: guardian.x, y: guardian.y }, sources)),
-    );
+    // NÉVOA: quem está fora da luz de um Peixe-Lanterna enxerga menos. Entra depois da aura para
+    // valer por cima de qualquer bônus de alcance — o Coro não fura a névoa, a lanterna fura.
+    const fog = this.fogActive;
+    const lights = fog ? this.guardianList.filter((guardian) => guardian.stats.light) : [];
+    this.guardianList.forEach((guardian) => {
+      const aura = resolveAura({ id: guardian.id, guardianId: guardian.guardianId, x: guardian.x, y: guardian.y }, sources);
+      guardian.setAura(fog && !isLit(guardian, lights) ? { ...aura, rangeMultiplier: aura.rangeMultiplier * FOG.rangeMultiplier } : aura);
+    });
   }
 
   /** Zonas de corrente presas a Guardiões (Tartaruga): recalculadas a cada tick a partir dos stats. */

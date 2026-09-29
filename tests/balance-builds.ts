@@ -1,5 +1,6 @@
 import type { SimPoint, SimStep } from "../src/game/core/Simulation";
 import type { BranchId, GuardianId } from "../src/game/types";
+import { CANAIS_BUILDS } from "./balance-builds-canais";
 
 /**
  * Roteiros de compra usados tanto pela simulação headless (`balance-sim.test.ts`)
@@ -706,6 +707,8 @@ export const BALANCE_BUILDS: BalanceBuild[] = [
       up([440, 435], "b"),
     ],
   },
+  // ------------------------------------------------------------ Canais Profundos (v4)
+  ...CANAIS_BUILDS,
 ];
 
 /** Build cru para a checagem de "não é fácil demais". */

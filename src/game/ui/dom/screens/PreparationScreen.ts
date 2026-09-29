@@ -8,7 +8,7 @@ import type { ProgressionService } from "../../../core/progression/ProgressionSe
 import type { LevelRecord } from "../../../core/save/PlayerProgress";
 import { DIFFICULTIES, DIFFICULTY_IDS, type DifficultyId } from "../../../data/difficulty";
 import { difficultyGates, type DifficultyGate } from "../../../core/progression/difficultyUnlocks";
-import { LEVEL_IDS } from "../../../data/levels";
+import { DIFFICULTY_GATE_LEVEL_IDS } from "../../../data/levels";
 import { enableReorder } from "../reorder";
 import { preserveScroll } from "../scroll";
 import { ENEMIES } from "../../../data/enemies";
@@ -63,7 +63,7 @@ export function preparationScreen(
   let rosterSlot: number | null = null;
   const statuses = new Map(progression.unlockStatuses().map((status) => [status.guardianId, status]));
   const record = progression.record(level.id);
-  const gates = difficultyGates(progression.progress, LEVEL_IDS);
+  const gates = difficultyGates(progression.progress, DIFFICULTY_GATE_LEVEL_IDS);
   // Toda fase abre no Normal (item 4). O que ficou guardado no save não decide mais isto, e uma
   // dificuldade que o jogador ainda não conquistou nunca vem pré-selecionada.
   if (!initial.locked && !(gates.find((gate) => gate.id === difficulty)?.unlocked ?? true)) difficulty = "normal";

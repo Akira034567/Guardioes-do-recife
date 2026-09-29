@@ -2,7 +2,13 @@ import type { TargetTier } from "./Targeting";
 import type {
   BlockHoldEffect,
   ChorusEffect,
+  DuelistEffect,
+  ExecuteEffect,
   FlowFieldEffect,
+  InterestEffect,
+  LanceEffect,
+  LightEffect,
+  LureEffect,
   FrenzyEffect,
   GuardianDefinition,
   GuardianUpgrade,
@@ -67,6 +73,17 @@ export interface GuardianStats {
   trap: TrapEffect | null;
   sonar: SonarEffect | null;
   chorus: ChorusEffect | null;
+  /** Peixe-Lanterna: luz que revela e acende aliados contra a névoa. */
+  light: LightEffect | null;
+  lure: LureEffect | null;
+  /** Ostra, ramo Banco: juros sobre as pérolas guardadas no fim de cada onda. */
+  interest: InterestEffect | null;
+  /** Peixe-Espada: estocada em linha, execução e duelo. */
+  lance: LanceEffect | null;
+  execute: ExecuteEffect | null;
+  duelist: DuelistEffect | null;
+  /** Arraia, ramo Planar: pode mudar de lugar uma vez por onda. */
+  relocate: boolean;
   /** Multiplicadores da aura que os sistemas aplicam na hora de usar (cooldowns, durações). */
   abilityCooldownMultiplier: number;
   controlDurationMultiplier: number;
@@ -158,6 +175,13 @@ export function resolveGuardianStats(
       : null,
     sonar: resolveLast(applied, "sonar") ?? definition.sonar ?? null,
     chorus: resolveLast(applied, "chorus") ?? null,
+    light: resolveLast(applied, "light") ?? definition.light ?? null,
+    lure: resolveLast(applied, "lure") ?? null,
+    interest: resolveLast(applied, "interest") ?? null,
+    lance: resolveLast(applied, "lance") ?? definition.lance ?? null,
+    execute: resolveLast(applied, "execute") ?? null,
+    duelist: resolveLast(applied, "duelist") ?? null,
+    relocate: applied.some((upgrade) => upgrade.relocate),
     abilityCooldownMultiplier: aura.abilityCooldownMultiplier * mastery.abilityCooldownMultiplier,
     controlDurationMultiplier: aura.controlDurationMultiplier * mastery.controlDurationMultiplier,
     debuffDurationMultiplier: aura.debuffDurationMultiplier * mastery.debuffDurationMultiplier,

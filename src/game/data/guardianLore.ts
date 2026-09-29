@@ -54,4 +54,24 @@ export const GUARDIAN_LORE: Record<GuardianId, GuardianLore> = {
     history: "Some por semanas e volta sempre que o Recife chama. Ouve a maré antes de todo mundo.",
     tip: "O sonar revela o que está escondido e coordena os Guardiões por perto.",
   },
+  oyster: {
+    difficulty: 2,
+    history: "Guardou pérolas do Recife antigo por cem marés, fechada no fundo da eclusa. Agora abre a concha para quem defende o canal.",
+    tip: "Ponha cedo: cada segundo em campo é renda. No ramo Banco, gastar tudo é desperdiçar juros.",
+  },
+  lanternfish: {
+    difficulty: 2,
+    history: "No fundo dos Canais a água é preta. Ele nasceu sabendo acender o próprio caminho — e o dos outros.",
+    tip: "Na névoa, quem está fora da luz dele enxerga só dois terços. Junte o esquadrão em volta.",
+  },
+  "manta-ray": {
+    difficulty: 3,
+    history: "Plana sobre os canais sem bater as asas, como se a corrente fosse dela. Quando ela passa, a água toda desacelera.",
+    tip: "Rende mais onde a fila vem em linha reta. No ramo Planar, mude-a de lugar quando o canal virar.",
+  },
+  swordfish: {
+    difficulty: 3,
+    history: "O mais rápido dos Canais. Não persegue ninguém: espera a fila se alinhar e atravessa todo mundo de uma vez.",
+    tip: "Coloque-o na beira de uma reta longa, apontando para onde a fila se acumula.",
+  },
 };

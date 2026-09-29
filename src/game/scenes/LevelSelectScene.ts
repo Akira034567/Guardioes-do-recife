@@ -4,7 +4,7 @@ import type { LevelProgressApi } from "../core/LevelProgress";
 
 import { ENCOUNTERS, type EncounterDefinition } from "../data/encounters";
 import type { ChallengeDefinition } from "../core/progression/challenges";
-import { getLevel, LEVELS, LEVEL_IDS } from "../data/levels";
+import { DIFFICULTY_GATE_LEVEL_IDS, getLevel, LEVELS, LEVEL_IDS } from "../data/levels";
 import { launchConfigFor } from "../match/MatchLaunchConfig";
 import { createLevelProgress } from "../systems/ProgressStore";
 import { getProgression } from "../systems/progression";
@@ -201,7 +201,7 @@ export class LevelSelectScene extends Phaser.Scene {
           // A preparação abre na TRILHA que o jogador estava olhando no mapa — e nunca acima do
           // que ele abriu (`clampDifficulty`). `lastDifficulty` continua sendo gravado (os atalhos
           // de URL e as sondas de balanceamento o usam), mas segue sem decidir isto.
-          difficulty: clampDifficulty(difficulty, saved, LEVEL_IDS),
+          difficulty: clampDifficulty(difficulty, saved, DIFFICULTY_GATE_LEVEL_IDS),
           loadout: (saved.lastLoadout.length > 0 ? saved.lastLoadout : saved.unlockedGuardians) as GuardianId[],
           encounter: encounter ? { guardianId: encounter.guardianId, teaser: encounter.teaser } : undefined,
         },

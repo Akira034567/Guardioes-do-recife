@@ -14,6 +14,10 @@ export type MatchCommand =
   | { type: "crownGuardian"; instanceId: string; playerId?: PlayerId }
   /** Toque em um elemento do mapa (rede, gruta, pedra que pisca) — item 28. */
   | { type: "interact"; interactableId: string; playerId?: PlayerId }
+  /** Toque numa comporta ou num redemoinho dormente (Canais Profundos). */
+  | { type: "useMapDevice"; deviceId: string; playerId?: PlayerId }
+  /** Arraia, ramo Planar: muda de lugar de graça, uma vez por onda. */
+  | { type: "relocateGuardian"; instanceId: string; x: number; y: number; playerId?: PlayerId }
   // Ferramentas de desenvolvimento (item 40). Toda partida que usar uma delas fica marcada
   // (`stats.cheated`) e não deve render estrelas nem moeda global.
   | { type: "debug.addPearls"; amount: number; playerId?: PlayerId }
@@ -41,6 +45,9 @@ export type RejectionReason =
   | "interactableLocked"
   | "interactableBusy"
   | "interactableDone"
+  | "deviceCooldown"
+  | "noEarlyStart"
+  | "cannotRelocate"
   | "unknownCommand";
 
 export type CommandResult =

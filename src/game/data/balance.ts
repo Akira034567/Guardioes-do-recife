@@ -380,6 +380,96 @@ export const GUARDIAN_BALANCE = {
       },
     },
   },
+  // ── Canais Profundos (v4) ───────────────────────────────────────────────────
+  /**
+   * Ostra — a economia. Tiro de pérola fraco e renda a cada 12s. Não é um DPS: é quem paga os DPS.
+   * O ramo Banco dobra a aposta (mais renda + juros sobre o que você GUARDA); o ramo Madrepérola
+   * desiste da renda extra e vira uma arma de verdade contra blindados.
+   */
+  oyster: {
+    cost: 120,
+    upgradeCosts: [90, 150] as const,
+    range: 170,
+    damage: 14,
+    cooldownMs: 1250,
+    projectileSpeed: 420,
+    income: { amount: 6, intervalMs: 12000 },
+    bank: {
+      level1: { income: { amount: 10, intervalMs: 11000 } },
+      level2: { income: { amount: 12, intervalMs: 10000 }, interest: { rate: 0.05, cap: 30 } },
+    },
+    nacre: {
+      level1: { damage: 30, cooldownMs: 1150 },
+      level2: { damage: 46, cooldownMs: 1150, splash: { radius: 60, damageMultiplier: 0.55 } },
+    },
+  },
+  /**
+   * Peixe-Lanterna — a luz. Revela camuflados continuamente e é o ÚNICO que fura a névoa: todo
+   * Guardião dentro da luz dele enxerga com o alcance inteiro. Ataque fraco de propósito.
+   */
+  lanternfish: {
+    cost: 100,
+    upgradeCosts: [85, 140] as const,
+    range: 160,
+    damage: 12,
+    cooldownMs: 950,
+    projectileSpeed: 480,
+    light: { radiusMultiplier: 1.1 },
+    lure: {
+      level1: { damage: 12, lure: { cooldownMs: 7000, durationMs: 1400, maxTargets: 3, slowFactor: 0.2 } },
+      level2: {
+        damage: 14,
+        lure: { cooldownMs: 6000, durationMs: 1700, maxTargets: 5, slowFactor: 0.15, vulnerability: { multiplier: 1.2, durationMs: 3000 } },
+      },
+    },
+    beacon: {
+      level1: { damage: 14, light: { radiusMultiplier: 1.35 }, aura: { rangeMultiplier: 1.1 } },
+      level2: { damage: 16, light: { radiusMultiplier: 1.5 }, aura: { rangeMultiplier: 1.15, damageMultiplier: 1.12 } },
+    },
+  },
+  /**
+   * Arraia-Manta — a varredura. Em vez de um alvo, uma FAIXA: tudo que estiver na linha entre ela e
+   * o alvo leva dano e fica lento. Planar a deixa trocar de lugar uma vez por onda; Arrasto
+   * empurra a faixa de volta rota acima.
+   */
+  "manta-ray": {
+    cost: 115,
+    upgradeCosts: [90, 150] as const,
+    range: 150,
+    damage: 18,
+    cooldownMs: 1600,
+    slowFactor: 0.7,
+    slowDurationMs: 1200,
+    sweep: { width: 80, lengthMultiplier: 1, maxTargets: 10 },
+    glide: {
+      level1: { damage: 24, sweep: { width: 90, lengthMultiplier: 1.15, maxTargets: 12 } },
+      level2: { damage: 34, slowFactor: 0.55, slowDurationMs: 1600, sweep: { width: 100, lengthMultiplier: 1.25, maxTargets: 14 } },
+    },
+    drag: {
+      level1: { damage: 22, pushWave: { cooldownMs: 7000, distance: 70, eliteFactor: 0.5, bossSlow: { factor: 0.7, durationMs: 1200 }, visualMs: 700 } },
+      level2: { damage: 28, pushWave: { cooldownMs: 6000, distance: 110, eliteFactor: 0.5, bossSlow: { factor: 0.6, durationMs: 1500 }, visualMs: 800 } },
+    },
+  },
+  /**
+   * Peixe-Espada — a estocada. Golpe lento e pesado em LINHA RETA que atravessa a fila. Estocada
+   * termina quem sobrou com pouca vida; Esgrimista é o duelista contra elite, chefe e escudo.
+   */
+  swordfish: {
+    cost: 120,
+    upgradeCosts: [95, 160] as const,
+    range: 175,
+    damage: 46,
+    cooldownMs: 2100,
+    lance: { width: 34, lengthMultiplier: 1.3, maxTargets: 4 },
+    thrust: {
+      level1: { damage: 58, execute: { threshold: 0.15 }, lance: { width: 34, lengthMultiplier: 1.3, maxTargets: 5 } },
+      level2: { damage: 72, cooldownMs: 1900, execute: { threshold: 0.22 }, lance: { width: 38, lengthMultiplier: 1.45, maxTargets: 6 } },
+    },
+    duelist: {
+      level1: { damage: 64, duelist: { eliteMultiplier: 1.35, bossMultiplier: 1.3, breaksShield: true } },
+      level2: { damage: 88, cooldownMs: 2000, duelist: { eliteMultiplier: 1.6, bossMultiplier: 1.5, breaksShield: true } },
+    },
+  },
 } as const;
 
 /**
@@ -456,6 +546,48 @@ export const ENEMY_BALANCE = {
   moray: { maxHealth: 390, speed: 52, reward: 22, armor: 5, reefDamage: 4 },
   corruptedShark: { maxHealth: 500, speed: 74, reward: 32, armor: 6, reefDamage: 5 },
   tidebreaker: { maxHealth: 550, speed: 29, reward: 60, armor: 7, reefDamage: 10 },
+  // ── Canais Profundos (v4) ───────────────────────────────────────────────────
+  /** Infla ao levar dano (armadura + lentidão) e estoura espinhos se morrer inflado. */
+  puffer: { maxHealth: 150, speed: 54, reward: 10, armor: 2, reefDamage: 2 },
+  /** Rápido e frágil: cega Guardiões com tinta e, se passar, leva pérolas. */
+  thief: { maxHealth: 120, speed: 80, reward: 12, armor: 1, reefDamage: 1 },
+  /** Tanque de suporte: casco pesado e escudo nos vizinhos. */
+  ironShell: { maxHealth: 460, speed: 36, reward: 22, armor: 10, reefDamage: 3 },
+  /** Carrega um cardume nas costas: morto, solta quatro Peixinhos. */
+  carrier: { maxHealth: 280, speed: 44, reward: 12, armor: 4, reefDamage: 2 },
+  /** Chefe dos Canais: três fases, troca de canal e chama escolta. */
+  queenMoray: { maxHealth: 1500, speed: 30, reward: 120, armor: 8, reefDamage: 12 },
+} as const;
+
+/**
+ * NÉVOA (modificador de onda `fog`, Canais Profundos): Guardião fora da luz de um Peixe-Lanterna
+ * enxerga menos. O Golfinho não acende ninguém — ele revela inimigos, não devolve o alcance.
+ */
+export const FOG = { rangeMultiplier: 0.8 } as const;
+
+/** Maré que vira: com quantos milissegundos de antecedência o HUD avisa. */
+export const TIDE_WARNING_MS = 3000;
+
+/** Baiacu Corrompido: inflar e estourar. */
+export const PUFFER_INFLATE = {
+  armorBonus: 6,
+  speedMultiplier: 0.6,
+  durationMs: 2200,
+  cooldownMs: 3500,
+  pop: { radius: 96, attackSpeedMultiplier: 0.5, durationMs: 1800 },
+} as const;
+
+/** Ladrão do Recife: a tinta que cega e o roubo no coral. */
+export const THIEF_INK = { radius: 110, intervalMs: 6500, attackSpeedMultiplier: 0.55, durationMs: 2200, stealPearls: 12 } as const;
+
+/** Tartaruga Corrompida: escudo nos vizinhos. */
+export const IRON_SHELL = { radius: 115, damageReduction: 0.3, slowResistance: 0.3 } as const;
+
+/** Moreia-Rainha: as três fases do chefe dos Canais. */
+export const QUEEN_MORAY = {
+  phase2: { hpThreshold: 0.7, speed: 1.15 },
+  phase3: { hpThreshold: 0.35, speed: 1.1, armorBonus: 3 },
+  bossRewardPearls: 60,
 } as const;
 
 /**

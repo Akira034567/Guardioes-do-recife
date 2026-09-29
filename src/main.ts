@@ -10,6 +10,12 @@ import { DIAGNOSTICS_ON, dumpLifecycle } from "./game/systems/devLog";
 import { armImmersiveFullscreen } from "./game/systems/immersive";
 import { setCloudLinkEvent } from "./game/systems/cloud";
 import { adoptCloudLinkSession } from "./game/systems/session";
+import { armMobileShell, registerServiceWorker } from "./game/systems/mobileShell";
+import { setSplashProgress } from "./game/systems/splash";
+import { installImageFallback } from "./game/ui/dom/imageFallback";
+
+// O bundle chegou: a barra da entrada anda o primeiro trecho. O resto é o `preload` da BootScene.
+setSplashProgress(0.3);
 
 /**
  * O jogador pode estar CHEGANDO de um link de e-mail (confirmação de conta ou troca de senha).
@@ -59,6 +65,9 @@ const game = new Phaser.Game({
 // No celular, o primeiro toque pede tela cheia: é a única forma de a barra do navegador sair da frente.
 const stage = document.getElementById("game");
 const disarmImmersive = stage ? armImmersiveFullscreen(stage) : () => {};
+armMobileShell();
+installImageFallback();
+registerServiceWorker();
 
 window.addEventListener("beforeunload", () => {
   disarmImmersive();

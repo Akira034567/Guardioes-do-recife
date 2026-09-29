@@ -191,6 +191,8 @@ export class UIScene extends Phaser.Scene {
   private pearlText!: Phaser.GameObjects.Text;
   private healthText!: Phaser.GameObjects.Text;
   private waveText!: Phaser.GameObjects.Text;
+  /** "ONDA" na pílula: sai quando o total tem dois dígitos, senão "12/24" passa por cima da ampulheta. */
+  private waveCaption!: Phaser.GameObjects.Text;
   private timerText!: Phaser.GameObjects.Text;
   private messageText!: Phaser.GameObjects.Text;
   private messageBubble!: Phaser.GameObjects.Image;
@@ -339,17 +341,19 @@ export class UIScene extends Phaser.Scene {
     const { topCenterY, pods, brand, levelPod } = HUD_LAYOUT;
     this.add.image(GAME_WIDTH / 2, HUD_TOP / 2, hudPanel(this, GAME_WIDTH, HUD_TOP, { ...SKIN.bar, edgeBottom: "#4fd8ff" }));
 
-    // Marca: a onda do logotipo é o mesmo pictograma das pílulas, só que maior.
-    this.add.image(brand.x + brand.width / 2, topCenterY, hudPanel(this, brand.width, brand.height, { ...SKIN.pod, radius: 14 }));
-    this.add.image(brand.x + 136, topCenterY, hudIcon(this, "waves", 28, "#4fc3f0"));
-    this.add
-      .text(brand.x + 16, topCenterY, "GUARDIÕES\nDO RECIFE", {
-        fontFamily: HUD_FONT.strong,
-        fontSize: "15px",
-        lineSpacing: -2,
-        color: HUD_COLORS.text,
-      })
-      .setOrigin(0, 0.5);
+    // Marca: a onda do logotipo é o mesmo pictograma das pílulas, só que maior. (No celular, não.)
+    if (HUD_LAYOUT.showBrand) {
+      this.add.image(brand.x + brand.width / 2, topCenterY, hudPanel(this, brand.width, brand.height, { ...SKIN.pod, radius: 14 }));
+      this.add.image(brand.x + 136, topCenterY, hudIcon(this, "waves", 28, "#4fc3f0"));
+      this.add
+        .text(brand.x + 16, topCenterY, "GUARDIÕES\nDO RECIFE", {
+          fontFamily: HUD_FONT.strong,
+          fontSize: "15px",
+          lineSpacing: -2,
+          color: HUD_COLORS.text,
+        })
+        .setOrigin(0, 0.5);
+    }
 
     // Plaquinha da fase, logo depois da marca: onde estou e em que dificuldade.
     //
@@ -403,7 +407,7 @@ export class UIScene extends Phaser.Scene {
 
     // Pílula da onda: em que onda estou e quanto falta para a próxima, no mesmo lugar.
     this.wavePod = this.pod(pods.wave.x, pods.wave.width, "waves", 22);
-    this.podCaption(pods.wave.x + 38, "ONDA");
+    this.waveCaption = this.podCaption(pods.wave.x + 38, "ONDA");
     this.waveText = this.podValue(pods.wave.x + 80, "1/5", HUD_COLORS.text);
     this.add.image(pods.wave.x + 114, topCenterY, hudIcon(this, "hourglass", 16, HUD_COLORS.cyan));
     this.timerText = this.podValue(pods.wave.x + 126, "EM 10s", HUD_COLORS.cyanBright, 12);
@@ -799,7 +803,7 @@ export class UIScene extends Phaser.Scene {
       color: HUD_COLORS.textSoft,
       wordWrap: { width: panelWidth - PANEL_ICON_COLUMN - 32 },
       lineSpacing: 0,
-      maxLines: 3,
+      maxLines: HUD_LAYOUT.panelDescriptionLines,
     });
 
     this.createPanelButtons();
@@ -954,6 +958,9 @@ export class UIScene extends Phaser.Scene {
     this.healthText.setText(`${snapshot.reefHealth}/${snapshot.maxReefHealth}`);
     this.healthText.setColor(snapshot.reefHealth <= 6 ? HUD_COLORS.danger : HUD_COLORS.text);
     this.waveText.setText(`${snapshot.wave}/${snapshot.totalWaves}`);
+    const compact = snapshot.totalWaves >= 10;
+    this.waveCaption.setVisible(!compact);
+    this.waveText.setX(HUD_LAYOUT.pods.wave.x + (compact ? 38 : 80));
     this.timerText.setText(
       snapshot.waveState === "countdown" ? `EM ${snapshot.countdownSeconds}s` : snapshot.waveState === "victory" ? "FIM" : "EM CURSO",
     );
@@ -1394,7 +1401,13 @@ export class UIScene extends Phaser.Scene {
     if (options.name) UI_REGISTRY.register(options.name, x, y, width, height);
     const style = options.tone === "primary" ? SKIN.primary : options.tone === "danger" ? SKIN.danger : SKIN.button;
     const image = this.add.image(x, y, hudPanel(this, width, height, style));
-    image.setInteractive({ hitArea: new Phaser.Geom.Rectangle(GLOW_PAD, GLOW_PAD, width, height), hitAreaCallback: Phaser.Geom.Rectangle.Contains, useHandCursor: true });
+    // No celular a área de toque passa do desenho (`hitSlop`): dedo erra por alguns pixels.
+    const slop = HUD_LAYOUT.hitSlop;
+    image.setInteractive({
+      hitArea: new Phaser.Geom.Rectangle(GLOW_PAD - slop, GLOW_PAD - slop, width + slop * 2, height + slop * 2),
+      hitAreaCallback: Phaser.Geom.Rectangle.Contains,
+      useHandCursor: true,
+    });
     image.on("pointerdown", onClick);
     image.on("pointerover", () => image.setAlpha(0.82));
     image.on("pointerout", () => image.setAlpha(1));

@@ -21,7 +21,7 @@ test("abre a Escola como aba do Álbum e lê uma aula", async ({ page }) => {
 
   // Save novo: só a aula que abriu por padrão conta como lida.
   await expect(panel).toHaveAttribute("data-read", "1");
-  await expect(page.getByTestId("album-progress")).toContainText("1 de 25");
+  await expect(page.getByTestId("album-progress")).toContainText("1 de 34");
 
   // Cada aula é uma carta da grade, e a do efeito abre com a regra dela.
   const card = page.getByTestId("collection-card-efeito-vulneravel");

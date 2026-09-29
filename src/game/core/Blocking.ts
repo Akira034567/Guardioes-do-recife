@@ -7,11 +7,20 @@ export interface BlockerLike {
   id: string;
   /** Distância ao longo da rota; unidades fora dela (null) nunca bloqueiam. */
   routeDistance: number | null;
+  /**
+   * Canal em que ele está (fases com várias rotas). `routeDistance` só compara com quem nada no
+   * MESMO canal; quem vem por outro canal só encosta se passar fisicamente por cima dele (o tronco
+   * comum antes da bifurcação).
+   */
+  pathId?: string | null;
+  x?: number;
+  y?: number;
   stats: Pick<GuardianStats, "blocks" | "blockCapacity" | "contactDamagePerSecond" | "bossHold" | "blockHold" | "controlDurationMultiplier">;
 }
 
 export interface BlockableEnemy extends ControlTarget {
   isBlockable: boolean;
+  pathId?: string;
   setBlocked(blockerId: string, stopDistance: number): void;
 }
 
@@ -87,12 +96,13 @@ export class BlockingSystem {
        * raspão custa uma fração de segundo de dano e ficar preso custa o fluxo inteiro: o dano por
        * inimigo continua saindo do tempo que ele passa encostado.
        */
-      const touching = enemies.filter(
-        (enemy) =>
-          !enemy.dead &&
-          !enemy.reachedGoal &&
-          hasReachedBlockerContact(enemy.pathDistance, anchor, BLOCKER_BODY_RADIUS + enemy.definition.hitRadius),
-      );
+      const touching = enemies.filter((enemy) => {
+        if (enemy.dead || enemy.reachedGoal) return false;
+        const reach = BLOCKER_BODY_RADIUS + enemy.definition.hitRadius;
+        const samePath = !blocker.pathId || !enemy.pathId || enemy.pathId === blocker.pathId;
+        if (samePath) return hasReachedBlockerContact(enemy.pathDistance, anchor, reach);
+        return blocker.x !== undefined && blocker.y !== undefined && Math.hypot(enemy.x - blocker.x, enemy.y - blocker.y) <= reach;
+      });
       if (stats.contactDamagePerSecond > 0) {
         for (const enemy of touching) hooks.damage(enemy, stats.contactDamagePerSecond * (deltaMs / 1000));
       }

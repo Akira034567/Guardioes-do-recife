@@ -23,7 +23,11 @@ export type GuardianId =
   | "shark"
   | "sea-turtle"
   | "stonefish"
-  | "dolphin";
+  | "dolphin"
+  | "oyster"
+  | "lanternfish"
+  | "manta-ray"
+  | "swordfish";
 export type EnemyId =
   | "minnow"
   | "swimmer"
@@ -33,7 +37,12 @@ export type EnemyId =
   | "shellback"
   | "moray"
   | "corruptedShark"
-  | "tidebreaker";
+  | "tidebreaker"
+  | "puffer"
+  | "thief"
+  | "ironShell"
+  | "carrier"
+  | "queenMoray";
 export type EnemyRole = "swarm" | "common" | "fast" | "armored" | "elite" | "boss";
 export type GuardianState = "idle" | "windup" | "attack" | "recovery" | "disabled";
 /**
@@ -44,8 +53,10 @@ export type GuardianState = "idle" | "windup" | "attack" | "recovery" | "disable
  * ink: jato instantâneo que aplica debuff (Polvo).
  * trap: não ataca pela FSM; a armadilha (`TrapCore`) dispara quando inimigos pisam nela (Peixe-Pedra).
  * sonar: golpe fraco de alvo único mais pulso periódico de ecolocalização (Golfinho).
+ * lance: estocada em linha reta que atravessa todos no caminho até o alvo e além (Peixe-Espada).
+ * sweep: varre a faixa inteira do alcance (`targetingShape` em linha) de uma vez (Arraia-Manta).
  */
-export type AttackKind = "projectile" | "chain" | "area" | "melee" | "ink" | "trap" | "sonar";
+export type AttackKind = "projectile" | "chain" | "area" | "melee" | "ink" | "trap" | "sonar" | "lance" | "sweep";
 /**
  * platform: plataforma de pedra da fase; water: água livre longe da rota; route: em cima da correnteza;
  * margin: faixa de água colada à rota; ambush: encostado na BORDA da correnteza, virado para dentro
@@ -296,6 +307,54 @@ export interface ChorusEffect {
   thematic?: Partial<Record<GuardianId, AuraEffect>>;
 }
 
+/**
+ * Peixe-Lanterna: a luz. Revela camuflados dentro dela e ACENDE os aliados — Guardião aceso
+ * enxerga através da névoa (`fog`) com o alcance inteiro.
+ */
+export interface LightEffect {
+  /** Raio = alcance × este fator. */
+  radiusMultiplier: number;
+}
+
+/** Peixe-Lanterna, ramo Isca: fascina os inimigos mais adiantados, que quase param diante da luz. */
+export interface LureEffect {
+  cooldownMs: number;
+  durationMs: number;
+  maxTargets: number;
+  /** Lentidão enquanto fascinado (0.15 = anda a 15%). Chefes não caem na isca. */
+  slowFactor: number;
+  vulnerability?: { multiplier: number; durationMs: number };
+}
+
+/** Ostra, ramo Banco: rende juros sobre as pérolas GUARDADAS ao fim de cada onda. */
+export interface InterestEffect {
+  /** Fração das pérolas em caixa (0.05 = 5%). */
+  rate: number;
+  /** Teto de pérolas por onda, por Ostra. */
+  cap: number;
+}
+
+/** Peixe-Espada, ramo Estocada: quem não é chefe e está abaixo do limiar morre no golpe. */
+export interface ExecuteEffect {
+  threshold: number;
+}
+
+/** Peixe-Espada, ramo Esgrimista: o duelo contra o que é grande. */
+export interface DuelistEffect {
+  eliteMultiplier: number;
+  bossMultiplier: number;
+  /** A estocada rompe o escudo dado por inimigos de suporte (Tartaruga Corrompida). */
+  breaksShield: boolean;
+}
+
+/** A estocada em linha: largura da faixa, quanto passa do alvo e quantos ela atravessa. */
+export interface LanceEffect {
+  width: number;
+  /** Comprimento = alcance × este fator. */
+  lengthMultiplier: number;
+  maxTargets: number;
+}
+
 /** Resistência de elites/chefes a controle: cada controle na janela vale `steps[n]`; depois, imunidade. */
 export interface ControlResistance {
   windowMs: number;
@@ -357,6 +416,14 @@ export interface GuardianUpgrade {
   trap?: TrapEffect;
   sonar?: SonarEffect;
   chorus?: ChorusEffect;
+  light?: LightEffect;
+  lure?: LureEffect;
+  interest?: InterestEffect;
+  execute?: ExecuteEffect;
+  duelist?: DuelistEffect;
+  lance?: LanceEffect;
+  /** Arraia, ramo Planar: pode mudar de lugar de graça, uma vez por onda (comando `relocateGuardian`). */
+  relocate?: boolean;
 }
 
 export interface UpgradeBranch {
@@ -410,6 +477,8 @@ export interface GuardianDefinition {
   dash?: boolean;
   trap?: TrapEffect;
   sonar?: SonarEffect;
+  light?: LightEffect;
+  lance?: LanceEffect;
   timings: GuardianStateTimings;
   animation: GuardianAnimationProfile;
   branches: [UpgradeBranch, UpgradeBranch];
@@ -516,7 +585,21 @@ export type EnemyAbility =
    * Quebra-Marés: em ciclos, a Baleia AMPLIFICA a corrente natural do mapa (nunca inverte, e nunca
    * toca nas correntes criadas por Guardiões — veja `CurrentZone.amplifiable`).
    */
-  | { type: "amplifyCurrents"; cycleMs: number; surgeMs: number; strengthMultiplier: number; driftMultiplier: number };
+  | { type: "amplifyCurrents"; cycleMs: number; surgeMs: number; strengthMultiplier: number; driftMultiplier: number }
+  /**
+   * Baiacu Corrompido: ao levar dano, INFLA — ganha armadura e fica lento por um tempo. Morrer
+   * inflado estoura os espinhos e atrapalha os Guardiões em volta.
+   */
+  | {
+      type: "inflateOnHit";
+      armorBonus: number;
+      speedMultiplier: number;
+      durationMs: number;
+      cooldownMs: number;
+      pop: { radius: number; attackSpeedMultiplier: number; durationMs: number };
+    }
+  /** Ladrão do Recife: se chega ao coral, além das vidas, leva pérolas do caixa. */
+  | { type: "stealPearls"; amount: number };
 
 export interface BossPhase {
   id: string;
@@ -527,6 +610,10 @@ export interface BossPhase {
   statMultipliers?: StatMultipliers;
   addAbilities?: EnemyAbility[];
   removeAbilityTypes?: EnemyAbility["type"][];
+  /** Escolta chamada ao entrar na fase, nascendo junto do chefe. */
+  summon?: Array<{ enemyId: EnemyId; count: number }>;
+  /** Troca de canal: o chefe mergulha e reaparece na OUTRA rota, no mesmo ponto do percurso. */
+  switchPath?: boolean;
 }
 
 /** Encontro de chefe (item 8): fases por vida, barra própria e recompensa extra. */
@@ -678,6 +765,49 @@ export interface CurrentZoneDefinition {
   direction: Vec2;
   speedModifier: number;
   projectileDrift: number;
+  /**
+   * MARÉ QUE VIRA (Canais Profundos): a corrente inverte de sentido a cada `flipEveryMs`. Ausente =
+   * corrente fixa, como no Recife Costeiro. O HUD avisa alguns segundos antes da virada.
+   */
+  flipEveryMs?: number;
+}
+
+/**
+ * COMPORTA (Canais Profundos). Uma alavanca no mapa decide por qual de dois canais vão os grupos
+ * marcados com `pathId: "gate:<id>"`. O jogador toca para virar; depois disso ela tranca por
+ * `cooldownMs`. A decisão é de rota: mandar o cardume pelo canal longo ou pelo canal onde está a defesa.
+ */
+export interface GateDefinition {
+  id: string;
+  label: string;
+  x: number;
+  y: number;
+  /** Os dois canais que ela alterna (ids de `paths`). */
+  routes: [string, string];
+  /** Canal aberto no começo da fase (índice em `routes`). */
+  initial?: 0 | 1;
+  cooldownMs: number;
+  /** Nome curto de cada canal no mapa ("Canal Norte"). */
+  routeLabels: [string, string];
+  /** Onde fica a porta de pedra de cada canal: a do canal FECHADO aparece desenhada no mapa. */
+  doors: [Vec2, Vec2];
+}
+
+/**
+ * REDEMOINHO (Canais Profundos). De tempos em tempos puxa quem está dentro e devolve alguns metros
+ * para trás na rota. Chefes não são arrastados; elites, pela metade. `dormant` = só gira quando o
+ * jogador toca nele, por `activeMs`, e depois descansa `cooldownMs`.
+ */
+export interface WhirlpoolDefinition {
+  id: string;
+  label: string;
+  x: number;
+  y: number;
+  radius: number;
+  /** Distância, em pixels de rota, que o redemoinho devolve. */
+  pullBack: number;
+  intervalMs: number;
+  dormant?: { activeMs: number; cooldownMs: number };
 }
 
 export interface EnemyScaling {
@@ -742,6 +872,10 @@ export interface LevelDefinition {
   encounterId?: string;
   /** Elementos do mapa com que o jogador interage durante a partida (item 28). */
   interactables?: InteractableDefinition[];
+  /** Comportas que escolhem o canal dos grupos `gate:<id>` (Canais Profundos). */
+  gates?: GateDefinition[];
+  /** Redemoinhos que devolvem inimigos rota acima (Canais Profundos). */
+  whirlpools?: WhirlpoolDefinition[];
 }
 
 /** O que o jogador precisa fazer para resolver um interagível. */

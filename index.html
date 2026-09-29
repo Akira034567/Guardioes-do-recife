@@ -2,17 +2,234 @@
 <html lang="pt-BR">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
     <meta name="theme-color" content="#031f35" />
     <link rel="manifest" href="./manifest.webmanifest" />
+    <link rel="icon" href="./icons/favicon-32.png" type="image/png" sizes="32x32" />
     <link rel="icon" href="./icons/icon.svg" type="image/svg+xml" />
-    <link rel="apple-touch-icon" href="./icons/icon-192.png" />
+    <link rel="apple-touch-icon" href="./icons/icon-180.png" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="Guardiões" />
     <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="format-detection" content="telephone=no" />
     <title>Guardiões do Recife — Recife 1</title>
+    <script>
+      /*
+       * Antes de qualquer CSS pintar: marca o documento como "toque" (celular/tablet) e "instalado"
+       * (aberto pelo ícone da tela inicial). Todo o visual exclusivo do celular fica atrás de
+       * `html.is-touch` — o desktop não é afetado.
+       */
+      (function () {
+        var root = document.documentElement;
+        var coarse = window.matchMedia && window.matchMedia("(pointer: coarse)").matches;
+        var standalone =
+          (window.matchMedia && window.matchMedia("(display-mode: standalone), (display-mode: fullscreen)").matches) ||
+          window.navigator.standalone === true;
+        if (coarse) root.classList.add("is-touch");
+        if (standalone) root.classList.add("is-standalone");
+      })();
+    </script>
+    <style>
+      /* A entrada precisa existir antes do JavaScript do jogo — por isso o CSS dela mora aqui. */
+      #boot-splash {
+        position: fixed;
+        inset: 0;
+        z-index: 1000;
+        overflow: hidden;
+        background: radial-gradient(circle at 50% 20%, #1c9fd0 0%, #0a5a80 35%, #031f35 80%);
+        color: #bff4ff;
+        font-family: "Arial Black", Arial, sans-serif;
+        transition: opacity 420ms ease;
+        pointer-events: auto;
+      }
+      #boot-splash.is-leaving {
+        opacity: 0;
+        pointer-events: none;
+      }
+      .boot-splash__art {
+        position: absolute;
+        inset: -3%;
+        background-size: cover;
+        background-position: 50% 35%;
+        opacity: 0;
+        transform: scale(1.02);
+        transition: opacity 500ms ease;
+        animation: boot-kenburns 14s ease-in-out infinite alternate;
+      }
+      #boot-splash.has-art .boot-splash__art {
+        opacity: 1;
+      }
+      /* Sem a arte (arquivo ainda não salvo), o nome do jogo aparece em texto. */
+      .boot-splash__title {
+        position: absolute;
+        left: 0;
+        right: 0;
+        top: 26%;
+        text-align: center;
+        font-size: clamp(28px, 7vw, 72px);
+        line-height: 1;
+        color: #ffd35a;
+        text-shadow: 0 4px 0 #0b2c63, 0 0 28px rgba(0, 0, 0, 0.45);
+        animation: boot-pop 900ms cubic-bezier(0.2, 1.4, 0.4, 1) both;
+      }
+      .boot-splash__title small {
+        display: block;
+        margin-top: 0.2em;
+        font-size: 0.55em;
+        color: #9ff0ff;
+      }
+      #boot-splash.has-art .boot-splash__title {
+        display: none;
+      }
+      .boot-splash__rays {
+        position: absolute;
+        inset: -20% -10% 30%;
+        background: repeating-conic-gradient(from 180deg at 50% 0%, rgba(255, 255, 255, 0.14) 0deg 4deg, transparent 4deg 13deg);
+        mask-image: radial-gradient(ellipse at 50% 0%, #000 0%, transparent 70%);
+        -webkit-mask-image: radial-gradient(ellipse at 50% 0%, #000 0%, transparent 70%);
+        mix-blend-mode: screen;
+        animation: boot-rays 7s ease-in-out infinite alternate;
+      }
+      .boot-splash__bubble {
+        position: absolute;
+        bottom: -40px;
+        width: var(--s, 14px);
+        height: var(--s, 14px);
+        left: var(--x, 50%);
+        border-radius: 50%;
+        border: 1.5px solid rgba(210, 250, 255, 0.75);
+        background: radial-gradient(circle at 32% 30%, rgba(255, 255, 255, 0.85) 0 12%, rgba(160, 235, 255, 0.18) 30%, transparent 70%);
+        animation: boot-bubble var(--d, 6s) linear var(--w, 0s) infinite;
+      }
+      .boot-splash__loader {
+        position: absolute;
+        left: 50%;
+        bottom: calc(9% + env(safe-area-inset-bottom, 0px));
+        width: min(62vw, 620px);
+        transform: translateX(-50%);
+        text-align: center;
+      }
+      .boot-splash__bar {
+        position: relative;
+        height: clamp(16px, 3.6vh, 30px);
+        border-radius: 999px;
+        padding: 3px;
+        background: rgba(4, 22, 56, 0.85);
+        border: 2px solid #9fdcff;
+        box-shadow: 0 0 18px rgba(80, 200, 255, 0.55), inset 0 0 10px rgba(0, 0, 0, 0.6);
+      }
+      .boot-splash__fill {
+        position: relative;
+        height: 100%;
+        width: calc(var(--p, 0) * 100%);
+        min-width: 8%;
+        border-radius: 999px;
+        overflow: hidden;
+        background: linear-gradient(180deg, #8ff3ff 0%, #2fc6f5 45%, #0f86d4 100%);
+        transition: width 260ms ease-out;
+      }
+      .boot-splash__fill::after {
+        content: "";
+        position: absolute;
+        inset: 0;
+        background:
+          radial-gradient(ellipse 14px 7px at 50% 100%, rgba(255, 255, 255, 0.45) 60%, transparent 62%) 0 35% / 26px 100% repeat-x,
+          linear-gradient(90deg, transparent 0%, rgba(255, 255, 255, 0.35) 50%, transparent 100%) 0 0 / 40% 100% no-repeat;
+        animation: boot-wave 1.4s linear infinite;
+      }
+      .boot-splash__label {
+        margin-top: 0.9em;
+        font-family: Arial, sans-serif;
+        font-weight: 700;
+        font-size: clamp(12px, 2.4vh, 18px);
+        letter-spacing: 0.32em;
+        color: #bff4ff;
+        text-shadow: 0 2px 6px rgba(0, 0, 0, 0.7);
+      }
+      .boot-splash__label span {
+        animation: boot-dot 1.2s infinite;
+      }
+      .boot-splash__label span:nth-child(2) {
+        animation-delay: 0.2s;
+      }
+      .boot-splash__label span:nth-child(3) {
+        animation-delay: 0.4s;
+      }
+      @keyframes boot-kenburns {
+        from { transform: scale(1.02) translate3d(0, 0, 0); }
+        to { transform: scale(1.09) translate3d(0, -1.2%, 0); }
+      }
+      @keyframes boot-rays {
+        from { opacity: 0.55; transform: rotate(-2deg); }
+        to { opacity: 1; transform: rotate(2deg); }
+      }
+      @keyframes boot-bubble {
+        0% { transform: translate3d(0, 0, 0); opacity: 0; }
+        10% { opacity: 1; }
+        50% { transform: translate3d(12px, -55vh, 0); }
+        100% { transform: translate3d(-6px, -115vh, 0); opacity: 0.2; }
+      }
+      @keyframes boot-wave {
+        from { background-position: 0 35%, -40% 0; }
+        to { background-position: 26px 35%, 140% 0; }
+      }
+      @keyframes boot-dot {
+        0%, 100% { opacity: 0.2; }
+        50% { opacity: 1; }
+      }
+      @keyframes boot-pop {
+        from { transform: scale(0.6); opacity: 0; }
+        to { transform: scale(1); opacity: 1; }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        .boot-splash__art,
+        .boot-splash__rays,
+        .boot-splash__bubble,
+        .boot-splash__fill::after,
+        .boot-splash__title {
+          animation: none;
+        }
+        .boot-splash__bubble {
+          display: none;
+        }
+      }
+    </style>
   </head>
   <body>
+    <div id="boot-splash" role="progressbar" aria-label="Carregando Guardiões do Recife" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+      <div class="boot-splash__art"></div>
+      <div class="boot-splash__rays"></div>
+      <div class="boot-splash__title">GUARDIÕES<small>DO RECIFE</small></div>
+      <i class="boot-splash__bubble" style="--x: 6%; --s: 18px; --d: 7s; --w: 0s"></i>
+      <i class="boot-splash__bubble" style="--x: 14%; --s: 10px; --d: 5.5s; --w: 1.2s"></i>
+      <i class="boot-splash__bubble" style="--x: 24%; --s: 7px; --d: 6.5s; --w: 2.6s"></i>
+      <i class="boot-splash__bubble" style="--x: 71%; --s: 12px; --d: 6s; --w: 0.6s"></i>
+      <i class="boot-splash__bubble" style="--x: 83%; --s: 20px; --d: 8s; --w: 1.8s"></i>
+      <i class="boot-splash__bubble" style="--x: 93%; --s: 9px; --d: 5s; --w: 3s"></i>
+      <div class="boot-splash__loader">
+        <div class="boot-splash__bar"><div class="boot-splash__fill"></div></div>
+        <div class="boot-splash__label">CARREGANDO<span>.</span><span>.</span><span>.</span></div>
+      </div>
+    </div>
+    <script>
+      // A arte chega por JS (e não pelo HTML) para o Vite não tentar empacotar um arquivo de `public/`.
+      (function () {
+        var splash = document.getElementById("boot-splash");
+        var art = new Image();
+        art.onload = function () {
+          splash.querySelector(".boot-splash__art").style.backgroundImage = "url(" + art.src + ")";
+          splash.classList.add("has-art");
+        };
+        art.src = "assets/brand/splash.jpg";
+        window.__grSplashStartedAt = performance.now();
+      })();
+    </script>
+    <div id="rotate-hint" aria-live="polite">
+      <div class="rotate-hint__phone" aria-hidden="true"></div>
+      <p>Gire o celular</p>
+      <small>O Recife se defende na horizontal.</small>
+    </div>
     <main id="game" aria-label="Guardiões do Recife"></main>
     <script type="module" src="/src/main.ts"></script>
   </body>

@@ -6,7 +6,7 @@ import { difficultyGates, highestUnlockedDifficulty, type DifficultyGate } from 
 import { hasOwnObjectives, objectivesFor } from "../../../core/progression/levelObjectives";
 import { objectiveLabel } from "../../../core/progression/objectives";
 import { difficultyTrack } from "../../../core/progression/stars";
-import { LEVEL_IDS } from "../../../data/levels";
+import { DIFFICULTY_GATE_LEVEL_IDS, LEVEL_IDS } from "../../../data/levels";
 import { DIFFICULTY_IDS, type DifficultyId } from "../../../data/difficulty";
 import type { ProgressionService } from "../../../core/progression/ProgressionService";
 import { DIFFICULTIES } from "../../../data/difficulty";
@@ -81,26 +81,43 @@ export function encounterNodeState(encounter: EncounterDefinition, progression: 
  * para conferir ondas, vidas e ameaças antes de decidir, sem entrar e voltar.
  */
 export function mapScreen(progression: ProgressionService, isUnlocked: (levelId: string) => boolean, actions: MapActions): Screen {
-  const region = REGIONS.find(isRegionOpen) ?? REGIONS[0];
+  /**
+   * A REGIÃO em foco. Abre onde o jogador está: a última região aberta em que ele já destrancou
+   * alguma fase (quem venceu o Coração do Recife cai direto nos Canais). As setas trocam.
+   */
+  const reachable = (candidate: RegionDefinition): boolean => candidate.nodes.some((node) => isUnlocked(node.levelId));
+  let region = [...REGIONS].reverse().find((candidate) => isRegionOpen(candidate) && reachable(candidate)) ?? REGIONS.find(isRegionOpen) ?? REGIONS[0];
   /**
    * A TRILHA que o mapa está mostrando. O mapa abre na mais alta que o jogador já abriu: quem
    * terminou a campanha no Normal quer ver o Difícil, e antes disso o Difícil aparecia em lugar
    * nenhum — o jogador nem descobria que tinha liberado.
    */
-  let difficulty: DifficultyId = highestUnlockedDifficulty(progression.progress, LEVEL_IDS);
+  let difficulty: DifficultyId = highestUnlockedDifficulty(progression.progress, DIFFICULTY_GATE_LEVEL_IDS);
   let selected: Selection = { kind: "level", level: nextLevel(region, progression, isUnlocked, difficulty) };
 
   return {
     id: "map",
     render(host: ScreenHost) {
       const root = h("div", { class: "gr-world", testId: "map-panel" });
-      const art = levelBackgroundPath(region.backgroundKey);
-      if (art) root.append(h("div", { class: "gr-world__backdrop", style: `background-image:url(${art})` }));
+      const backdrop = h("div", { class: "gr-world__backdrop" });
+      root.append(backdrop);
 
       const layout = h("div", { class: "gr-world__layout" });
       root.append(layout);
 
+      const goToRegion = (delta: number): void => {
+        const open = REGIONS.filter((candidate) => isRegionOpen(candidate) && reachable(candidate));
+        const next = open[open.indexOf(region) + delta];
+        if (!next) return;
+        region = next;
+        selected = { kind: "level", level: nextLevel(region, progression, isUnlocked, difficulty) };
+        draw();
+      };
+
       const draw = (): void => {
+        const art = levelBackgroundPath(region.backgroundKey);
+        backdrop.style.backgroundImage = art ? `url(${art})` : "";
+        root.dataset.region = region.id;
         root.dataset.difficulty = difficulty;
         layout.replaceChildren(
           sidebar(host, actions),
@@ -114,10 +131,19 @@ export function mapScreen(progression: ProgressionService, isUnlocked: (levelId:
               selected = { kind: "level", level: nextLevel(region, progression, isUnlocked, difficulty) };
               draw();
             }),
-            mapField(region, progression, isUnlocked, art, selected, difficulty, (next) => {
-              selected = next;
-              draw();
-            }),
+            mapField(
+              region,
+              progression,
+              isUnlocked,
+              levelBackgroundPath(region.backgroundKey),
+              selected,
+              difficulty,
+              (next) => {
+                selected = next;
+                draw();
+              },
+              goToRegion,
+            ),
             detail(selected, progression, actions, difficulty),
             challengeRow(progression, isUnlocked, actions),
           ),
@@ -148,7 +174,7 @@ function difficultyTrackBar(
   current: DifficultyId,
   onPick: (next: DifficultyId) => void,
 ): HTMLElement {
-  const gates = difficultyGates(progression.progress, LEVEL_IDS);
+  const gates = difficultyGates(progression.progress, DIFFICULTY_GATE_LEVEL_IDS);
   return h(
     "nav",
     { class: "gr-world__tracks", testId: "map-tracks", dataValue: current, "aria-label": "Dificuldade da campanha" },
@@ -302,8 +328,11 @@ function mapField(
   selected: Selection,
   difficulty: DifficultyId,
   onSelect: (next: Selection) => void,
+  onRegionStep: (delta: number) => void,
 ): HTMLElement {
   const field = h("div", { class: "gr-world__map", testId: "map-track", dataRegion: region.id, dataDifficulty: difficulty });
+  // Região sem mapa pintado (os Canais, por enquanto): o fundo vem do CSS, pela `data-region`.
+  if (!art) field.classList.add("gr-world__map--procedural");
   if (art) field.append(h("div", { class: "gr-world__map-art", style: `background-image:url(${art})` }));
   field.append(trail(region, isUnlocked));
 
@@ -318,7 +347,7 @@ function mapField(
   }
   field.append(nodes);
 
-  field.append(regionTabs(region));
+  field.append(regionTabs(region, isUnlocked, onRegionStep));
   field.append(h("div", { class: "gr-world__compass", html: MAP_COMPASS }));
   field.append(h("span", { class: "gr-world__sign gr-world__sign--here", text: region.name }));
   // A faixa da dificuldade fica POR CIMA do mapa, com a cor dela: é impossível confundir a trilha.
@@ -443,19 +472,25 @@ function encounterNode(
 }
 
 /** Abas das regiões: a aberta à esquerda, com as setas; as que ainda virão ficam anunciadas ao lado. */
-function regionTabs(current: RegionDefinition): HTMLElement {
-  const open = REGIONS.filter(isRegionOpen);
-  const alone = open.length < 2;
-  const step = (delta: number): HTMLElement =>
-    h("button", {
+function regionTabs(current: RegionDefinition, isUnlocked: (levelId: string) => boolean, onStep: (delta: number) => void): HTMLElement {
+  // Só conta como aberta a região que tem fase E que o jogador já alcançou.
+  const reachable = (region: RegionDefinition): boolean => isRegionOpen(region) && region.nodes.some((node) => isUnlocked(node.levelId));
+  const open = REGIONS.filter(reachable);
+  const index = open.indexOf(current);
+  const step = (delta: number): HTMLElement => {
+    const target = open[index + delta];
+    const button = h("button", {
       class: "gr-world__region-step",
       testId: `map-region-${delta < 0 ? "prev" : "next"}`,
       type: "button",
-      disabled: alone,
-      title: alone ? "Só o Recife Costeiro está aberto por enquanto." : "",
+      disabled: !target,
+      title: target ? target.name : delta > 0 ? "A próxima região abre quando você vencer a última fase desta." : "",
       "aria-label": delta < 0 ? "Região anterior" : "Próxima região",
       html: delta < 0 ? ICONS.chevronLeft : ICONS.chevronRight,
     });
+    if (target) button.addEventListener("click", () => onStep(delta));
+    return button;
+  };
 
   return h(
     "div",
@@ -494,7 +529,9 @@ function detail(selected: Selection, progression: ProgressionService, actions: M
   const level = selected.kind === "level" ? selected.level : selected.encounter.level;
   const art = levelBackgroundPath(level.backgroundKey);
   const isEncounter = selected.kind === "encounter";
-  const index = LEVELS.findIndex((candidate) => candidate.id === level.id);
+  // "Fase 3" conta DENTRO da região: nos Canais a primeira fase é a 1, não a 7.
+  const home = REGIONS.find((region) => region.nodes.some((node) => node.levelId === level.id));
+  const index = home ? home.nodes.findIndex((node) => node.levelId === level.id) : LEVELS.findIndex((candidate) => candidate.id === level.id);
   const track = difficultyTrack(progression.record(level.id), difficulty);
   const stars = track.stars;
   const bosses = [...new Set(level.waves.flatMap((wave) => wave.groups.map((group) => group.enemyId)))].filter((id) => ENEMIES[id].isBoss);
@@ -660,7 +697,7 @@ function challengeRow(progression: ProgressionService, isUnlocked: (levelId: str
     now,
     progression.progress.unlockedGuardians as never,
     reachable,
-    DIFFICULTY_IDS.indexOf(highestUnlockedDifficulty(progression.progress, LEVEL_IDS)),
+    DIFFICULTY_IDS.indexOf(highestUnlockedDifficulty(progression.progress, DIFFICULTY_GATE_LEVEL_IDS)),
   );
   return h(
     "div",

@@ -18,6 +18,11 @@ describe("balance sheet", () => {
       "sea-turtle": [85, 75, 130],
       stonefish: [95, 80, 140],
       dolphin: [110, 95, 160],
+      // v4 — Canais Profundos.
+      oyster: [120, 90, 150],
+      lanternfish: [100, 85, 140],
+      "manta-ray": [115, 90, 150],
+      swordfish: [120, 95, 160],
     };
     (Object.keys(expected) as GuardianId[]).forEach((id) => {
       expect(GUARDIAN_BALANCE[id].cost).toBe(expected[id][0]);
@@ -42,14 +47,21 @@ describe("balance sheet", () => {
       moray: { maxHealth: 390, reward: 22, reefDamage: 4 },
       corruptedShark: { maxHealth: 500, reward: 32, reefDamage: 5 },
       tidebreaker: { maxHealth: 550, reward: 60, reefDamage: 10 },
+      // v4 — Canais Profundos.
+      puffer: { maxHealth: 150, reward: 10, reefDamage: 2 },
+      thief: { maxHealth: 120, reward: 12, reefDamage: 1 },
+      ironShell: { maxHealth: 460, reward: 22, reefDamage: 3 },
+      carrier: { maxHealth: 280, reward: 12, reefDamage: 2 },
+      queenMoray: { maxHealth: 1500, reward: 120, reefDamage: 12 },
     };
     (Object.keys(expected) as EnemyId[]).forEach((id) => {
       expect(ENEMY_BALANCE[id]).toMatchObject(expected[id]);
       expect(ENEMIES[id].id).toBe(id);
       expect(ENEMIES[id].reefDamage).toBeGreaterThanOrEqual(1);
-      expect(ENEMIES[id].reefDamage).toBeLessThanOrEqual(10);
+      // O chefe dos Canais é o único que passa de 10: é o fim de uma região inteira.
+      expect(ENEMIES[id].reefDamage).toBeLessThanOrEqual(id === "queenMoray" ? 12 : 10);
     });
-    expect(ENEMY_ORDER).toHaveLength(9);
+    expect(ENEMY_ORDER).toHaveLength(14);
     // V2: armadura na curva percentual — 9 = 36% do dano absorvido.
     expect(ENEMIES.shellback.armor).toBe(9);
     expect(ENEMIES.tidebreaker.isBoss).toBe(true);

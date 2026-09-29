@@ -126,6 +126,47 @@ export const GUARDIAN_UNLOCKS: GuardianUnlockDefinition[] = [
       hint: "Um sonar atravessou o naufrágio e sumiu. Ele volta se o Recife resistir.",
     },
   },
+  // ── Canais Profundos (v4): cada um se junta ao Recife numa fase dos Canais.
+  {
+    guardianId: "oyster",
+    conditions: [{ type: "levelCompleted", levelId: "canais-2" }],
+    reveal: {
+      title: "Ostra — Tesoureira do Canal",
+      role: "Economia",
+      mechanic: "Rende pérolas durante a partida; no ramo Banco, juros sobre o que você guarda.",
+      hint: "Presa na Eclusa Velha, guardando o que sobrou do Recife antigo.",
+    },
+  },
+  {
+    guardianId: "lanternfish",
+    conditions: [{ type: "levelCompleted", levelId: "canais-4" }],
+    reveal: {
+      title: "Peixe-Lanterna — Farol das Profundezas",
+      role: "Visão",
+      mechanic: "Revela camuflados e acende os Guardiões por perto: na névoa, só quem está na luz enxerga longe.",
+      hint: "Uma luz se acende dentro da Névoa de Lodo quando o Recife resiste.",
+    },
+  },
+  {
+    guardianId: "manta-ray",
+    conditions: [{ type: "levelCompleted", levelId: "canais-6" }],
+    reveal: {
+      title: "Arraia-Manta — Asa do Canal",
+      role: "Controle em área",
+      mechanic: "Varre uma faixa inteira da rota, deixa todos lentos e (Planar) muda de lugar a cada onda.",
+      hint: "Uma sombra enorme plana sobre o Labirinto de Pedra.",
+    },
+  },
+  {
+    guardianId: "swordfish",
+    conditions: [{ type: "levelCompleted", levelId: "canais-8" }],
+    reveal: {
+      title: "Peixe-Espada — Lâmina do Canal",
+      role: "Perfuração",
+      mechanic: "Estocada em linha reta que atravessa a fila, executa os feridos ou duela com elites e chefes.",
+      hint: "Alguém corta o Breu Azul em linha reta, rápido demais para ver.",
+    },
+  },
 ];
 
 export const DEFAULT_UNLOCKED_GUARDIANS: GuardianId[] = GUARDIAN_UNLOCKS.filter((definition) =>

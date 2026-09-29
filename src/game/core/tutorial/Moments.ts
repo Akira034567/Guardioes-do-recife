@@ -49,6 +49,12 @@ export interface MomentSignals {
   hasCurrentZone: boolean;
   /** Há um invasor camuflado em campo (visível ou não). */
   hasCloakedEnemy: boolean;
+  /** Canais Profundos: a fase tem mais de uma rota, comporta, redemoinho, maré que vira, névoa agora. */
+  hasBranchingRoutes?: boolean;
+  hasGate?: boolean;
+  hasWhirlpool?: boolean;
+  hasFlippingTide?: boolean;
+  fogNow?: boolean;
 }
 
 /** Momento por Guardião: dispara quando ele entra em campo pela primeira vez. */
@@ -89,6 +95,22 @@ const GUARDIAN_MOMENTS: Record<GuardianId, { text: string; lessonId: string }> =
     text: "O sonar do Golfinho revela camuflados. Sem ele, o que é invisível não leva tiro.",
     lessonId: "guardiao-golfinho",
   },
+  oyster: {
+    text: "A Ostra rende pérolas o tempo todo. Quanto mais cedo em campo, mais ela paga.",
+    lessonId: "guardiao-ostra",
+  },
+  lanternfish: {
+    text: "Na névoa, só quem está na luz do Peixe-Lanterna enxerga longe. Agrupe o esquadrão nela.",
+    lessonId: "guardiao-lanterna",
+  },
+  "manta-ray": {
+    text: "A Arraia acerta a FAIXA entre ela e o alvo: todo mundo na linha leva dano e fica lento.",
+    lessonId: "guardiao-arraia",
+  },
+  swordfish: {
+    text: "O Peixe-Espada atravessa a fila em linha reta. Aponte para onde os inimigos se alinham.",
+    lessonId: "guardiao-espada",
+  },
 };
 
 /** Momento por status: dispara na primeira vez que o jogador vê aquele ícone em campo. */
@@ -121,6 +143,36 @@ const FIELD_MOMENTS: readonly Moment[] = [
     id: "momento-correnteza",
     text: "Correnteza: muda a velocidade de quem atravessa E entorta o projétil que passa por ela.",
     lessonId: "corrente-mapa",
+    art: { kind: "none" },
+  },
+  {
+    id: "momento-canais",
+    text: "Dois canais! Pedras entre eles alcançam os dois lados. A prévia da onda mostra por onde ela vem.",
+    lessonId: "canal-bifurcado",
+    art: { kind: "none" },
+  },
+  {
+    id: "momento-comporta",
+    text: "Comporta: toque na alavanca para mandar os próximos invasores pelo outro canal.",
+    lessonId: "canal-comporta",
+    art: { kind: "none" },
+  },
+  {
+    id: "momento-redemoinho",
+    text: "Redemoinho: devolve quem passa rota acima. O dormente só gira quando você toca nele.",
+    lessonId: "canal-redemoinho",
+    art: { kind: "none" },
+  },
+  {
+    id: "momento-mare",
+    text: "Esta maré VIRA: a corrente troca de sentido em ciclos. O aviso sai 3s antes.",
+    lessonId: "canal-mare",
+    art: { kind: "none" },
+  },
+  {
+    id: "momento-nevoa",
+    text: "Névoa! Fora da luz do Peixe-Lanterna, os Guardiões enxergam menos.",
+    lessonId: "canal-nevoa",
     art: { kind: "none" },
   },
   {
@@ -207,6 +259,11 @@ const PRIORITY: ReadonlyArray<readonly [prefix: string, rank: number]> = [
   ["momento-blindado", 2],
   ["momento-elite", 2],
   ["momento-chefe", 2],
+  ["momento-nevoa", 2],
+  ["momento-comporta", 3],
+  ["momento-redemoinho", 3],
+  ["momento-mare", 3],
+  ["momento-canais", 3],
   ["momento-correnteza", 3],
   ["momento-guardiao-", 4],
 ];
@@ -226,6 +283,11 @@ export function momentsFor(signals: MomentSignals): string[] {
     if (id) ids.push(id);
   }
   if (signals.hasCurrentZone) ids.push("momento-correnteza");
+  if (signals.hasBranchingRoutes) ids.push("momento-canais");
+  if (signals.hasGate) ids.push("momento-comporta");
+  if (signals.hasWhirlpool) ids.push("momento-redemoinho");
+  if (signals.hasFlippingTide) ids.push("momento-mare");
+  if (signals.fogNow) ids.push("momento-nevoa");
   for (const guardianId of signals.guardiansOnField) ids.push(`momento-guardiao-${guardianId}`);
   return ids.sort((a, b) => priorityOf(a) - priorityOf(b));
 }

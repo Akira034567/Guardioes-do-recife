@@ -125,6 +125,34 @@ export const GOLDEN_FISH: Record<GuardianId, GoldenFishProfile> = {
     "Coro: bônus maior por diversidade de espécies.",
     "Sonar: eco-onda extra ao fim do pulso.",
   ),
+  oyster: profile(
+    "oyster",
+    "A pérola dela vira ouro.",
+    "Renda mais rápida e tiro mais forte.",
+    "Banco: renda ainda mais rápida.",
+    "Madrepérola: pérola mais pesada e mais cadência.",
+  ),
+  lanternfish: profile(
+    "lanternfish",
+    "A chama dele fica dourada.",
+    "Luz maior e efeitos mais longos.",
+    "Isca: fascínio mais longo e mais frequente.",
+    "Farol: luz e alcance maiores.",
+  ),
+  "manta-ray": profile(
+    "manta-ray",
+    "As asas dela cintilam.",
+    "Faixa mais forte e lentidão mais longa.",
+    "Planar: mais dano e alcance.",
+    "Arrasto: empurrão mais longo e mais frequente.",
+  ),
+  swordfish: profile(
+    "swordfish",
+    "A lâmina dele fica dourada.",
+    "Estocada mais forte e mais rápida.",
+    "Estocada: mais dano e mais alcance.",
+    "Esgrimista: golpe ainda mais pesado.",
+  ),
 };
 
 /**
@@ -178,6 +206,26 @@ export const GOLDEN_BOOSTS: Record<GuardianId, Record<"base" | BranchId, Partial
     base: { rangeMultiplier: 1.2, debuffDurationMultiplier: 1.2 },
     a: { rangeMultiplier: 1.2, abilityCooldownMultiplier: 0.78 },
     b: { debuffDurationMultiplier: 1.25, abilityCooldownMultiplier: 0.8, rangeMultiplier: 1.08 },
+  },
+  oyster: {
+    base: { abilityCooldownMultiplier: 0.8, damageMultiplier: 1.15 },
+    a: { abilityCooldownMultiplier: 0.75 },
+    b: { damageMultiplier: 1.25, attackSpeedMultiplier: 1.1 },
+  },
+  lanternfish: {
+    base: { rangeMultiplier: 1.2, debuffDurationMultiplier: 1.2 },
+    a: { controlDurationMultiplier: 1.25, abilityCooldownMultiplier: 0.8 },
+    b: { rangeMultiplier: 1.25 },
+  },
+  "manta-ray": {
+    base: { damageMultiplier: 1.2, debuffDurationMultiplier: 1.2 },
+    a: { damageMultiplier: 1.2, rangeMultiplier: 1.1 },
+    b: { pushDistanceMultiplier: 1.25, abilityCooldownMultiplier: 0.82 },
+  },
+  swordfish: {
+    base: { damageMultiplier: 1.22, attackSpeedMultiplier: 1.08 },
+    a: { damageMultiplier: 1.18, rangeMultiplier: 1.1 },
+    b: { damageMultiplier: 1.28 },
   },
 };
 

@@ -1,5 +1,750 @@
 // Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
 
+exports[`golden match results > canais-1 · canais: shrimp + shark + turtle + stonefish + dolphin 1`] = `
+{
+  "guardians": 16,
+  "kills": {
+    "corruptedShark": 6,
+    "dartfish": 41,
+    "ghostJelly": 2,
+    "minnow": 106,
+    "moray": 10,
+    "needlefish": 67,
+    "puffer": 47,
+    "shellback": 25,
+    "swimmer": 52,
+    "tidebreaker": 3,
+  },
+  "leaks": {
+    "dartfish": 2,
+  },
+  "pearls": 116,
+  "reef": 18,
+  "state": "victory",
+  "stepsExecuted": 46,
+  "timeMs": 774250,
+  "upgrades": 30,
+  "wavesCleared": 19,
+}
+`;
+
+exports[`golden match results > canais-1 · controle: água-viva gélida + baiacu fortaleza + camarões perfurantes + polvo 1`] = `
+{
+  "guardians": 16,
+  "kills": {
+    "corruptedShark": 6,
+    "dartfish": 43,
+    "ghostJelly": 2,
+    "minnow": 106,
+    "moray": 10,
+    "needlefish": 67,
+    "puffer": 47,
+    "shellback": 25,
+    "swimmer": 52,
+    "tidebreaker": 3,
+  },
+  "leaks": {},
+  "pearls": 184,
+  "reef": 20,
+  "state": "victory",
+  "stepsExecuted": 46,
+  "timeMs": 872033,
+  "upgrades": 30,
+  "wavesCleared": 19,
+}
+`;
+
+exports[`golden match results > canais-1 · dano: camarões pesados em todas as pedras + caranguejos + água-viva elétrica 1`] = `
+{
+  "guardians": 17,
+  "kills": {
+    "corruptedShark": 6,
+    "dartfish": 43,
+    "minnow": 106,
+    "moray": 10,
+    "needlefish": 67,
+    "puffer": 47,
+    "shellback": 25,
+    "swimmer": 52,
+    "tidebreaker": 3,
+  },
+  "leaks": {
+    "ghostJelly": 2,
+  },
+  "pearls": 121,
+  "reef": 18,
+  "state": "victory",
+  "stepsExecuted": 48,
+  "timeMs": 748700,
+  "upgrades": 31,
+  "wavesCleared": 19,
+}
+`;
+
+exports[`golden match results > canais-2 · canais: shrimp + shark + turtle + stonefish + dolphin 1`] = `
+{
+  "guardians": 17,
+  "kills": {
+    "corruptedShark": 1,
+    "dartfish": 11,
+    "ghostJelly": 2,
+    "minnow": 90,
+    "moray": 3,
+    "needlefish": 57,
+    "puffer": 75,
+    "shellback": 35,
+    "swimmer": 71,
+    "thief": 24,
+    "tidebreaker": 3,
+  },
+  "leaks": {
+    "puffer": 1,
+  },
+  "pearls": 108,
+  "reef": 18,
+  "state": "victory",
+  "stepsExecuted": 49,
+  "timeMs": 758617,
+  "upgrades": 32,
+  "wavesCleared": 20,
+}
+`;
+
+exports[`golden match results > canais-2 · controle: água-viva gélida + baiacu fortaleza + camarões perfurantes + polvo 1`] = `
+{
+  "guardians": 17,
+  "kills": {
+    "corruptedShark": 1,
+    "dartfish": 11,
+    "ghostJelly": 2,
+    "minnow": 90,
+    "moray": 3,
+    "needlefish": 57,
+    "puffer": 76,
+    "shellback": 35,
+    "swimmer": 71,
+    "thief": 24,
+    "tidebreaker": 3,
+  },
+  "leaks": {},
+  "pearls": 170,
+  "reef": 20,
+  "state": "victory",
+  "stepsExecuted": 49,
+  "timeMs": 790933,
+  "upgrades": 32,
+  "wavesCleared": 20,
+}
+`;
+
+exports[`golden match results > canais-2 · dano: camarões pesados em todas as pedras + caranguejos + água-viva elétrica 1`] = `
+{
+  "guardians": 18,
+  "kills": {
+    "corruptedShark": 1,
+    "dartfish": 11,
+    "minnow": 90,
+    "moray": 3,
+    "needlefish": 57,
+    "puffer": 76,
+    "shellback": 35,
+    "swimmer": 71,
+    "thief": 24,
+    "tidebreaker": 3,
+  },
+  "leaks": {
+    "ghostJelly": 2,
+  },
+  "pearls": 137,
+  "reef": 18,
+  "state": "victory",
+  "stepsExecuted": 51,
+  "timeMs": 751550,
+  "upgrades": 33,
+  "wavesCleared": 20,
+}
+`;
+
+exports[`golden match results > canais-3 · canais: shrimp + oyster + crab + jelly + dolphin 1`] = `
+{
+  "guardians": 16,
+  "kills": {
+    "carrier": 25,
+    "corruptedShark": 14,
+    "dartfish": 121,
+    "ghostJelly": 5,
+    "minnow": 241,
+    "moray": 1,
+    "needlefish": 16,
+    "puffer": 30,
+    "shellback": 9,
+    "swimmer": 50,
+    "thief": 4,
+    "tidebreaker": 3,
+  },
+  "leaks": {
+    "ghostJelly": 3,
+  },
+  "pearls": 509,
+  "reef": 17,
+  "state": "victory",
+  "stepsExecuted": 48,
+  "timeMs": 728183,
+  "upgrades": 32,
+  "wavesCleared": 21,
+}
+`;
+
+exports[`golden match results > canais-3 · controle: água-viva gélida + baiacu fortaleza + camarões perfurantes + polvo 1`] = `
+{
+  "guardians": 15,
+  "kills": {
+    "carrier": 25,
+    "corruptedShark": 12,
+    "dartfish": 121,
+    "ghostJelly": 8,
+    "minnow": 241,
+    "moray": 1,
+    "needlefish": 16,
+    "puffer": 30,
+    "shellback": 9,
+    "swimmer": 50,
+    "thief": 4,
+    "tidebreaker": 3,
+  },
+  "leaks": {
+    "corruptedShark": 2,
+  },
+  "pearls": 147,
+  "reef": 7,
+  "state": "victory",
+  "stepsExecuted": 44,
+  "timeMs": 825167,
+  "upgrades": 29,
+  "wavesCleared": 21,
+}
+`;
+
+exports[`golden match results > canais-3 · dano: camarões pesados em todas as pedras + caranguejos + água-viva elétrica 1`] = `
+{
+  "guardians": 16,
+  "kills": {
+    "carrier": 25,
+    "corruptedShark": 13,
+    "dartfish": 121,
+    "ghostJelly": 8,
+    "minnow": 241,
+    "moray": 1,
+    "needlefish": 16,
+    "puffer": 30,
+    "shellback": 9,
+    "swimmer": 50,
+    "thief": 4,
+    "tidebreaker": 3,
+  },
+  "leaks": {
+    "corruptedShark": 1,
+  },
+  "pearls": 108,
+  "reef": 15,
+  "state": "victory",
+  "stepsExecuted": 46,
+  "timeMs": 775900,
+  "upgrades": 30,
+  "wavesCleared": 21,
+}
+`;
+
+exports[`golden match results > canais-4 · controle: água-viva gélida + baiacu fortaleza + camarões perfurantes + polvo 1`] = `
+{
+  "guardians": 18,
+  "kills": {
+    "carrier": 8,
+    "corruptedShark": 4,
+    "dartfish": 105,
+    "ghostJelly": 18,
+    "minnow": 164,
+    "moray": 2,
+    "needlefish": 30,
+    "puffer": 31,
+    "shellback": 27,
+    "swimmer": 46,
+    "thief": 29,
+    "tidebreaker": 3,
+  },
+  "leaks": {
+    "corruptedShark": 1,
+  },
+  "pearls": 184,
+  "reef": 12,
+  "state": "victory",
+  "stepsExecuted": 53,
+  "timeMs": 947433,
+  "upgrades": 35,
+  "wavesCleared": 22,
+}
+`;
+
+exports[`golden match results > canais-4 · dano: camarões pesados em todas as pedras + caranguejos + água-viva elétrica 1`] = `
+{
+  "guardians": 19,
+  "kills": {
+    "carrier": 8,
+    "corruptedShark": 5,
+    "dartfish": 104,
+    "ghostJelly": 11,
+    "minnow": 164,
+    "moray": 2,
+    "needlefish": 30,
+    "puffer": 31,
+    "shellback": 27,
+    "swimmer": 45,
+    "thief": 26,
+    "tidebreaker": 3,
+  },
+  "leaks": {
+    "dartfish": 1,
+    "ghostJelly": 7,
+    "swimmer": 1,
+    "thief": 3,
+  },
+  "pearls": 108,
+  "reef": 8,
+  "state": "victory",
+  "stepsExecuted": 54,
+  "timeMs": 851517,
+  "upgrades": 35,
+  "wavesCleared": 22,
+}
+`;
+
+exports[`golden match results > canais-5 · canais: shrimp + oyster + lantern + crab + jelly 1`] = `
+{
+  "guardians": 15,
+  "kills": {
+    "carrier": 34,
+    "corruptedShark": 7,
+    "dartfish": 55,
+    "ghostJelly": 6,
+    "ironShell": 1,
+    "minnow": 292,
+    "moray": 7,
+    "needlefish": 19,
+    "puffer": 70,
+    "queenMoray": 1,
+    "shellback": 19,
+    "swimmer": 72,
+    "thief": 4,
+    "tidebreaker": 1,
+  },
+  "leaks": {
+    "ghostJelly": 2,
+  },
+  "pearls": 1410,
+  "reef": 18,
+  "state": "victory",
+  "stepsExecuted": 45,
+  "timeMs": 886733,
+  "upgrades": 30,
+  "wavesCleared": 23,
+}
+`;
+
+exports[`golden match results > canais-5 · controle: água-viva gélida + baiacu fortaleza + camarões perfurantes + polvo 1`] = `
+{
+  "guardians": 14,
+  "kills": {
+    "carrier": 34,
+    "corruptedShark": 5,
+    "dartfish": 55,
+    "ghostJelly": 8,
+    "ironShell": 1,
+    "minnow": 292,
+    "moray": 7,
+    "needlefish": 19,
+    "puffer": 70,
+    "queenMoray": 1,
+    "shellback": 19,
+    "swimmer": 72,
+    "thief": 4,
+    "tidebreaker": 1,
+  },
+  "leaks": {
+    "corruptedShark": 2,
+  },
+  "pearls": 649,
+  "reef": 7,
+  "state": "victory",
+  "stepsExecuted": 42,
+  "timeMs": 1000183,
+  "upgrades": 28,
+  "wavesCleared": 23,
+}
+`;
+
+exports[`golden match results > canais-5 · dano: camarões pesados em todas as pedras + caranguejos + água-viva elétrica 1`] = `
+{
+  "guardians": 16,
+  "kills": {
+    "carrier": 34,
+    "corruptedShark": 7,
+    "dartfish": 55,
+    "ghostJelly": 8,
+    "ironShell": 1,
+    "minnow": 292,
+    "moray": 7,
+    "needlefish": 19,
+    "puffer": 70,
+    "queenMoray": 1,
+    "shellback": 19,
+    "swimmer": 72,
+    "thief": 4,
+    "tidebreaker": 1,
+  },
+  "leaks": {},
+  "pearls": 358,
+  "reef": 20,
+  "state": "victory",
+  "stepsExecuted": 47,
+  "timeMs": 888233,
+  "upgrades": 31,
+  "wavesCleared": 23,
+}
+`;
+
+exports[`golden match results > canais-6 · canais: shrimp + oyster + lantern + crab + jelly 1`] = `
+{
+  "guardians": 23,
+  "kills": {
+    "carrier": 15,
+    "corruptedShark": 2,
+    "dartfish": 78,
+    "ironShell": 10,
+    "minnow": 256,
+    "moray": 14,
+    "needlefish": 17,
+    "puffer": 23,
+    "queenMoray": 1,
+    "shellback": 13,
+    "swimmer": 46,
+    "thief": 36,
+    "tidebreaker": 2,
+  },
+  "leaks": {
+    "corruptedShark": 1,
+    "ghostJelly": 2,
+    "minnow": 8,
+    "swimmer": 1,
+  },
+  "pearls": 198,
+  "reef": 1,
+  "state": "victory",
+  "stepsExecuted": 68,
+  "timeMs": 954567,
+  "upgrades": 45,
+  "wavesCleared": 24,
+}
+`;
+
+exports[`golden match results > canais-6 · dano: camarões pesados em todas as pedras + caranguejos + água-viva elétrica 1`] = `
+{
+  "guardians": 20,
+  "kills": {
+    "carrier": 14,
+    "corruptedShark": 2,
+    "dartfish": 78,
+    "ironShell": 10,
+    "minnow": 260,
+    "moray": 14,
+    "needlefish": 17,
+    "puffer": 22,
+    "queenMoray": 1,
+    "shellback": 13,
+    "swimmer": 47,
+    "thief": 36,
+    "tidebreaker": 2,
+  },
+  "leaks": {
+    "carrier": 1,
+    "corruptedShark": 1,
+    "ghostJelly": 2,
+    "puffer": 1,
+  },
+  "pearls": 182,
+  "reef": 6,
+  "state": "victory",
+  "stepsExecuted": 59,
+  "timeMs": 915617,
+  "upgrades": 39,
+  "wavesCleared": 24,
+}
+`;
+
+exports[`golden match results > canais-7 · canais: shrimp + oyster + lantern + manta + crab 1`] = `
+{
+  "guardians": 15,
+  "kills": {
+    "carrier": 39,
+    "corruptedShark": 1,
+    "dartfish": 32,
+    "ironShell": 13,
+    "minnow": 337,
+    "moray": 15,
+    "needlefish": 82,
+    "puffer": 17,
+    "queenMoray": 1,
+    "shellback": 6,
+    "swimmer": 79,
+    "thief": 3,
+    "tidebreaker": 2,
+  },
+  "leaks": {
+    "ghostJelly": 4,
+    "needlefish": 1,
+    "tidebreaker": 1,
+  },
+  "pearls": 1777,
+  "reef": 4,
+  "state": "victory",
+  "stepsExecuted": 45,
+  "timeMs": 1043583,
+  "upgrades": 30,
+  "wavesCleared": 25,
+}
+`;
+
+exports[`golden match results > canais-7 · dano: camarões pesados em todas as pedras + caranguejos + água-viva elétrica 1`] = `
+{
+  "guardians": 16,
+  "kills": {
+    "carrier": 39,
+    "corruptedShark": 1,
+    "dartfish": 32,
+    "ghostJelly": 3,
+    "ironShell": 13,
+    "minnow": 337,
+    "moray": 15,
+    "needlefish": 83,
+    "puffer": 17,
+    "queenMoray": 1,
+    "shellback": 6,
+    "swimmer": 79,
+    "thief": 3,
+    "tidebreaker": 2,
+  },
+  "leaks": {
+    "ghostJelly": 1,
+    "tidebreaker": 1,
+  },
+  "pearls": 690,
+  "reef": 9,
+  "state": "victory",
+  "stepsExecuted": 47,
+  "timeMs": 1064450,
+  "upgrades": 31,
+  "wavesCleared": 25,
+}
+`;
+
+exports[`golden match results > canais-8 · controle: água-viva gélida + baiacu fortaleza + camarões perfurantes + polvo 1`] = `
+{
+  "guardians": 19,
+  "kills": {
+    "carrier": 27,
+    "corruptedShark": 12,
+    "dartfish": 92,
+    "ghostJelly": 16,
+    "ironShell": 4,
+    "minnow": 246,
+    "moray": 3,
+    "needlefish": 40,
+    "puffer": 30,
+    "queenMoray": 1,
+    "shellback": 5,
+    "swimmer": 77,
+    "thief": 39,
+    "tidebreaker": 2,
+  },
+  "leaks": {
+    "corruptedShark": 1,
+    "ghostJelly": 3,
+  },
+  "pearls": 1405,
+  "reef": 9,
+  "state": "victory",
+  "stepsExecuted": 57,
+  "timeMs": 1157267,
+  "upgrades": 38,
+  "wavesCleared": 26,
+}
+`;
+
+exports[`golden match results > canais-8 · dano: camarões pesados em todas as pedras + caranguejos + água-viva elétrica 1`] = `
+{
+  "guardians": 21,
+  "kills": {
+    "carrier": 27,
+    "corruptedShark": 12,
+    "dartfish": 92,
+    "ghostJelly": 8,
+    "ironShell": 4,
+    "minnow": 246,
+    "moray": 3,
+    "needlefish": 40,
+    "puffer": 30,
+    "queenMoray": 1,
+    "shellback": 5,
+    "swimmer": 77,
+    "thief": 39,
+    "tidebreaker": 2,
+  },
+  "leaks": {
+    "corruptedShark": 1,
+    "ghostJelly": 11,
+  },
+  "pearls": 955,
+  "reef": 1,
+  "state": "victory",
+  "stepsExecuted": 62,
+  "timeMs": 1038350,
+  "upgrades": 41,
+  "wavesCleared": 26,
+}
+`;
+
+exports[`golden match results > canais-9 · canais: shrimp + oyster + lantern + manta + swordfish 1`] = `
+{
+  "guardians": 18,
+  "kills": {
+    "carrier": 46,
+    "corruptedShark": 14,
+    "dartfish": 105,
+    "ghostJelly": 2,
+    "ironShell": 12,
+    "minnow": 389,
+    "moray": 8,
+    "needlefish": 41,
+    "puffer": 43,
+    "queenMoray": 1,
+    "shellback": 9,
+    "swimmer": 46,
+    "thief": 3,
+    "tidebreaker": 3,
+  },
+  "leaks": {
+    "ghostJelly": 3,
+    "minnow": 2,
+    "swimmer": 1,
+  },
+  "pearls": 3782,
+  "reef": 14,
+  "state": "victory",
+  "stepsExecuted": 54,
+  "timeMs": 1063533,
+  "upgrades": 36,
+  "wavesCleared": 28,
+}
+`;
+
+exports[`golden match results > canais-9 · dano: camarões pesados em todas as pedras + caranguejos + água-viva elétrica 1`] = `
+{
+  "guardians": 23,
+  "kills": {
+    "carrier": 46,
+    "corruptedShark": 14,
+    "dartfish": 105,
+    "ghostJelly": 5,
+    "ironShell": 12,
+    "minnow": 389,
+    "moray": 8,
+    "needlefish": 41,
+    "puffer": 39,
+    "queenMoray": 1,
+    "shellback": 9,
+    "swimmer": 47,
+    "thief": 3,
+    "tidebreaker": 3,
+  },
+  "leaks": {
+    "minnow": 2,
+    "puffer": 4,
+  },
+  "pearls": 1564,
+  "reef": 10,
+  "state": "victory",
+  "stepsExecuted": 68,
+  "timeMs": 1060983,
+  "upgrades": 45,
+  "wavesCleared": 28,
+}
+`;
+
+exports[`golden match results > canais-10 · canais: shrimp + oyster + lantern + manta + swordfish 1`] = `
+{
+  "guardians": 18,
+  "kills": {
+    "carrier": 39,
+    "corruptedShark": 1,
+    "dartfish": 62,
+    "ironShell": 18,
+    "minnow": 367,
+    "moray": 26,
+    "needlefish": 23,
+    "puffer": 45,
+    "queenMoray": 1,
+    "shellback": 12,
+    "swimmer": 105,
+    "thief": 3,
+    "tidebreaker": 2,
+  },
+  "leaks": {
+    "ghostJelly": 2,
+    "ironShell": 1,
+    "minnow": 3,
+    "tidebreaker": 1,
+  },
+  "pearls": 3615,
+  "reef": 2,
+  "state": "victory",
+  "stepsExecuted": 54,
+  "timeMs": 1106133,
+  "upgrades": 36,
+  "wavesCleared": 30,
+}
+`;
+
+exports[`golden match results > canais-10 · controle: água-viva gélida + baiacu fortaleza + camarões perfurantes + polvo 1`] = `
+{
+  "guardians": 21,
+  "kills": {
+    "carrier": 39,
+    "corruptedShark": 1,
+    "dartfish": 62,
+    "ghostJelly": 2,
+    "ironShell": 19,
+    "minnow": 370,
+    "moray": 26,
+    "needlefish": 23,
+    "puffer": 45,
+    "queenMoray": 1,
+    "shellback": 12,
+    "swimmer": 105,
+    "thief": 3,
+    "tidebreaker": 2,
+  },
+  "leaks": {
+    "tidebreaker": 1,
+  },
+  "pearls": 1674,
+  "reef": 10,
+  "state": "victory",
+  "stepsExecuted": 63,
+  "timeMs": 1311800,
+  "upgrades": 42,
+  "wavesCleared": 30,
+}
+`;
+
 exports[`golden match results > recife-1 · concentrado + quebra-casco (referência) 1`] = `
 {
   "guardians": 3,

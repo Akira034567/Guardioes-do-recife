@@ -49,6 +49,8 @@ export interface MatchOutcome {
 
 export interface ProgressionContext {
   levelIds: readonly string[];
+  /** Fases que contam para abrir as dificuldades (ausente = todas). */
+  difficultyLevelIds?: readonly string[];
   unlocks: readonly GuardianUnlockDefinition[];
 }
 
@@ -97,7 +99,7 @@ export class ProgressionService {
     let challengeCompleted: string | null = null;
 
     // Lido antes e depois do `update` para saber o que ESTA vitória abriu.
-    const unlockedBefore = highestUnlockedDifficulty(this.save.progress, this.context.levelIds);
+    const unlockedBefore = highestUnlockedDifficulty(this.save.progress, this.context.difficultyLevelIds ?? this.context.levelIds);
 
     this.save.update((draft) => {
       // Descobrir um inimigo vale para o bestiário mesmo em partida de teste.
@@ -149,7 +151,7 @@ export class ProgressionService {
       rewards.shells += achievementShells(achievements);
     }
 
-    const unlockedAfter = highestUnlockedDifficulty(this.save.progress, this.context.levelIds);
+    const unlockedAfter = highestUnlockedDifficulty(this.save.progress, this.context.difficultyLevelIds ?? this.context.levelIds);
 
     return {
       levelId: result.levelId,

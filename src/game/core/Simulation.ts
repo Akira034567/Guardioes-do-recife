@@ -69,7 +69,8 @@ export class ScriptedPlayer implements MatchController {
 
 export function simulateLevel(level: LevelDefinition, steps: readonly SimStep[], options: SimOptions = {}): SimResult {
   const dtMs = options.dtMs ?? 1000 / 60;
-  const maxMs = options.maxMs ?? 900_000;
+  // 40 minutos de jogo: as fases dos Canais passam de 20 (30 ondas numa rota longa).
+  const maxMs = options.maxMs ?? 2_400_000;
   const player = new ScriptedPlayer(steps);
   const match = new Match(level, { dtMs, controller: player });
   while (match.status === "running" && match.now < maxMs) match.tick();

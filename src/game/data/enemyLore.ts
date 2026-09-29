@@ -65,4 +65,34 @@ export const ENEMY_LORE: Record<EnemyId, EnemyLore> = {
     weaknesses: ["Dano concentrado e contínuo"],
     resistances: ["Bloqueio (imune)", "Lentidão (35%)"],
   },
+  puffer: {
+    description: "Nos Canais a maré negra entrou até nos baiacus. Qualquer arranhão e ele vira uma bola de espinhos.",
+    trait: "Infla ao levar dano: ganha armadura e fica lento. Morto inflado, os espinhos atrasam os Guardiões em volta.",
+    weaknesses: ["Um golpe forte antes de ele inflar", "Quebra de armadura", "Dano contínuo (ignora a armadura)"],
+    resistances: ["Tiros fracos enquanto inflado"],
+  },
+  thief: {
+    description: "Não quer o coral: quer o que o Recife guarda. Esguicha tinta em quem o vigia e foge com as pérolas.",
+    trait: "Rápido e frágil. A tinta faz os Guardiões próximos atacarem mais devagar; se escapar, leva pérolas do caixa.",
+    weaknesses: ["Lentidão", "Bloqueio na rota", "Dano à distância antes de ele chegar perto"],
+    resistances: [],
+  },
+  ironShell: {
+    description: "Uma tartaruga velha dos Canais que a maré negra cobriu de pedra. Não ataca ninguém: protege quem ataca.",
+    trait: "Tanque de suporte: muita armadura e um escudo que corta 30% do dano dos vizinhos.",
+    weaknesses: ["Quebra de armadura", "Estocada do Peixe-Espada (rompe o escudo)", "Derrubá-la primeiro"],
+    resistances: ["Tiros fracos e rápidos", "Lentidão (30%)"],
+  },
+  carrier: {
+    description: "A concha dele não é casa: é um barco. Leva um cardume inteiro escondido lá dentro.",
+    trait: "Blindado e lento. Morto, solta quatro Peixinhos de uma vez no mesmo ponto da rota.",
+    weaknesses: ["Dano em área logo depois do ponto em que ele cai", "Quebra de armadura"],
+    resistances: ["Alvo único: o cardume que ele solta passa"],
+  },
+  queenMoray: {
+    description: "Mora no fundo dos Canais desde antes do Recife ter nome. Conhece cada passagem e nunca volta pelo mesmo caminho.",
+    trait: "Chefe em três fases: ao se ferir mergulha para o outro canal e chama escolta. Não pode ser bloqueada.",
+    weaknesses: ["Defesa nos DOIS canais", "Dano concentrado e contínuo", "Vulnerabilidade"],
+    resistances: ["Bloqueio (imune)", "Lentidão (40%)"],
+  },
 };

@@ -13,7 +13,21 @@ import { GAME_HEIGHT, GAME_WIDTH, HUD_BOTTOM, HUD_TOP } from "./constants";
 const POD_HEIGHT = 40;
 const TOP_CENTER = HUD_TOP / 2;
 
-export const HUD_LAYOUT = {
+const DESKTOP_HUD = {
+  /** Marca do jogo na barra de cima. No celular ela sai: o espaço vira botão maior. */
+  showBrand: true,
+  /** Folga de toque em volta de cada botão do HUD, além do desenho. */
+  hitSlop: 0,
+  /** Linhas da descrição do ramo no painel do Guardião em foco. */
+  panelDescriptionLines: 3,
+  /**
+   * Posicionar pede DOIS toques (o primeiro mostra onde e o alcance; o segundo, no mesmo lugar,
+   * confirma). No celular o dedo cobre o ponto e não há "passar o mouse por cima" para conferir
+   * antes: sem isto, cada toque torto era pérola gasta no lugar errado.
+   */
+  confirmPlacement: false,
+  /** Raio em que um toque fora da plataforma ainda "gruda" na mais próxima (0 = só em cima dela). */
+  platformSnap: 0,
   // ── Barra de cima ────────────────────────────────────────────────────────────
   topCenterY: TOP_CENTER,
   podHeight: POD_HEIGHT,
@@ -117,7 +131,7 @@ export const HUD_LAYOUT = {
   panelHeight: 104,
   /** Botões do painel: ramo A à esquerda, ramo B no meio, venda à direita. */
   optionButtonY: GAME_HEIGHT - 27,
-  optionButtonXs: [714, 926] as const,
+  optionButtonXs: [714, 926] as readonly [number, number],
   optionButtonWidth: 200,
   optionButtonHeight: 34,
   sellButtonX: 1138,
@@ -131,7 +145,60 @@ export const HUD_LAYOUT = {
   screenWidth: GAME_WIDTH,
   /** Topo da barra de baixo. */
   bottomTop: GAME_HEIGHT - HUD_BOTTOM,
-} as const;
+};
+
+export type HudLayout = Readonly<typeof DESKTOP_HUD>;
+
+/**
+ * HUD DO CELULAR. Num telefone deitado o canvas de 1280 px aparece a ~0,58×: o botão de 42 px do
+ * desktop vira um alvo de 24 px, menor que um dedo. As FAIXAS continuam com a mesma altura
+ * (`HUD_TOP`/`HUD_BOTTOM`) — mudar isso tiraria canteiros de fases já feitas de baixo do HUD —, mas
+ * dentro delas tudo que se toca cresce: a marca do jogo sai (o ícone do app já diz o nome) e os
+ * botões ganham o espaço dela, com folga de toque além do desenho.
+ */
+const MOBILE_HUD: HudLayout = {
+  ...DESKTOP_HUD,
+  showBrand: false,
+  hitSlop: 4,
+  panelDescriptionLines: 1,
+  confirmPlacement: true,
+  platformSnap: 72,
+  levelPod: { x: 10, width: 222 },
+  pods: {
+    pearls: { x: 240, width: 110 },
+    reef: { x: 358, width: 162 },
+    wave: { x: 528, width: 182 },
+  },
+  wavePodWideWidth: 332,
+  topButtonSize: 70,
+  topButtonHeight: 60,
+  skipButtonX: 788,
+  skipButtonWidth: 144,
+  speedButtonX: 904,
+  speedButtonWidth: 80,
+  restartButtonX: 986,
+  pauseButtonX: 1062,
+  fullscreenButtonX: 1138,
+  muteButtonX: 1214,
+  optionButtonY: GAME_HEIGHT - 28,
+  optionButtonHeight: 44,
+};
+
+/**
+ * Qual HUD vale nesta abertura. `?hud=mobile|desktop` força (é o que a sonda e2e do HUD do celular
+ * usa); os testes automatizados, fora isso, ficam no do desktop — as coordenadas deles vêm de
+ * `DESKTOP_HUD` em Node, onde não há `document` para perguntar.
+ */
+function pickLayout(): HudLayout {
+  if (typeof document === "undefined") return DESKTOP_HUD;
+  const forced = new URLSearchParams(window.location.search).get("hud");
+  if (forced === "mobile") return MOBILE_HUD;
+  if (forced === "desktop" || navigator.webdriver) return DESKTOP_HUD;
+  return document.documentElement.classList.contains("is-touch") ? MOBILE_HUD : DESKTOP_HUD;
+}
+
+export const HUD_LAYOUT: HudLayout = pickLayout();
+export { DESKTOP_HUD, MOBILE_HUD };
 
 /** Centro da carta na posição `slot` (0..4) do esquadrão. */
 export function cardCenterX(slot: number): number {

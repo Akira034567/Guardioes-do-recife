@@ -340,7 +340,7 @@ test("opens the reef album, the bestiary and the settings from the map", async (
 
   // As outras abas do álbum saem dos mesmos dados do jogo.
   await page.getByTestId("album-tab-places").click();
-  await expect(page.getByTestId("album-progress")).toContainText("de 10");
+  await expect(page.getByTestId("album-progress")).toContainText("de 20");
   await expect(page.getByTestId("collection-card-recife-1")).toHaveAttribute("data-state", "unlocked");
   await expect(page.getByTestId("collection-card-recife-6")).toHaveAttribute("data-state", "locked");
   await page.getByTestId("album-tab-treasures").click();

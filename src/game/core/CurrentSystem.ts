@@ -46,6 +46,18 @@ export interface CurrentZone {
   /** Zonas contrárias respeitam a resistência a lentidão do inimigo (FlowField); as de mapa não. */
   respectsSlowResistance: boolean;
   visual?: { kind: "motes" | "ring" | "none"; color?: number };
+  /** Maré que vira (Canais Profundos): o sentido inverte a cada `everyMs`, a partir de `base`. */
+  flip?: { everyMs: number; base: Vec2 };
+}
+
+/** Estado da maré que vira, para o HUD avisar antes e a cena girar as partículas. */
+export interface TideState {
+  /** A fase tem alguma corrente que vira. */
+  flips: boolean;
+  /** Quantas viradas já aconteceram (ímpar = invertida). */
+  flipCount: number;
+  /** Até a próxima virada; `null` se nada vira. */
+  nextFlipInMs: number | null;
 }
 
 export function zoneFromLevel(definition: CurrentZoneDefinition): CurrentZone {
@@ -62,6 +74,7 @@ export function zoneFromLevel(definition: CurrentZoneDefinition): CurrentZone {
     expiresAt: null,
     respectsSlowResistance: false,
     visual: { kind: "motes" },
+    flip: definition.flipEveryMs ? { everyMs: definition.flipEveryMs, base: { ...definition.direction } } : undefined,
   };
 }
 
@@ -151,6 +164,22 @@ export class CurrentSystem {
       const zone = this.temporary[index];
       if (zone.expiresAt !== null && now >= zone.expiresAt) this.temporary.splice(index, 1);
     }
+    // Maré que vira: o sentido é função do relógio, e não um estado que alguém lembra de trocar —
+    // assim a simulação e o jogo nunca discordam sobre para que lado a água está indo.
+    for (const zone of this.mapZones) {
+      if (!zone.flip) continue;
+      const sign = Math.floor(now / zone.flip.everyMs) % 2 === 0 ? 1 : -1;
+      zone.direction = { x: zone.flip.base.x * sign, y: zone.flip.base.y * sign };
+    }
+  }
+
+  /** A maré que vira, agora: quantas viradas houve e quanto falta para a próxima. */
+  tide(now: number): TideState {
+    const periods = this.mapZones.filter((zone) => zone.flip).map((zone) => zone.flip!.everyMs);
+    if (periods.length === 0) return { flips: false, flipCount: 0, nextFlipInMs: null };
+    // Todas as correntes que viram de uma fase compartilham o período (a lua é uma só).
+    const every = Math.min(...periods);
+    return { flips: true, flipCount: Math.floor(now / every), nextFlipInMs: every - (now % every) };
   }
 
   zones(filter?: (zone: CurrentZone) => boolean): CurrentZone[] {

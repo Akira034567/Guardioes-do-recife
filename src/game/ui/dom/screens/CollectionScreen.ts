@@ -679,6 +679,8 @@ const ATTACK_LABELS: Record<GuardianDefinition["attackKind"], string> = {
   ink: "Tinta",
   trap: "Emboscada",
   sonar: "Sonar",
+  lance: "Estocada em linha",
+  sweep: "Varredura em faixa",
 };
 
 const PLACEMENT_LABELS: Record<GuardianDefinition["placementMode"], string> = {

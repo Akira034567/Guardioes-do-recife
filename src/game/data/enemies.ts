@@ -1,5 +1,5 @@
 import type { EnemyDefinition, EnemyId, EnemyOverride, EnemyRole, EnemyScaling, EnemyShapeKey, EnemyTag, ResolvedEnemyDefinition } from "../types";
-import { BOSS_CURRENT, ENEMY_BALANCE, SHARK_HUNT } from "./balance";
+import { BOSS_CURRENT, ENEMY_BALANCE, IRON_SHELL, PUFFER_INFLATE, QUEEN_MORAY, SHARK_HUNT, THIEF_INK } from "./balance";
 
 /**
  * Catálogo de inimigos. Números em `balance.ts`; aqui ficam identidade visual e
@@ -159,6 +159,154 @@ export const ENEMIES: Record<EnemyId, EnemyDefinition> = {
       },
     ],
   },
+  // ── Canais Profundos (v4) ───────────────────────────────────────────────────
+  puffer: {
+    id: "puffer",
+    name: "Baiacu Corrompido",
+    role: "armored",
+    color: 0xc07ad8,
+    accent: 0xffd36a,
+    ...ENEMY_BALANCE.puffer,
+    hitRadius: 16,
+    scale: 1,
+    // Os dois primeiros quadros são o nado; o quarto é ele cheio de espinhos — a pose de quem inflou.
+    art: {
+      kind: "sprite",
+      folder: "baiacu-corrompido",
+      frames: 4,
+      frameMs: 220,
+      scale: 0.46,
+      loopFrames: [1, 2],
+      guardFrames: [4],
+      guard: { trigger: "damage", holdMs: PUFFER_INFLATE.durationMs, cooldownMs: PUFFER_INFLATE.cooldownMs },
+      shapeFallback: "fish",
+    },
+    description: "Infla quando apanha: fica lento e blindado por alguns segundos. Se morrer inflado, os espinhos atrapalham os Guardiões em volta.",
+    tags: ["ARMORED"],
+    threatLevel: 1,
+    abilities: [
+      {
+        type: "inflateOnHit",
+        armorBonus: PUFFER_INFLATE.armorBonus,
+        speedMultiplier: PUFFER_INFLATE.speedMultiplier,
+        durationMs: PUFFER_INFLATE.durationMs,
+        cooldownMs: PUFFER_INFLATE.cooldownMs,
+        pop: { ...PUFFER_INFLATE.pop },
+      },
+    ],
+  },
+  thief: {
+    id: "thief",
+    name: "Ladrão do Recife",
+    role: "fast",
+    color: 0xe0435a,
+    accent: 0xffc2cb,
+    ...ENEMY_BALANCE.thief,
+    hitRadius: 13,
+    scale: 0.9,
+    // Polvo de frente, andando no leito: não inclina na rota. O quarto quadro é a nuvem de tinta.
+    art: {
+      kind: "sprite",
+      folder: "ladrao-do-recife",
+      frames: 4,
+      frameMs: 170,
+      scale: 0.42,
+      rotate: "upright",
+      loopFrames: [1, 2, 3],
+      guardFrames: [4],
+      guard: { trigger: "interval", holdMs: 500, cooldownMs: THIEF_INK.intervalMs, idleIntervalMs: THIEF_INK.intervalMs, idleJitterMs: 800 },
+      shapeFallback: "dart",
+    },
+    description: "Corre, esguicha tinta nos Guardiões (atacam mais devagar por um tempo) e, se chegar ao coral, leva pérolas do seu caixa.",
+    tags: ["FAST"],
+    abilities: [
+      {
+        type: "disruptGuardians",
+        radius: THIEF_INK.radius,
+        intervalMs: THIEF_INK.intervalMs,
+        attackSpeedMultiplier: THIEF_INK.attackSpeedMultiplier,
+        durationMs: THIEF_INK.durationMs,
+      },
+      { type: "stealPearls", amount: THIEF_INK.stealPearls },
+    ],
+  },
+  ironShell: {
+    id: "ironShell",
+    name: "Tartaruga Corrompida",
+    role: "armored",
+    color: 0x7b4fb8,
+    accent: 0xd6b8ff,
+    ...ENEMY_BALANCE.ironShell,
+    hitRadius: 22,
+    scale: 1.3,
+    slowResistance: IRON_SHELL.slowResistance,
+    art: { kind: "sprite", folder: "tartaruga-corrompida", frames: 3, frameMs: 260, scale: 0.5, shapeFallback: "shell" },
+    description: "Casco de pedra e maré negra. Anda devagar e cobre os vizinhos com um escudo que corta o dano recebido.",
+    tags: ["ARMORED", "TANK", "SUPPORT"],
+    abilities: [{ type: "shieldAllies", radius: IRON_SHELL.radius, damageReduction: IRON_SHELL.damageReduction }],
+  },
+  carrier: {
+    id: "carrier",
+    name: "Carregador",
+    role: "armored",
+    color: 0xd9803a,
+    accent: 0xffe08a,
+    ...ENEMY_BALANCE.carrier,
+    hitRadius: 18,
+    scale: 1.15,
+    art: { kind: "sprite", folder: "carregador", frames: 4, frameMs: 210, scale: 0.46, shapeFallback: "shell" },
+    description: "Leva um cardume escondido na concha. Derrubá-lo solta quatro Peixinhos de uma vez — tenha área por perto.",
+    tags: ["ARMORED", "TANK"],
+    abilities: [{ type: "splitOnDeath", enemyId: "minnow", count: 4, spreadPx: 14 }],
+  },
+  queenMoray: {
+    id: "queenMoray",
+    name: "Moreia-Rainha",
+    role: "boss",
+    color: 0x2f5f3a,
+    accent: 0xe7ff6a,
+    ...ENEMY_BALANCE.queenMoray,
+    hitRadius: 34,
+    scale: 1.7,
+    isBoss: true,
+    unblockable: true,
+    slowResistance: 0.4,
+    // 🔶 placeholder: a Moreia das Correntes recolorida (`scripts/make-queen-moray.py`), até a arte própria chegar.
+    art: { kind: "sprite", folder: "rainha-moreia", frames: 3, frameMs: 200, scale: 0.66, shapeFallback: "boss" },
+    description: "Senhora dos Canais. Muda de canal quando se fere e chama escolta a cada fase — nunca aparece duas vezes no mesmo lugar.",
+    boss: {
+      title: "Moreia-Rainha dos Canais",
+      rewards: { pearls: QUEEN_MORAY.bossRewardPearls },
+      healthBar: { segments: 3, color: 0xb8ff5a },
+      phases: [
+        { id: "espreita", name: "Espreita", hpThreshold: 1 },
+        {
+          id: "mergulho",
+          name: "Mergulho",
+          hpThreshold: QUEEN_MORAY.phase2.hpThreshold,
+          announcement: "A Moreia-Rainha mergulhou para o outro canal!",
+          statMultipliers: { speed: QUEEN_MORAY.phase2.speed },
+          switchPath: true,
+          summon: [
+            { enemyId: "dartfish", count: 3 },
+            { enemyId: "moray", count: 1 },
+          ],
+        },
+        {
+          id: "furia",
+          name: "Fúria da Rainha",
+          hpThreshold: QUEEN_MORAY.phase3.hpThreshold,
+          announcement: "Fúria da Rainha: a escolta pesada chegou!",
+          statMultipliers: { speed: QUEEN_MORAY.phase3.speed, armorBonus: QUEEN_MORAY.phase3.armorBonus },
+          switchPath: true,
+          summon: [
+            { enemyId: "carrier", count: 2 },
+            { enemyId: "ironShell", count: 1 },
+          ],
+        },
+      ],
+    },
+  },
 };
 
 /** Categorias padrão a partir do papel antigo. */
@@ -182,6 +330,11 @@ export const SHAPE_FOR_LEGACY_ID: Record<EnemyId, EnemyShapeKey> = {
   moray: "moray",
   corruptedShark: "shark",
   tidebreaker: "boss",
+  puffer: "fish",
+  thief: "dart",
+  ironShell: "shell",
+  carrier: "shell",
+  queenMoray: "boss",
 };
 
 export const THREAT_FOR_ROLE: Record<EnemyRole, number> = { swarm: 0, common: 0, fast: 0, armored: 1, elite: 2, boss: 3 };
@@ -211,6 +364,11 @@ export const ENEMY_ORDER: EnemyId[] = [
   "moray",
   "corruptedShark",
   "tidebreaker",
+  "thief",
+  "puffer",
+  "carrier",
+  "ironShell",
+  "queenMoray",
 ];
 
 /** Aplica a sobrescrita da fase (se houver) e depois o multiplicador da fase. */

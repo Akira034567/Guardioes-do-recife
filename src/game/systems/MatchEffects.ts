@@ -49,6 +49,7 @@ const TONE_FOR_CAUSE: Partial<Record<DamageCause, DamageTone>> = {
   spin: "area",
   inkSecondary: "area",
   weakPoint: "weakPoint",
+  sweep: "area",
 };
 
 /**
@@ -119,7 +120,7 @@ export class MatchEffects {
     const { audio } = this.host;
     switch (event.type) {
       case "enemyDamaged":
-        if (["projectile", "chain", "pulse", "melee", "spin", "ink", "sonar"].includes(event.cause)) audio.play("impact");
+        if (["projectile", "chain", "pulse", "melee", "spin", "ink", "sonar", "lance", "sweep"].includes(event.cause)) audio.play("impact");
         if (event.cause === "poison") this.poisonPuff(event.x, event.y);
         if (getSettings().damageNumbers) {
           const share = event.maxHealth > 0 ? event.amount / event.maxHealth : 0;
@@ -235,9 +236,101 @@ export class MatchEffects {
       case "behavior":
         this.behavior(event.event);
         return;
+      // ── Canais Profundos ──────────────────────────────────────────────────────
+      case "gateToggled":
+        audio.play("upgrade");
+        this.shockwave(event.x, event.y, 0xffd76a, 46);
+        this.host.showMessage(`${event.label}: os próximos vão pelo outro canal.`, 1800);
+        return;
+      case "whirlpoolAwakened":
+        audio.play("pulse");
+        this.shockwave(event.x, event.y, 0x7fe7ff, 60);
+        this.host.showMessage(`${event.label} acordou!`, 1500);
+        return;
+      case "whirlpoolPulled": {
+        if (event.pulledIds.length === 0) return;
+        this.swirl(event.x, event.y, event.radius);
+        event.pulledIds.forEach((id) => {
+          const enemy = this.host.match.enemy(id);
+          if (enemy) this.shockwave(enemy.x, enemy.y, 0x7fe7ff, 18);
+        });
+        audio.play("zap");
+        return;
+      }
+      case "tideWarning":
+        audio.play("warning");
+        this.host.showMessage(`A maré vai virar em ${Math.ceil(event.inMs / 1000)}s!`, 1800);
+        return;
+      case "tideFlipped":
+        this.host.showMessage(event.flipCount % 2 === 1 ? "A maré virou: a corrente agora corre ao contrário!" : "A maré voltou ao sentido de antes.", 1800);
+        return;
+      case "fogChanged":
+        if (event.on) {
+          audio.play("warning");
+          this.host.showMessage("Névoa de lodo! Fora da luz, os Guardiões enxergam menos.", 2200);
+        } else {
+          this.host.showMessage("A névoa baixou.", 1200);
+        }
+        return;
+      case "guardianRelocated":
+        audio.play("buy");
+        this.shockwave(event.fromX, event.fromY, 0x8ff0ff, 30);
+        this.shockwave(event.x, event.y, 0x8ff0ff, 44);
+        return;
+      case "pearlsStolen":
+        audio.play("warning");
+        this.host.showMessage(`O Ladrão fugiu com ${event.amount} pérolas!`, 1600);
+        return;
+      case "bossSwitchedPath":
+        audio.play("warning");
+        this.shockwave(event.x, event.y, 0xb8ff5a, 80);
+        if (getSettings().screenShake) this.host.scene.cameras.main.shake(200, 0.005);
+        return;
+      case "enemyInflated": {
+        if (!event.on) return;
+        const enemy = this.host.match.enemy(event.id);
+        if (enemy) this.shockwave(enemy.x, enemy.y, 0xc07ad8, 24);
+        return;
+      }
+      case "spikesPopped":
+        audio.play("pulse");
+        this.shockwave(event.x, event.y, 0xffd36a, event.radius);
+        if (event.guardianIds.length > 0) this.host.showMessage("Espinhos! Os Guardiões perto do Baiacu ficaram mais lentos.", 1400);
+        return;
+      case "interestPaid":
+        this.shockwave(event.x, event.y, 0xffd76a, 36);
+        if (getSettings().damageNumbers) {
+          this.showDamage({ key: `interest:${event.id}:${event.now}`, x: event.x, y: event.y - 18, amount: event.amount, share: 0, tone: "reward" });
+        }
+        return;
       default:
         return;
     }
+  }
+
+  /** Espiral curta do redemoinho: dois anéis girando para dentro. */
+  private swirl(x: number, y: number, radius: number): void {
+    const { scene } = this.host;
+    for (const [delay, alpha] of [
+      [0, 0.8],
+      [140, 0.5],
+    ] as const) {
+      const ring = scene.add.circle(x, y, radius).setStrokeStyle(4, 0x7fe7ff, alpha).setDepth(DEPTH.effects);
+      scene.tweens.add({ targets: ring, radius: radius * 0.2, alpha: 0, angle: 180, duration: 620, delay, ease: "Sine.In", onComplete: () => ring.destroy() });
+    }
+  }
+
+  /** Faixa reta do golpe em linha (estocada do Peixe-Espada, varredura da Arraia). */
+  private lineStrike(fromX: number, fromY: number, angle: number, length: number, width: number, color: number, durationMs: number): void {
+    const { scene } = this.host;
+    const graphics = scene.add.graphics().setDepth(DEPTH.effects);
+    const endX = fromX + Math.cos(angle) * length;
+    const endY = fromY + Math.sin(angle) * length;
+    graphics.lineStyle(width, color, 0.28);
+    graphics.lineBetween(fromX, fromY, endX, endY);
+    graphics.lineStyle(Math.max(2, width * 0.18), 0xffffff, 0.85);
+    graphics.lineBetween(fromX, fromY, endX, endY);
+    scene.tweens.add({ targets: graphics, alpha: 0, duration: durationMs, ease: "Quad.In", onComplete: () => graphics.destroy() });
   }
 
   // ---------------------------------------------------------------- golpes
@@ -328,6 +421,29 @@ export class MatchEffects {
         }
         this.impactBurst(view, event.targetX, event.targetY);
         audio.play("zap");
+        return;
+      }
+      case "lance": {
+        // A estocada: um risco de luz que sai do Peixe-Espada, passa pelo alvo e segue até o fim da
+        // lâmina — é a linha que explica por que os de trás também caíram.
+        view.playAbility(this.host.match.now);
+        const angle = Math.atan2(event.targetY - event.y, event.targetX - event.x);
+        this.lineStrike(event.x, event.y, angle, event.radius, guardian.stats.lance?.width ?? 30, accent, 260);
+        this.dashTrail(guardian, event.targetX, event.targetY);
+        event.affectedIds.slice(0, 6).forEach((id) => {
+          const enemy = this.host.match.enemy(id);
+          if (enemy) this.impactBurst(view, enemy.x, enemy.y, id === event.targetId ? 1 : 0.75);
+        });
+        audio.play("impact");
+        return;
+      }
+      case "sweep": {
+        // O voo rasante: a faixa inteira acende larga e esmaece devagar, como a sombra da asa.
+        view.playAbility(this.host.match.now);
+        const angle = Math.atan2(event.targetY - event.y, event.targetX - event.x);
+        this.lineStrike(event.x, event.y, angle, event.radius, guardian.stats.lance?.width ?? 80, 0x9fe3ff, 420);
+        this.burstAt(view, event.affectedIds.slice(0, 6), 0.6);
+        audio.play("pulse");
         return;
       }
       case "sonar": {
@@ -500,6 +616,23 @@ export class MatchEffects {
         return;
       }
       case "poisoned":
+        return;
+      case "lure": {
+        // A isca: um brilho amarelo em cada fascinado, e o fio de luz até ele.
+        const graphics = scene.add.graphics().setDepth(DEPTH.effects);
+        event.targetIds.forEach((id) => {
+          const enemy = this.host.match.enemy(id);
+          if (!enemy) return;
+          graphics.lineStyle(2, 0xfff27a, 0.7);
+          graphics.lineBetween(event.x, event.y - 20, enemy.x, enemy.y);
+          graphics.fillStyle(0xfff27a, 0.5);
+          graphics.fillCircle(enemy.x, enemy.y - 14, 6);
+        });
+        scene.tweens.add({ targets: graphics, alpha: 0, duration: 900, ease: "Quad.In", onComplete: () => graphics.destroy() });
+        audio.play("zap");
+        return;
+      }
+      case "interest":
         return;
     }
   }

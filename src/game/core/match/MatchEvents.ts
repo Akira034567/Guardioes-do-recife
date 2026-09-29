@@ -120,6 +120,20 @@ export type MatchEvent =
   | (Timed & { type: "interactableCompleted"; id: string; label: string; x: number; y: number; secretId: string | null })
   /** Guardião libertado que entra de graça, sem dono, até o fim da partida. */
   | (Timed & { type: "allyJoined"; id: string; guardianId: GuardianId; x: number; y: number; label: string })
+  // Canais Profundos: aparelhos do mapa, maré, névoa
+  | (Timed & { type: "gateToggled"; id: string; label: string; routeId: string; x: number; y: number })
+  | (Timed & { type: "whirlpoolAwakened"; id: string; label: string; x: number; y: number; activeUntil: number })
+  | (Timed & { type: "whirlpoolPulled"; id: string; x: number; y: number; radius: number; pulledIds: string[] })
+  /** A maré vai virar em `inMs`: o HUD avisa antes, para o jogador não ser pego de surpresa. */
+  | (Timed & { type: "tideWarning"; inMs: number })
+  | (Timed & { type: "tideFlipped"; flipCount: number })
+  | (Timed & { type: "fogChanged"; on: boolean })
+  | (Timed & { type: "guardianRelocated"; id: string; guardianId: GuardianId; x: number; y: number; fromX: number; fromY: number })
+  | (Timed & { type: "pearlsStolen"; enemyId: EnemyId; amount: number })
+  | (Timed & { type: "bossSwitchedPath"; id: string; pathId: string; x: number; y: number })
+  | (Timed & { type: "enemyInflated"; id: string; on: boolean })
+  | (Timed & { type: "spikesPopped"; id: string; x: number; y: number; radius: number; guardianIds: string[] })
+  | (Timed & { type: "interestPaid"; id: string; x: number; y: number; amount: number })
   // comportamentos compartilhados (visual)
   | (Timed & { type: "behavior"; event: BehaviorEvent });
 

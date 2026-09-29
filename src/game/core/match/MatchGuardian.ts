@@ -28,6 +28,8 @@ export interface GuardianPlacement {
   routeDistance: number | null;
   /** Plataforma ocupada (modo `platform`). */
   platformId: string | null;
+  /** Canal a que `routeDistance` se refere (fases com várias rotas). */
+  pathId?: string | null;
 }
 
 /**
@@ -39,10 +41,13 @@ export class MatchGuardian {
   upgradeLevel = 0;
   attacksPerformed = 0;
   aura: ResolvedAura = NEUTRAL_AURA;
-  readonly x: number;
-  readonly y: number;
-  readonly routeDistance: number | null;
-  readonly platformId: string | null;
+  x: number;
+  y: number;
+  routeDistance: number | null;
+  platformId: string | null;
+  pathId: string | null;
+  /** Arraia, ramo Planar: a última onda (índice) em que ela já mudou de lugar. */
+  relocatedOnWave = -1;
   readonly fsm: GuardianStateMachine;
   readonly runtime = new GuardianRuntime();
   private cachedStats: GuardianStats | null = null;
@@ -69,8 +74,18 @@ export class MatchGuardian {
     this.y = placement.y;
     this.routeDistance = placement.routeDistance;
     this.platformId = placement.platformId;
+    this.pathId = placement.pathId ?? null;
     this.fsm = new GuardianStateMachine(scaledTimings(definition, this.stats.cooldownMs));
     this.runtime.syncStats(this.stats, now);
+  }
+
+  /** Muda de lugar (Arraia, Planar). A partida valida antes; aqui só a posição muda. */
+  moveTo(placement: GuardianPlacement): void {
+    this.x = placement.x;
+    this.y = placement.y;
+    this.routeDistance = placement.routeDistance;
+    this.platformId = placement.platformId;
+    this.pathId = placement.pathId ?? null;
   }
 
   get guardianId(): GuardianId {

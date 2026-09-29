@@ -21,7 +21,7 @@ export type TargetingShape =
 export interface TargetOrigin extends Vec2 {
   routeDistance?: number | null;
   facingRad?: number;
-  pathId?: string;
+  pathId?: string | null;
 }
 
 /** Ponto testado contra uma forma; `pathDistance`/`pathId` só importam para a forma `route`. */
@@ -66,7 +66,7 @@ export function shapeContains(shape: TargetingShape, origin: TargetOrigin, range
     case "route": {
       if (origin.routeDistance === null || origin.routeDistance === undefined) return false;
       if (point.pathDistance === undefined) return false;
-      if (origin.pathId !== undefined && point.pathId !== undefined && origin.pathId !== point.pathId) return false;
+      if (origin.pathId != null && point.pathId != null && origin.pathId !== point.pathId) return false;
       const delta = point.pathDistance - origin.routeDistance;
       return delta >= -shape.behind && delta <= shape.ahead;
     }

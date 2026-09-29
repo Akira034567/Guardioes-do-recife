@@ -68,6 +68,13 @@ import type {
   Vec2,
   WavePreviewChip,
 } from "../types";
+import { trackSceneLoad } from "../systems/splash";
+import { HUD_LAYOUT } from "../hudLayout";
+import { PinchZoom } from "../systems/PinchZoom";
+import { regionOfLevel } from "../data/regions";
+import { GateView, LightFogLayer, WhirlpoolView } from "../objects/MapDeviceViews";
+import { lightRadiusOf } from "../core/GuardianBehaviors";
+import { setMatchActive } from "../systems/mobileShell";
 
 const preventContextMenu = (event: Event): void => event.preventDefault();
 
@@ -155,6 +162,13 @@ export class GameScene extends Phaser.Scene {
   private crownView: GoldenCrownView | null = null;
   /** Arraste em curso: o jogador apertou uma carta e ainda não soltou. Ver `handleWorldPointerUp`. */
   private dragPlacing = false;
+  /** Celular: o primeiro toque de posicionamento, esperando o segundo que confirma. */
+  private pendingPlacement: { guardianId: GuardianId; x: number; y: number } | null = null;
+  private pinch: PinchZoom | null = null;
+  /** Comportas, redemoinhos e o véu de névoa (Canais Profundos). */
+  private readonly gateViews = new Map<string, GateView>();
+  private readonly whirlpoolViews = new Map<string, WhirlpoolView>();
+  private lightFog: LightFogLayer | null = null;
   /** A pergunta do reinício, enquanto estiver na tela. `null` = não há nada a confirmar. */
   private restartConfirm: ConfirmScreen | null = null;
   /** Quando a última tecla ESC teve efeito; ver `handleEscape`. */
@@ -205,6 +219,7 @@ export class GameScene extends Phaser.Scene {
     preloadGoldenArt(this);
     // Ícones de status: leves e usados em qualquer fase.
     preloadStatusArt(this);
+    trackSceneLoad(this);
   }
 
   create(): void {
@@ -307,7 +322,18 @@ export class GameScene extends Phaser.Scene {
     this.placementGuideGraphic = this.add.graphics().setDepth(DEPTH.effects - 1);
     this.ghost = new PlacementGhost(this);
     this.createInteractables();
+    this.createMapDevices();
     this.debugOverlay = new DebugOverlay(this, this.match.route);
+    // Celular: dois dedos aproximam e arrastam o mapa. Registrada ANTES dos toques do jogo, para o
+    // segundo dedo já encontrar a pinça ativa e não virar um posicionamento.
+    if (HUD_LAYOUT.confirmPlacement) {
+      const pinch = new PinchZoom(this);
+      this.pinch = pinch;
+      this.disposables.add("pinça", () => {
+        pinch.destroy();
+        this.pinch = null;
+      });
+    }
     this.registerEvents();
     this.game.canvas.addEventListener("pointerdown", this.unlockAudio, { passive: true });
     this.game.canvas.dataset.screen = "game";
@@ -414,6 +440,8 @@ export class GameScene extends Phaser.Scene {
     this.drainEvents();
     if (ticks > 0) this.syncViews(ticks * this.match.dtMs, Math.min(delta, 100));
     if (ticks > 0) this.syncInteractables();
+    if (ticks > 0) this.syncMapDevices();
+    this.updateLightAndFog(Math.min(delta, 100));
     this.effects.update(this.match.now);
     if (!this.clock.paused) this.updateCurrentMotes(Math.min(delta, 100) * this.clock.speed);
 
@@ -487,6 +515,15 @@ export class GameScene extends Phaser.Scene {
       case "guardianPlaced": {
         const guardian = this.match.guardian(event.id);
         if (guardian) this.guardianViews.set(event.id, new GuardianView(this, guardian, () => this.selectPlacedGuardian(event.id)));
+        break;
+      }
+      case "guardianRelocated": {
+        // A Arraia planou: a view nasce de novo no lugar novo (é mais simples e mais seguro do que
+        // mover cada peça dela — anel de alcance, sombra, coroa).
+        const guardian = this.match.guardian(event.id);
+        this.guardianViews.get(event.id)?.destroy();
+        if (guardian) this.guardianViews.set(event.id, new GuardianView(this, guardian, () => this.selectPlacedGuardian(event.id)));
+        this.renderPlacementState();
         break;
       }
       case "guardianSold":
@@ -634,6 +671,7 @@ export class GameScene extends Phaser.Scene {
     EventBus.on(Events.upgradeGuardian, this.upgradeSelectedGuardian, this);
     EventBus.on(Events.sellGuardian, this.sellSelectedGuardian, this);
     EventBus.on(Events.togglePause, this.togglePause, this);
+    EventBus.on(Events.requestPause, this.requestPause, this);
     EventBus.on(Events.setSpeed, this.setSpeed, this);
     EventBus.on(Events.toggleMute, this.toggleMute, this);
     EventBus.on(Events.restart, this.restartGame, this);
@@ -670,6 +708,7 @@ export class GameScene extends Phaser.Scene {
       EventBus.off(Events.upgradeGuardian, this.upgradeSelectedGuardian, this);
       EventBus.off(Events.sellGuardian, this.sellSelectedGuardian, this);
       EventBus.off(Events.togglePause, this.togglePause, this);
+      EventBus.off(Events.requestPause, this.requestPause, this);
       EventBus.off(Events.setSpeed, this.setSpeed, this);
       EventBus.off(Events.toggleMute, this.toggleMute, this);
       EventBus.off(Events.restart, this.restartGame, this);
@@ -698,6 +737,9 @@ export class GameScene extends Phaser.Scene {
       this.game.canvas.removeEventListener("pointerdown", this.unlockAudio);
     });
     this.disposables.add("motor", () => this.match.setListener(null));
+    // Partida viva mantém a tela do celular acesa; sair da cena libera.
+    setMatchActive(true);
+    this.disposables.add("tela acesa", () => setMatchActive(false));
     this.disposables.add("fantasma de posicionamento", () => this.ghost.destroy());
     this.disposables.add("efeitos", () => this.effects.destroy());
     this.disposables.add("áudio", () => this.audio.destroy());
@@ -722,6 +764,7 @@ export class GameScene extends Phaser.Scene {
 
   private selectGuardian(id: GuardianId): void {
     if (this.match.status !== "running") return;
+    this.pendingPlacement = null;
     this.selectedGuardianId = this.selectedGuardianId === id ? null : id;
     this.selectedPlacedGuardianId = null;
     this.ghost.setGuardian(this.selectedGuardianId ? GUARDIANS[this.selectedGuardianId] : null);
@@ -756,7 +799,8 @@ export class GameScene extends Phaser.Scene {
 
   // ------------------------------------------------------------ posicionamento
 
-  private handlePlatform(platform: PlatformZone): void {
+  /** `dragged`: veio de soltar a carta arrastada — o gesto já é a confirmação, sem segundo toque. */
+  private handlePlatform(platform: PlatformZone, dragged = false): void {
     this.audio.unlock();
     if (this.match.status !== "running") return;
     const occupant = this.match.platformOccupant(platform.definition.id);
@@ -777,8 +821,12 @@ export class GameScene extends Phaser.Scene {
       this.showMessage(`${definition.name} precisa de ${placementModesOf(definition).map((mode) => PLACEMENT_HINTS[mode]).join(" ou ")}.`, 1900);
       return;
     }
-    const result = this.place(definition.id, platform.definition.x, platform.definition.y, platform.definition.id);
-    if (result.ok) this.showMessage(`${definition.name} protege esta plataforma!`, 1600);
+    const placeHere = (): void => {
+      const result = this.place(definition.id, platform.definition.x, platform.definition.y, platform.definition.id);
+      if (result.ok) this.showMessage(`${definition.name} protege esta plataforma!`, 1600);
+    };
+    if (dragged) placeHere();
+    else this.confirmThenPlace(platform.definition.x, platform.definition.y, placeHere);
   }
 
   /** Envia o comando de posicionamento e trata sucesso/recusa (mensagens e seleção). */
@@ -851,16 +899,40 @@ export class GameScene extends Phaser.Scene {
     this.renderPlacementState();
   }
 
+  /**
+   * Celular (`HUD_LAYOUT.confirmPlacement`): o primeiro toque só mostra o fantasma e o alcance ali;
+   * o segundo toque NO MESMO LUGAR posiciona. Tocar em outro lugar move a prévia. No desktop, com o
+   * fantasma seguindo o cursor, o clique já é a confirmação e isto passa direto.
+   */
+  private confirmThenPlace(x: number, y: number, place: () => void): void {
+    const guardianId = this.selectedGuardianId;
+    if (!HUD_LAYOUT.confirmPlacement || !guardianId) {
+      place();
+      return;
+    }
+    const pending = this.pendingPlacement;
+    if (pending && pending.guardianId === guardianId && Math.hypot(pending.x - x, pending.y - y) <= 36) {
+      this.pendingPlacement = null;
+      place();
+      return;
+    }
+    this.pendingPlacement = { guardianId, x, y };
+    this.handleWorldPointerMove({ worldX: x, worldY: y, y } as Phaser.Input.Pointer);
+    this.showMessage("Toque de novo para confirmar.", 1600);
+  }
+
   private handleWorldPointerDown(pointer: Phaser.Input.Pointer): void {
     // Um clique que começa no mapa nunca é arraste de carta: fecha a janela antes de qualquer coisa,
     // senão o `pointerup` deste mesmo clique tentaria posicionar um SEGUNDO Guardião no lugar.
     this.dragPlacing = false;
+    if (this.pinch?.active) return;
     if (this.match.status !== "running" || pointer.y <= HUD_TOP || pointer.y >= GAME_HEIGHT - HUD_BOTTOM) return;
     if (pointer.rightButtonDown()) {
       this.cancelPlacement();
       return;
     }
     if (!this.selectedGuardianId) {
+      if (this.selectedPlacedGuardianId && this.tryRelocate(pointer.worldX, pointer.worldY)) return;
       if (this.selectedPlacedGuardianId) this.clearPlacedSelection();
       return;
     }
@@ -868,8 +940,32 @@ export class GameScene extends Phaser.Scene {
     // carta na mão posicionaria um Guardião embaixo dele.
     if (this.goldenBadge?.contains(pointer.worldX, pointer.worldY)) return;
     const definition = GUARDIANS[this.selectedGuardianId];
-    if (freeModesOf(definition).length === 0) return;
-    this.dropOnField(definition, pointer.worldX, pointer.worldY);
+    if (freeModesOf(definition).length === 0) {
+      // Celular: um toque perto (mas fora) de uma plataforma gruda nela. Em cima dela quem responde
+      // é a própria zona da plataforma, então aqui só entra o toque que errou por pouco.
+      if (HUD_LAYOUT.platformSnap > 0 && !this.platformNear(pointer.worldX, pointer.worldY)) {
+        const snapped = this.nearestPlatform(pointer.worldX, pointer.worldY, HUD_LAYOUT.platformSnap);
+        if (snapped) this.handlePlatform(snapped);
+      }
+      return;
+    }
+    const x = pointer.worldX;
+    const y = pointer.worldY;
+    this.confirmThenPlace(x, y, () => this.dropOnField(definition, x, y));
+  }
+
+  /** A plataforma mais próxima do ponto dentro de `radius`, para o toque que errou por pouco. */
+  private nearestPlatform(x: number, y: number, radius: number): PlatformZone | null {
+    let best: PlatformZone | null = null;
+    let bestDistance = radius;
+    for (const platform of this.platforms) {
+      const distance = Math.hypot(platform.definition.x - x, platform.definition.y - y);
+      if (distance <= bestDistance) {
+        best = platform;
+        bestDistance = distance;
+      }
+    }
+    return best;
   }
 
   /**
@@ -889,8 +985,9 @@ export class GameScene extends Phaser.Scene {
     const definition = GUARDIANS[this.selectedGuardianId];
     if (placementModesOf(definition).includes("platform")) {
       const platform = this.platformNear(pointer.worldX, pointer.worldY);
-      if (platform) {
-        this.handlePlatform(platform);
+      const target = platform ?? (HUD_LAYOUT.platformSnap > 0 ? this.nearestPlatform(pointer.worldX, pointer.worldY, HUD_LAYOUT.platformSnap) : null);
+      if (target) {
+        this.handlePlatform(target, true);
         return;
       }
       // Fora de qualquer plataforma o arraste só vale para quem TAMBÉM aceita toque livre (o Polvo);
@@ -1054,6 +1151,7 @@ export class GameScene extends Phaser.Scene {
   /** Desiste do posicionamento (ESC, botão direito ou clique fora). */
   private cancelPlacement(): void {
     this.dragPlacing = false;
+    this.pendingPlacement = null;
     if (!this.selectedGuardianId && !this.selectedPlacedGuardianId) return;
     this.selectedGuardianId = null;
     this.selectedPlacedGuardianId = null;
@@ -1085,6 +1183,85 @@ export class GameScene extends Phaser.Scene {
     }
     this.syncInteractables();
     this.emitHud();
+  }
+
+  /** Posição da fase dentro da região dela, para a plaquinha do HUD. Encontro = -1. */
+  private regionPosition(): { levelIndex: number; levelCount: number } {
+    if (levelIndex(this.level.id) < 0) return { levelIndex: -1, levelCount: LEVELS.length };
+    const region = regionOfLevel(this.level.id);
+    if (!region) return { levelIndex: levelIndex(this.level.id), levelCount: LEVELS.length };
+    return { levelIndex: region.nodes.findIndex((node) => node.levelId === this.level.id), levelCount: region.nodes.length };
+  }
+
+  // ------------------------------------------------ Canais Profundos: aparelhos
+
+  private createMapDevices(): void {
+    const snapshot = this.match.snapshot();
+    for (const gate of snapshot.gates) this.gateViews.set(gate.id, new GateView(this, gate, () => this.touchMapDevice(gate.id)));
+    for (const whirlpool of snapshot.whirlpools) {
+      this.whirlpoolViews.set(whirlpool.id, new WhirlpoolView(this, whirlpool, () => this.touchMapDevice(whirlpool.id)));
+    }
+    const hasLights = this.launch.loadout.includes("lanternfish");
+    if (hasLights || this.level.waves.some((wave) => wave.specialModifiers?.some((modifier) => modifier.type === "fog"))) {
+      this.lightFog = new LightFogLayer(this);
+    }
+    this.disposables.add("aparelhos do mapa", () => {
+      this.gateViews.forEach((view) => view.destroy());
+      this.gateViews.clear();
+      this.whirlpoolViews.forEach((view) => view.destroy());
+      this.whirlpoolViews.clear();
+      this.lightFog?.destroy();
+      this.lightFog = null;
+    });
+  }
+
+  /** Toque numa comporta ou num redemoinho dormente. */
+  private touchMapDevice(id: string): void {
+    this.audio.unlock();
+    if (this.match.status !== "running" || this.clock.paused) return;
+    const result = this.match.execute({ type: "useMapDevice", deviceId: id });
+    this.drainEvents();
+    if (!result.ok) {
+      this.showMessage(result.message, 1400);
+      return;
+    }
+    this.syncMapDevices();
+    this.emitHud();
+  }
+
+  private syncMapDevices(): void {
+    if (this.gateViews.size === 0 && this.whirlpoolViews.size === 0) return;
+    const snapshot = this.match.snapshot();
+    for (const gate of snapshot.gates) this.gateViews.get(gate.id)?.sync(gate);
+    for (const whirlpool of snapshot.whirlpools) this.whirlpoolViews.get(whirlpool.id)?.sync(whirlpool);
+  }
+
+  private updateLightAndFog(deltaMs: number): void {
+    const spin = this.clock.paused ? 0 : deltaMs * this.clock.speed;
+    this.whirlpoolViews.forEach((view) => view.spin(spin));
+    if (!this.lightFog) return;
+    const lights = this.match.guardians
+      .filter((guardian) => guardian.stats.light)
+      .map((guardian) => ({ x: guardian.x, y: guardian.y, radius: lightRadiusOf(guardian) }));
+    this.lightFog.update(this.match.fog, lights, deltaMs);
+  }
+
+  /**
+   * Arraia, Planar: com ela selecionada, um toque na água a faz planar até lá (uma vez por onda).
+   * Devolve `true` quando o toque foi tratado como tentativa de planar.
+   */
+  private tryRelocate(x: number, y: number): boolean {
+    const guardian = this.selectedPlacedGuardianId ? this.match.guardian(this.selectedPlacedGuardianId) : undefined;
+    if (!guardian?.stats.relocate) return false;
+    const result = this.match.execute({ type: "relocateGuardian", instanceId: guardian.id, x, y });
+    this.drainEvents();
+    if (!result.ok) {
+      this.showMessage(result.message, 1500);
+      return result.reason === "invalidPlacement";
+    }
+    this.showMessage(`${guardian.definition.shortName} planou para o novo lugar.`, 1400);
+    this.emitHud();
+    return true;
   }
 
   private syncInteractables(): void {
@@ -1206,6 +1383,12 @@ export class GameScene extends Phaser.Scene {
     // A história de encerramento vem antes de tudo: é ela que o jogador lê primeiro.
     const outro = outcome.victory && outcome.counted ? pendingStory({ type: "levelOutro", levelId: this.level.id }) : undefined;
     if (outro) host.push(storyScreen(outro, () => host.pop()));
+  }
+
+  /** Saiu do app ou virou o celular em pé: pausa, mas nunca despausa nem fecha um menu aberto. */
+  private requestPause(): void {
+    if (this.match.status !== "running" || getScreenHost(this.game).isOpen) return;
+    this.togglePause();
   }
 
   /** O botão Ⅱ pausa a partida e abre o menu (item 36); sair do menu é o que despausa. */
@@ -1432,6 +1615,11 @@ export class GameScene extends Phaser.Scene {
       enemyRoles: [...roles] as MomentSignals["enemyRoles"],
       hasCurrentZone: (this.level.currents?.length ?? 0) > 0,
       hasCloakedEnemy: cloaked,
+      hasBranchingRoutes: this.match.routes.size > 1,
+      hasGate: (this.level.gates?.length ?? 0) > 0,
+      hasWhirlpool: (this.level.whirlpools?.length ?? 0) > 0,
+      hasFlippingTide: this.level.currents.some((current) => Boolean(current.flipEveryMs)),
+      fogNow: this.match.fog,
     };
   }
 
@@ -1523,8 +1711,8 @@ export class GameScene extends Phaser.Scene {
     const hud: HudSnapshot = {
       levelId: this.level.id,
       levelName: this.level.name,
-      levelIndex: levelIndex(this.level.id),
-      levelCount: LEVELS.length,
+      // "FASE 3/10" conta dentro da região (nos Canais, a primeira é a 1).
+      ...this.regionPosition(),
       nextLevelId: gameOver === "victory" ? (this.unlockedNextLevelId ?? nextLevelId(this.level.id)) : null,
       pearls: snapshot.pearls,
       reefHealth: snapshot.reef,
@@ -1602,6 +1790,10 @@ export class GameScene extends Phaser.Scene {
     dataset.reef = String(snapshot.reef);
     dataset.guardians = String(snapshot.guardianCount);
     dataset.upgrades = String(snapshot.upgradeCount);
+    // Canais Profundos (sondas e2e): canal aberto de cada comporta, redemoinhos girando e névoa.
+    dataset.gates = snapshot.gates.map((gate) => `${gate.id}:${gate.openRouteId}`).join(",");
+    dataset.whirlpools = snapshot.whirlpools.map((pool) => `${pool.id}:${pool.active ? "on" : "off"}`).join(",");
+    dataset.fog = snapshot.fog ? "on" : "off";
     dataset.selected = this.selectedPlacedGuardianId ?? "";
     // Carta na mão (vazio = nenhuma). Sonda de dois gestos: soltar a carta dentro do mapa posiciona,
     // e descer de volta ao menu larga a carta.
@@ -1750,13 +1942,16 @@ export class GameScene extends Phaser.Scene {
     return texture;
   }
 
+  /** Traça TODAS as rotas da fase (nos Canais há várias): a faixa da margem vale para cada canal. */
   private strokeRoute(graphics: Phaser.GameObjects.Graphics): void {
-    graphics.beginPath();
-    this.level.waypoints.forEach((point, index) => {
-      if (index === 0) graphics.moveTo(point.x, point.y);
-      else graphics.lineTo(point.x, point.y);
-    });
-    graphics.strokePath();
+    for (const route of this.match.routes.values()) {
+      graphics.beginPath();
+      route.points.forEach((point, index) => {
+        if (index === 0) graphics.moveTo(point.x, point.y);
+        else graphics.lineTo(point.x, point.y);
+      });
+      graphics.strokePath();
+    }
   }
 
   // -------------------------------------------------------------- ambiente
@@ -1780,6 +1975,10 @@ export class GameScene extends Phaser.Scene {
       const platform: PlatformZone = { definition, zone };
       zone.on("pointerdown", (_pointer: Phaser.Input.Pointer, _localX: number, _localY: number, event: Phaser.Types.Input.EventData) => {
         event.stopPropagation();
+        // O `stopPropagation` esconde este toque do `pointerdown` da cena, que é quem fecha a janela
+        // de arrastar carta. No celular, sem isto, o SOLTAR deste mesmo toque contava como "carta
+        // arrastada até a pedra" e posicionava já no primeiro toque, pulando a confirmação.
+        if (HUD_LAYOUT.confirmPlacement) this.dragPlacing = false;
         this.handlePlatform(platform);
       });
       this.platforms.push(platform);
@@ -1802,12 +2001,15 @@ export class GameScene extends Phaser.Scene {
     // exatamente o que o jogador sente na rota.
     const amplified = this.match.currentAmplified;
     const rush = amplified ? BOSS_CURRENT.strengthMultiplier : 1;
+    // Maré que vira: o sentido vem do motor (a zona viva), e não da ficha da fase.
+    const liveDirection = new Map(this.match.currents.zones((zone) => zone.origin === "map").map((zone) => [zone.id, zone.direction]));
     this.currentMotes.forEach(({ mote, zoneIndex }, index) => {
       const zone = this.level.currents[zoneIndex];
-      const length = Math.hypot(zone.direction.x, zone.direction.y) || 1;
+      const direction = liveDirection.get(zone.id) ?? zone.direction;
+      const length = Math.hypot(direction.x, direction.y) || 1;
       const speed = (22 + (index % 4) * 8) * rush;
-      mote.x += (zone.direction.x / length) * speed * (deltaMs / 1000);
-      mote.y += (zone.direction.y / length) * speed * (deltaMs / 1000);
+      mote.x += (direction.x / length) * speed * (deltaMs / 1000);
+      mote.y += (direction.y / length) * speed * (deltaMs / 1000);
       if (mote.x > zone.x + zone.width) mote.x = zone.x;
       if (mote.x < zone.x) mote.x = zone.x + zone.width;
       if (mote.y > zone.y + zone.height) mote.y = zone.y;

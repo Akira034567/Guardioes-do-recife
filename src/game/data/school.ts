@@ -184,6 +184,62 @@ const GUARDIAN_LESSONS: readonly Lesson[] = [
     ],
     rule: "110 pérolas · alcance 155 · pulso a cada 5,5s. Em água livre OU na margem.",
   },
+  {
+    id: "guardiao-ostra",
+    course: "guardioes",
+    title: "Ostra",
+    summary: "O Guardião que paga os outros: renda durante a partida inteira.",
+    art: { kind: "guardian", id: "oyster" },
+    points: [
+      "Rende pérolas a cada poucos segundos desde que entra em campo, até na contagem entre ondas.",
+      "O tiro de pérola é fraco: sozinha ela não segura nada. Ela compra quem segura.",
+      "Ramo Banco: mais renda e JUROS no fim de cada onda sobre o que está guardado — gastar tudo na hora rende menos.",
+      "Ramo Madrepérola: desiste da renda extra e vira uma arma que ignora armadura, com estilhaços no nível 2.",
+    ],
+    rule: "120 pérolas · alcance 170 · +6 pérolas a cada 12s. Em plataforma.",
+  },
+  {
+    id: "guardiao-lanterna",
+    course: "guardioes",
+    title: "Peixe-Lanterna",
+    summary: "A luz que revela o escondido e fura a névoa dos Canais.",
+    art: { kind: "guardian", id: "lanternfish" },
+    points: [
+      "A luz revela camuflados o tempo todo — o sonar do Golfinho revela em pulsos, a lanterna mantém o trecho à vista.",
+      "Nas ondas com NÉVOA, todo Guardião fora da luz perde um terço do alcance. Dentro dela, enxerga inteiro.",
+      "Ramo Isca: fascina os mais adiantados, que quase param diante da luz. Chefes não caem.",
+      "Ramo Farol: luz maior e bônus de alcance (e dano, no nível 2) para os vizinhos.",
+    ],
+    rule: "100 pérolas · alcance 160 · luz de 110% do alcance. Em água livre OU na margem.",
+  },
+  {
+    id: "guardiao-arraia",
+    course: "guardioes",
+    title: "Arraia",
+    summary: "Não mira um inimigo: varre a faixa inteira entre ela e o alvo.",
+    art: { kind: "guardian", id: "manta-ray" },
+    points: [
+      "Cada voo rasante atinge TODOS numa faixa reta de 80 px, do lado dela até o alvo, e deixa todo mundo lento.",
+      "Rende mais onde a rota corre em linha reta na frente dela: a fila inteira cabe na faixa.",
+      "Ramo Planar: uma vez por onda, selecione-a e toque na água para mudar de lugar, de graça.",
+      "Ramo Arrasto: de tempos em tempos empurra a fila para trás na rota.",
+    ],
+    rule: "115 pérolas · alcance 150 · voo a cada 1,6s. Em água livre OU na margem.",
+  },
+  {
+    id: "guardiao-espada",
+    course: "guardioes",
+    title: "Peixe-Espada",
+    summary: "A estocada em linha reta que atravessa a fila.",
+    art: { kind: "guardian", id: "swordfish" },
+    points: [
+      "Golpe lento e pesado: sai do Peixe-Espada, passa pelo alvo e segue, acertando até 4 na mesma linha.",
+      "Encoste-o na beira de uma reta longa: é onde a fila se alinha para a estocada.",
+      "Ramo Estocada: EXECUTA quem não é chefe e ficou com pouca vida.",
+      "Ramo Esgrimista: ignora armadura, cobra caro de elite e chefe e rompe o escudo da Tartaruga Corrompida.",
+    ],
+    rule: "120 pérolas · alcance 175 · estocada a cada 2,1s. Na beira da correnteza.",
+  },
 ];
 
 // ---------------------------------------------------------------- Efeitos
@@ -338,6 +394,75 @@ const CURRENT_LESSONS: readonly Lesson[] = [
 
 // ---------------------------------------------------------------- Ameaças
 
+/** Canais Profundos (v4): a água que o jogador aprende a controlar. Moram no curso da correnteza. */
+const CHANNEL_LESSONS: readonly Lesson[] = [
+  {
+    id: "canal-bifurcado",
+    course: "correnteza",
+    title: "Dois canais",
+    summary: "Quando a rota se divide, a defesa também precisa se dividir.",
+    art: { kind: "icon", name: "waves" },
+    points: [
+      "Nos Canais Profundos a água se divide: cada grupo de invasores escolhe um canal, e a próxima onda mostra por onde vem.",
+      "Pedras ENTRE os canais alcançam os dois lados — são as mais valiosas do mapa.",
+      "Bloqueadores e armadilhas só seguram quem passa pelo canal deles; a exceção é o tronco comum antes e depois da bifurcação.",
+    ],
+    rule: "Um canteiro vale pela rota MAIS PRÓXIMA dele (a 82–180 px). No tronco comum, o bloqueio pega os dois canais.",
+  },
+  {
+    id: "canal-comporta",
+    course: "correnteza",
+    title: "Comportas",
+    summary: "A alavanca decide por onde o cardume passa.",
+    art: { kind: "icon", name: "waves" },
+    points: [
+      "Toque na alavanca para virar a comporta: a porta de pedra fecha um canal e abre o outro.",
+      "Só os invasores que nascerem DEPOIS mudam de caminho. Quem já está nadando continua no canal em que entrou.",
+      "Depois de virar, a comporta tranca por alguns segundos. Mande o cardume para o canal onde está a sua defesa — ou para o mais longo.",
+    ],
+    rule: "Toque para virar. Vale para os próximos a nascer. Trava por cerca de 10s depois de cada virada.",
+  },
+  {
+    id: "canal-mare",
+    course: "correnteza",
+    title: "A maré que vira",
+    summary: "A corrente que segura agora vai empurrar daqui a pouco.",
+    art: { kind: "icon", name: "waves" },
+    points: [
+      "Em algumas fases a corrente inverte de sentido em ciclos, como uma maré.",
+      "O aviso aparece alguns segundos antes: é a hora de reposicionar quem depende da corrente (e de planar com a Arraia).",
+      "A deriva dos projéteis vira junto: o tiro que entortava para um lado passa a entortar para o outro.",
+    ],
+    rule: "A corrente troca de sentido a cada ciclo. O HUD avisa 3s antes.",
+  },
+  {
+    id: "canal-redemoinho",
+    course: "correnteza",
+    title: "Redemoinhos",
+    summary: "A água que devolve quem passa.",
+    art: { kind: "icon", name: "waves" },
+    points: [
+      "De tempos em tempos, o redemoinho puxa quem está nele e o devolve alguns metros rota acima.",
+      "Chefes não são arrastados; elites vão pela metade. Um mesmo invasor não é puxado duas vezes seguidas pelo mesmo redemoinho.",
+      "O redemoinho DORMENTE só gira quando você toca nele — acorde-o quando a fila estiver em cima.",
+    ],
+    rule: "Devolve 150–180 px de rota. Dormente: toque para girar por alguns segundos; depois descansa.",
+  },
+  {
+    id: "canal-nevoa",
+    course: "correnteza",
+    title: "Névoa",
+    summary: "Não dá para defender o que não se vê.",
+    art: { kind: "guardian", id: "lanternfish" },
+    points: [
+      "Nas ondas de névoa, todo Guardião fora da luz enxerga menos: o alcance cai para 80%.",
+      "A luz do Peixe-Lanterna fura a névoa: quem está dentro dela enxerga com o alcance inteiro.",
+      "O sonar do Golfinho continua revelando camuflados, mas não devolve o alcance de ninguém.",
+    ],
+    rule: "Névoa: alcance ×0,8 fora da luz. Dentro da luz do Peixe-Lanterna, alcance normal.",
+  },
+];
+
 const ENEMY_LESSONS: readonly Lesson[] = [
   {
     id: "ameaca-cardume",
@@ -425,7 +550,7 @@ const ENEMY_LESSONS: readonly Lesson[] = [
   },
 ];
 
-export const LESSONS: readonly Lesson[] = [...GUARDIAN_LESSONS, ...STATUS_LESSONS, ...CURRENT_LESSONS, ...ENEMY_LESSONS];
+export const LESSONS: readonly Lesson[] = [...GUARDIAN_LESSONS, ...STATUS_LESSONS, ...CURRENT_LESSONS, ...CHANNEL_LESSONS, ...ENEMY_LESSONS];
 
 export const LESSONS_BY_ID: ReadonlyMap<string, Lesson> = new Map(LESSONS.map((lesson) => [lesson.id, lesson]));
 

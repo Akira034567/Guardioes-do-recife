@@ -55,7 +55,12 @@ test("o mapa abre na dificuldade mais alta que o jogador liberou e mostra a tril
   // No Difícil ninguém venceu nada ainda: as estrelas voltam a zero, e os nós voltam a "por fazer".
   // A pílula é enxuta de propósito — a contagem de fases vive no `data-cleared` e no `title`.
   await expect(page.getByTestId("map-track-dificil")).toHaveAttribute("data-cleared", "0");
-  await expect(page.getByTestId("map-track-dificil")).toContainText("0/18");
+  // As estrelas contam a campanha inteira: 16 fases × 3 (Recife Costeiro + Canais Profundos).
+  await expect(page.getByTestId("map-track-dificil")).toContainText("0/48");
+  // Quem fechou o Recife Costeiro abre o mapa já nos Canais; a seta volta para a primeira região.
+  await expect(page.getByTestId("map-regions")).toHaveAttribute("data-value", "canais-profundos");
+  await page.getByTestId("map-region-prev").click();
+  await expect(page.getByTestId("map-regions")).toHaveAttribute("data-value", "recife-costeiro");
   await expect(page.getByTestId("map-node-recife-1")).toHaveAttribute("data-state", "available");
 
   // Voltando ao Normal, a campanha aparece como o jogador a deixou.
@@ -63,7 +68,7 @@ test("o mapa abre na dificuldade mais alta que o jogador liberou e mostra a tril
   await expect(panel).toHaveAttribute("data-difficulty", "normal");
   await expect(page.getByTestId("map-node-recife-1")).toHaveAttribute("data-state", "perfect");
   await expect(page.getByTestId("map-track-normal")).toHaveAttribute("data-cleared", "6");
-  await expect(page.getByTestId("map-track-normal")).toContainText("18/18");
+  await expect(page.getByTestId("map-track-normal")).toContainText("18/48");
 });
 
 test("cada dificuldade mostra os próprios objetivos, no mapa e na preparação", async ({ page }) => {
@@ -71,6 +76,7 @@ test("cada dificuldade mostra os próprios objetivos, no mapa e na preparação"
   await openGame(page, "screen=map");
 
   await page.getByTestId("map-track-normal").click();
+  await page.getByTestId("map-region-prev").click();
   await page.getByTestId("map-node-recife-1").click();
   const objectives = page.getByTestId("map-objectives");
   await expect(objectives).toHaveAttribute("data-difficulty", "normal");

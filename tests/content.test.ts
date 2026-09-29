@@ -16,9 +16,10 @@ describe("Recife 1 content contracts", () => {
     expect("routePlacements" in RECIFE_ONE).toBe(false);
   });
 
-  it("registers nine guardians and a default squad of five", () => {
-    expect(GUARDIAN_ORDER).toHaveLength(9);
-    expect(new Set(GUARDIAN_ORDER).size).toBe(9);
+  it("registers thirteen guardians and a default squad of five", () => {
+    // Nove do Recife Costeiro + quatro dos Canais Profundos (v4).
+    expect(GUARDIAN_ORDER).toHaveLength(13);
+    expect(new Set(GUARDIAN_ORDER).size).toBe(13);
     expect(DEFAULT_LOADOUT).toHaveLength(LOADOUT_SIZE);
     expect(DEFAULT_LOADOUT).toEqual(["pistol-shrimp", "jellyfish", "pufferfish", "reef-crab", "ink-octopus"]);
     expect(resolveLoadout(null)).toEqual(DEFAULT_LOADOUT);
@@ -52,6 +53,15 @@ describe("Recife 1 content contracts", () => {
     expect(GUARDIANS.stonefish.damage).toBe(0);
     expect(GUARDIANS.dolphin.placementMode).toBe("water");
     expect(GUARDIANS.dolphin.attackKind).toBe("sonar");
+    // Canais Profundos: economia na pedra, luz na água, faixa e estocada.
+    expect(GUARDIANS.oyster.placementMode).toBe("platform");
+    expect(GUARDIANS.oyster.generatesPearls?.amount).toBeGreaterThan(0);
+    expect(GUARDIANS.lanternfish.placementMode).toBe("water");
+    expect(GUARDIANS.lanternfish.light?.radiusMultiplier).toBeGreaterThan(1);
+    expect(GUARDIANS["manta-ray"].attackKind).toBe("sweep");
+    expect(GUARDIANS["manta-ray"].branches[0].upgrades.every((upgrade) => upgrade.relocate)).toBe(true);
+    expect(GUARDIANS.swordfish.placementMode).toBe("margin");
+    expect(GUARDIANS.swordfish.attackKind).toBe("lance");
   });
 
   it("lets the shark reach the route from anywhere in the margin band", () => {

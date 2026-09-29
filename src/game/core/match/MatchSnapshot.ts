@@ -46,7 +46,41 @@ export interface MatchSnapshot {
   trapPhase: TrapPhase | null;
   /** Elementos interativos do mapa e o progresso de cada um (item 28). */
   interactables: InteractableSnapshot[];
+  /** Comportas dos Canais: canal aberto e quanto falta para poder virar de novo. */
+  gates: GateSnapshot[];
+  /** Redemoinhos dos Canais. */
+  whirlpools: WhirlpoolSnapshot[];
+  /** A onda atual vem com névoa: Guardiões fora da luz enxergam menos. */
+  fog: boolean;
+  /** Maré que vira: quanto falta para a próxima virada (`null` = nada vira nesta fase). */
+  tideFlipInMs: number | null;
   stats: MatchStatsSnapshot;
+}
+
+export interface GateSnapshot {
+  id: string;
+  label: string;
+  x: number;
+  y: number;
+  openRouteId: string;
+  /** Índice do canal aberto em `routes`. */
+  open: 0 | 1;
+  routes: [string, string];
+  routeLabels: [string, string];
+  doors: [{ x: number; y: number }, { x: number; y: number }];
+  readyInMs: number;
+}
+
+export interface WhirlpoolSnapshot {
+  id: string;
+  label: string;
+  x: number;
+  y: number;
+  radius: number;
+  /** Só gira quando tocado. */
+  dormant: boolean;
+  active: boolean;
+  readyInMs: number;
 }
 
 /** Um interagível do mapa como a apresentação precisa vê-lo. */

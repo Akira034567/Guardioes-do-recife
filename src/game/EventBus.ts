@@ -20,6 +20,11 @@ export const Events = {
   upgradeGuardian: "ui:upgrade-guardian",
   sellGuardian: "ui:sell-guardian",
   togglePause: "ui:toggle-pause",
+  /**
+   * Pausa SE a partida estiver rodando e sem menu aberto — nunca despausa. É o que o sistema pede
+   * quando o jogador sai do app ou vira o celular em pé.
+   */
+  requestPause: "ui:request-pause",
   toggleMute: "ui:toggle-mute",
   /** Reinicia de verdade, sem perguntar. Só quem já confirmou emite isto. */
   restart: "ui:restart",

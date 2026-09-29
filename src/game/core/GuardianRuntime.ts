@@ -6,7 +6,7 @@ import { StatusContainer } from "./StatusEffects";
 import { TrapCore } from "./TrapCore";
 
 /** Chaves de recarga por habilidade: cada Guardião pode ter várias ao mesmo tempo. */
-export type AbilityKey = "electricField" | "inkCloud" | "mark" | "pushWave" | "income";
+export type AbilityKey = "electricField" | "inkCloud" | "mark" | "pushWave" | "income" | "lure";
 
 /**
  * Estado por unidade que não cabe nos stats (recargas, máquinas de estado, alvo coordenado, presa).

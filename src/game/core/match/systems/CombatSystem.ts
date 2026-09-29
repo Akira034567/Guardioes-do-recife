@@ -80,6 +80,12 @@ export function resolveAttack(context: CombatContext, guardian: MatchGuardian, t
     case "area":
       resolvePulse(context, guardian, target);
       return;
+    case "lance":
+      resolveLance(context, guardian, target);
+      return;
+    case "sweep":
+      resolveSweep(context, guardian, target);
+      return;
     case "trap":
       return;
     default: {
@@ -87,6 +93,68 @@ export function resolveAttack(context: CombatContext, guardian: MatchGuardian, t
       throw new Error(`attackKind desconhecido: ${String(exhaustive)}`);
     }
   }
+}
+
+/**
+ * Inimigos numa faixa reta que sai do Guardião na direção do alvo, do mais perto ao mais longe.
+ * É a geometria comum da estocada (faixa estreita e longa) e da varredura (faixa larga e curta).
+ */
+function alongLine(context: CombatContext, guardian: MatchGuardian, target: MatchEnemy, length: number, width: number): MatchEnemy[] {
+  const angle = Math.atan2(target.y - guardian.y, target.x - guardian.x);
+  const cos = Math.cos(angle);
+  const sin = Math.sin(angle);
+  const hits: Array<{ enemy: MatchEnemy; along: number }> = [];
+  for (const enemy of context.enemies) {
+    if (enemy.dead || enemy.reachedGoal || !enemy.isTargetable(context.now)) continue;
+    const dx = enemy.x - guardian.x;
+    const dy = enemy.y - guardian.y;
+    const along = dx * cos + dy * sin;
+    if (along < 0 || along > length) continue;
+    const across = Math.abs(-dx * sin + dy * cos);
+    if (across <= width / 2 + (enemy.definition.hitRadius ?? 0) * 0.5) hits.push({ enemy, along });
+  }
+  return withLockedTarget(
+    hits.sort((a, b) => a.along - b.along).map((hit) => hit.enemy),
+    target,
+  );
+}
+
+/**
+ * Peixe-Espada: a estocada atravessa a fila inteira até o alvo e além. Esgrimista cobra mais de
+ * elite e chefe e rompe escudo; Estocada termina quem ficou abaixo do limiar.
+ */
+function resolveLance(context: CombatContext, guardian: MatchGuardian, target: MatchEnemy): void {
+  const stats = guardian.stats;
+  const lance = stats.lance;
+  const length = guardian.range * (lance?.lengthMultiplier ?? 1.3);
+  const targets = alongLine(context, guardian, target, length, lance?.width ?? 30).slice(0, lance?.maxTargets ?? 4);
+  for (const enemy of targets) {
+    let damage = stats.damage;
+    const duelist = stats.duelist;
+    if (duelist) {
+      if (enemy.definition.isBoss) damage *= duelist.bossMultiplier;
+      else if (enemy.definition.role === "elite" || enemy.definition.eliteId) damage *= duelist.eliteMultiplier;
+      if (duelist.breaksShield) enemy.status.container.remove("shield");
+    }
+    context.damage(enemy, damage, { armorPiercing: stats.armorPiercing, sourceId: guardian.id, cause: "lance" });
+    const execute = stats.execute;
+    if (execute && !enemy.dead && !enemy.reachedGoal && !enemy.definition.isBoss && enemy.health / enemy.definition.maxHealth <= execute.threshold) {
+      context.damage(enemy, enemy.health + 1, { continuous: true, sourceId: guardian.id, cause: "lance" });
+    }
+  }
+  attacked(context, guardian, target, targets, length);
+}
+
+/** Arraia-Manta: o voo rasante varre a faixa inteira e deixa todo mundo nela mais lento. */
+function resolveSweep(context: CombatContext, guardian: MatchGuardian, target: MatchEnemy): void {
+  const stats = guardian.stats;
+  const length = guardian.range * (stats.lance?.lengthMultiplier ?? 1);
+  const targets = alongLine(context, guardian, target, length, stats.lance?.width ?? 80).slice(0, stats.lance?.maxTargets ?? 12);
+  for (const enemy of targets) {
+    context.damage(enemy, stats.damage, { armorPiercing: stats.armorPiercing, sourceId: guardian.id, cause: "sweep" });
+    if (stats.slowFactor !== null) enemy.status.applySlow(stats.slowFactor, stats.slowDurationMs, context.now);
+  }
+  attacked(context, guardian, target, targets, length);
 }
 
 function resolveChain(context: CombatContext, guardian: MatchGuardian, target: MatchEnemy): void {

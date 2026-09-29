@@ -40,7 +40,9 @@ export type EnemyAbilityEvent =
   | { type: "split"; enemyId: string; spawned: number }
   | { type: "phaseChanged"; enemyId: string; announcement?: string }
   | { type: "burst"; enemyId: string; on: boolean }
-  | { type: "disrupted"; enemyId: string; guardianIds: string[] };
+  | { type: "disrupted"; enemyId: string; guardianIds: string[] }
+  | { type: "inflated"; enemyId: string; on: boolean }
+  | { type: "popped"; enemyId: string; guardianIds: string[] };
 
 export interface EnemyAbilityWorld<E extends AbilityEnemy> {
   now: number;
@@ -259,6 +261,63 @@ const speedBurst: HandlerFor<"speedBurst"> = {
   },
 };
 
+interface InflateState {
+  inflated: boolean;
+  until: number;
+  /** Só volta a inflar depois disto: sem recarga, um cardume de tiros o deixaria inflado para sempre. */
+  readyAt: number;
+}
+
+const inflateMemory = (enemy: AbilityEnemy): InflateState => state(enemy, "inflate", () => ({ inflated: false, until: 0, readyAt: 0 }));
+
+/**
+ * Baiacu Corrompido: o golpe o faz INFLAR — armadura extra e passo lento por alguns segundos. É a
+ * leitura que ele ensina: bata forte uma vez, ou bata sem parar com o que ignora armadura. Morrer
+ * inflado estoura os espinhos e deixa os Guardiões em volta mais lentos para atacar.
+ */
+const inflateOnHit: HandlerFor<"inflateOnHit"> = {
+  scope: "enemy",
+  onDamaged(ability, enemy, _amount, world) {
+    const memory = inflateMemory(enemy);
+    if (memory.inflated || world.now < memory.readyAt || !isAlive(enemy)) return;
+    memory.inflated = true;
+    memory.until = world.now + ability.durationMs;
+    enemy.mods.armorBonus += ability.armorBonus;
+    enemy.mods.speed *= ability.speedMultiplier;
+    world.emit({ type: "inflated", enemyId: enemy.id, on: true });
+  },
+  onTick(ability, enemy, _deltaMs, world) {
+    const memory = inflateMemory(enemy);
+    if (!memory.inflated || world.now < memory.until) return;
+    memory.inflated = false;
+    memory.readyAt = world.now + ability.cooldownMs;
+    enemy.mods.armorBonus -= ability.armorBonus;
+    enemy.mods.speed /= ability.speedMultiplier;
+    world.emit({ type: "inflated", enemyId: enemy.id, on: false });
+  },
+  onDeath(ability, enemy, _shared, world) {
+    if (!inflateMemory(enemy).inflated) return;
+    const hit: string[] = [];
+    for (const guardian of world.guardians) {
+      if (Math.hypot(guardian.x - enemy.x, guardian.y - enemy.y) > ability.pop.radius) continue;
+      guardian.applyStatus(
+        { type: "attackSpeedBuff", strength: ability.pop.attackSpeedMultiplier, durationMs: ability.pop.durationMs, sourceId: enemy.id },
+        world.now,
+      );
+      hit.push(guardian.id);
+    }
+    world.emit({ type: "popped", enemyId: enemy.id, guardianIds: hit });
+  },
+};
+
+/** Ladrão do Recife: o roubo acontece no coral, e quem cobra é a partida (`Match.leak`). */
+const stealPearls: HandlerFor<"stealPearls"> = { scope: "enemy" };
+
+/** Pérolas que este inimigo leva se chegar ao coral (0 = não rouba). */
+export function pearlsStolenBy(enemy: Pick<AbilityEnemy, "abilities">): number {
+  return enemy.abilities.reduce((total, ability) => (ability.type === "stealPearls" ? total + ability.amount : total), 0);
+}
+
 /** Aplica multiplicadores de atributos a uma instância viva (fases de chefe, fúria). */
 export function applyStatMultipliers(enemy: AbilityEnemy, multipliers: StatMultipliers | undefined): void {
   if (!multipliers) return;
@@ -277,6 +336,8 @@ export const ENEMY_ABILITY_HANDLERS: { [K in EnemyAbility["type"]]: HandlerFor<K
   phaseChangeAtHp,
   speedBurst,
   amplifyCurrents,
+  inflateOnHit,
+  stealPearls,
 };
 
 function handlerFor(ability: EnemyAbility): Handler<EnemyAbility> {

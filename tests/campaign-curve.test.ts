@@ -5,8 +5,8 @@ import { LEVELS } from "../src/game/data/levels";
 import { armorReduction } from "../src/game/core/Combat";
 import type { LevelDefinition } from "../src/game/types";
 
-/** Ondas por fase que a V3 combinou: a campanha cresce de 7 para 18. */
-const EXPECTED_WAVES = [7, 10, 12, 15, 16, 18];
+/** Ondas por fase: a V3 cresce de 7 para 18 no Recife Costeiro; os Canais seguem de 19 a 30. */
+const EXPECTED_WAVES = [7, 10, 12, 15, 16, 18, 19, 20, 21, 22, 23, 24, 25, 26, 28, 30];
 
 const enemiesIn = (level: LevelDefinition): number =>
   level.waves.reduce((total, wave) => total + wave.groups.reduce((sum, group) => sum + group.count, 0), 0);
@@ -33,7 +33,12 @@ describe("curva da campanha (V3)", () => {
     const counts = LEVELS.map(enemiesIn);
     const health = LEVELS.map(effectiveHealth);
     counts.slice(1).forEach((count, index) => expect(count, `inimigos ${LEVELS[index + 1].id}`).toBeGreaterThan(counts[index]));
-    health.slice(1).forEach((value, index) => expect(value, `vida ${LEVELS[index + 1].id}`).toBeGreaterThan(health[index]));
+    // Vida efetiva: tendência, não degrau (ver `levels.test.ts`). O Recife Costeiro sobe sempre; nos
+    // Canais a velocidade e a economia de cada fase também pesam, então a vida pode recuar até 15%.
+    health.slice(1).forEach((value, index) => {
+      const floor = index + 1 < 6 ? health[index] : health[index] * 0.85;
+      expect(value, `vida ${LEVELS[index + 1].id}`).toBeGreaterThan(floor);
+    });
   });
 
   it("abre toda fase com uma onda leve, para o tabuleiro ainda vazio", () => {

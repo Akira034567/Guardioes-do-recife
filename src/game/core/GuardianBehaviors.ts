@@ -48,6 +48,8 @@ export type DamageCause =
   | "field"
   | "contact"
   | "poison"
+  | "lance"
+  | "sweep"
   /** Ruptura de ponto fraco de chefe: o estrago interno, não um golpe de Guardião (item 11). */
   | "weakPoint";
 
@@ -73,7 +75,11 @@ export type BehaviorEvent =
   | { type: "chorusStart"; guardianId: string; radius: number; durationMs: number; allyIds: string[] }
   | { type: "stunned"; enemyId: string }
   | { type: "poisoned"; enemyId: string }
-  | { type: "income"; guardianId: string; x: number; y: number; amount: number };
+  | { type: "income"; guardianId: string; x: number; y: number; amount: number }
+  /** Peixe-Lanterna, ramo Isca: quem ficou fascinado pela luz. */
+  | { type: "lure"; guardianId: string; x: number; y: number; radius: number; targetIds: string[] }
+  /** Ostra, ramo Banco: juros pagos no fim da onda. */
+  | { type: "interest"; guardianId: string; x: number; y: number; amount: number };
 
 export interface BehaviorHooks<E extends BehaviorEnemy> {
   now: number;
@@ -114,6 +120,60 @@ export function updateIncome<E extends BehaviorEnemy>(guardian: BehaviorGuardian
   if (!guardian.runtime.cooldown("income").tryActivate(hooks.now, intervalMs)) return;
   hooks.earn?.(income.amount, guardian.id);
   hooks.emit?.({ type: "income", guardianId: guardian.id, x: guardian.x, y: guardian.y, amount: income.amount });
+}
+
+// --------------------------------------------------------- Peixe-Lanterna
+
+/** Raio da luz de um Guardião (0 = não ilumina). */
+export function lightRadiusOf(guardian: BehaviorGuardian): number {
+  const light = guardian.stats.light;
+  return light ? guardian.range * light.radiusMultiplier : 0;
+}
+
+/**
+ * A luz revela camuflados que estiverem dentro dela, continuamente — é o que separa o Peixe-Lanterna
+ * do Golfinho: o sonar revela em pulsos, a lanterna mantém um trecho da rota sempre à vista.
+ */
+export function updateLight<E extends BehaviorEnemy>(guardian: BehaviorGuardian, enemies: readonly E[], hooks: BehaviorHooks<E>): void {
+  const radius = lightRadiusOf(guardian);
+  if (radius <= 0) return;
+  for (const enemy of aliveInRange(enemies, guardian, radius)) enemy.status.reveal(400, hooks.now);
+}
+
+/** O Guardião está aceso por alguma luz (inclusive a própria)? Aceso ignora a névoa. */
+export function isLit(guardian: Vec2, lights: readonly BehaviorGuardian[]): boolean {
+  return lights.some((light) => Math.hypot(light.x - guardian.x, light.y - guardian.y) <= lightRadiusOf(light));
+}
+
+/**
+ * Isca: os inimigos mais adiantados na luz quase param por um instante. Chefe não cai. É lentidão
+ * forte e curta — respeita a resistência a lentidão de quem tem, então elites saem antes.
+ */
+export function updateLure<E extends BehaviorEnemy>(guardian: BehaviorGuardian, enemies: readonly E[], hooks: BehaviorHooks<E>): void {
+  const lure = guardian.stats.lure;
+  if (!lure) return;
+  const radius = Math.max(guardian.range, lightRadiusOf(guardian));
+  const pool = aliveInRange(enemies, guardian, radius)
+    .filter((enemy) => !enemy.definition.isBoss)
+    .sort((a, b) => b.pathDistance - a.pathDistance)
+    .slice(0, lure.maxTargets);
+  if (pool.length === 0) return;
+  if (!guardian.runtime.cooldown("lure").tryActivate(hooks.now, lure.cooldownMs * guardian.stats.abilityCooldownMultiplier)) return;
+  const duration = lure.durationMs * guardian.stats.controlDurationMultiplier;
+  for (const enemy of pool) {
+    enemy.status.applySlow(lure.slowFactor, duration, hooks.now);
+    if (lure.vulnerability) applyVulnerabilityTo(enemy, lure.vulnerability.multiplier, lure.vulnerability.durationMs * guardian.stats.debuffDurationMultiplier, hooks.now);
+  }
+  hooks.emit?.({ type: "lure", guardianId: guardian.id, x: guardian.x, y: guardian.y, radius, targetIds: pool.map((enemy) => enemy.id) });
+}
+
+// ------------------------------------------------------------------- Ostra
+
+/** Juros da Ostra no fim de uma onda, dado o caixa atual. 0 quando ela não tem o ramo Banco II. */
+export function interestFor(guardian: BehaviorGuardian, pearlsInBank: number): number {
+  const interest = guardian.stats.interest;
+  if (!interest || pearlsInBank <= 0) return 0;
+  return Math.min(interest.cap, Math.floor(pearlsInBank * interest.rate));
 }
 
 // --------------------------------------------------------------- Tubarão
