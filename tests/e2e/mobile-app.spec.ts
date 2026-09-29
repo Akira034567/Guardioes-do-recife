@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { CARD_Y, openGame } from "./helpers";
+import { openGame } from "./helpers";
 
 /**
  * O jogo como app no celular (v4): entrada animada, manifest instalável, "gire o celular" em pé e o
@@ -38,7 +38,10 @@ test("em pé, o celular mostra o aviso de girar", async ({ page }, testInfo) => 
 test("no HUD do celular, posicionar pede dois toques no mesmo lugar", async ({ page }) => {
   const { canvas, clickGame, pageErrors } = await openGame(page, "level=recife-1&hud=mobile");
   await expect(canvas).toHaveAttribute("data-pearls", "180");
-  await clickGame(62, CARD_Y);
+  // No HUD do celular as cartas encostam na borda da tela: a posição vem do registro de controles.
+  const card = await page.evaluate(() => window.__grUi?.bounds("card:first") ?? null);
+  expect(card).not.toBeNull();
+  await clickGame(card!.x, card!.y);
   await expect(canvas).toHaveAttribute("data-card", "pistol-shrimp");
   // Primeiro toque: só mostra onde e o alcance.
   await clickGame(375, 245);
@@ -48,5 +51,33 @@ test("no HUD do celular, posicionar pede dois toques no mesmo lugar", async ({ p
   await clickGame(375, 245);
   await expect(canvas).toHaveAttribute("data-guardians", "1");
   await expect(canvas).toHaveAttribute("data-pearls", "100");
+  expect(pageErrors).toEqual([]);
+});
+
+test("janela mais alta que a tela (iPhone girado): o canvas cabe inteiro na tela", async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name !== "mobile-landscape", "o ajuste do palco é só de aparelho de toque");
+  await openGame(page, "level=recife-1");
+  // O WebKit às vezes informa a janela mais alta que o aparelho deitado; a tela física tem 390 de altura.
+  const screenHeight = await page.evaluate(() => Math.min(screen.width, screen.height));
+  const { width } = page.viewportSize() ?? { width: 750 };
+  await page.setViewportSize({ width, height: screenHeight + 50 });
+  await expect
+    .poll(async () =>
+      page.evaluate(() => {
+        const rect = document.querySelector("canvas")!.getBoundingClientRect();
+        return rect.top >= 0 && rect.bottom <= Math.min(screen.width, screen.height) + 1;
+      }),
+    )
+    .toBe(true);
+});
+
+test("no celular deitado o jogo ocupa a tela de ponta a ponta", async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name !== "mobile-landscape", "o palco largo é só de telefone");
+  const { canvas, pageErrors } = await openGame(page, "level=recife-1&hud=mobile");
+  const box = await canvas.boundingBox();
+  const viewport = page.viewportSize();
+  // Sem as faixas pretas do 16:9: o canvas tem a largura da janela, e o mundo de 1280 fica no meio.
+  expect(Math.round(box!.width)).toBe(viewport!.width);
+  expect(Number(await canvas.getAttribute("width"))).toBeGreaterThan(1280);
   expect(pageErrors).toEqual([]);
 });

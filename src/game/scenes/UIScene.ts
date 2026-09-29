@@ -8,23 +8,38 @@ import { difficultyOf } from "../data/difficulty";
 import { DEFAULT_LOADOUT, GUARDIANS } from "../data/guardians";
 import { EventBus, Events } from "../EventBus";
 import { statusIconKey, type StatusIcon } from "../assets/statusArt";
-import { HUD_LAYOUT } from "../hudLayout";
+import { HUD_LAYOUT, refitMobileHud } from "../hudLayout";
 import { hudIcon, type HudIconName } from "../ui/hud/HudIcons";
 import { GLOW_PAD, HUD_COLORS, HUD_FONT, hudBar, hudPanel, type PanelStyle } from "../ui/hud/HudSkin";
 import { publishUiRegistry, UI_REGISTRY } from "../ui/UiRegistry";
 import { devAssert, lifecycleLog } from "../systems/devLog";
+import { hudEdges, onStageResize, stageExtent } from "../systems/stage";
 import type { BranchId, DebugFlags, GuardianId, HudSnapshot, UpgradeOption } from "../types";
 
 export { HUD_LAYOUT };
 
+/** HUD compacto do celular (ver `compact` em `hudLayout.ts`). */
+const COMPACT = HUD_LAYOUT.compact;
+/** O mesmo número em duas versões: a do desktop e a do celular. */
+const pick = <T,>(desktop: T, mobile: T): T => (COMPACT ? mobile : desktop);
+/** Pictograma dos botões só de ícone da barra de cima. */
+const TOP_ICON = pick(20, 30);
+
 /** Largura da coluna do retrato dentro do painel de contexto. */
 const PANEL_ICON_COLUMN = 58;
 
-/** Faixa da dica do tutorial, acima das cartas. */
-const TUTORIAL_HINT = { x: 330, width: 560, skipX: 330 + 560 / 2 - 48 } as const;
+/** Faixa da dica do tutorial, acima das cartas (no celular ela anda com a borda da tela). */
+function tutorialHint(): { x: number; width: number; skipX: number } {
+  const width = HUD_LAYOUT.tutorialWidth;
+  const x = HUD_LAYOUT.tutorialLeft + width / 2;
+  return { x, width, skipX: x + width / 2 - pick(48, 64) };
+}
 
 /** Quantas linhas de inimigo cabem na prévia da próxima onda. */
 const PREVIEW_ROWS = 4;
+
+/** Fita da prévia da onda no celular: um bloco por inimigo (retrato + "×5"). */
+const PREVIEW_STRIP = { height: 50, lead: 44, cell: 86 } as const;
 
 /** Selo da dificuldade dentro da plaquinha da fase. */
 const DIFFICULTY_TAG = { width: 58, height: 20 } as const;
@@ -194,12 +209,16 @@ export class UIScene extends Phaser.Scene {
   /** "ONDA" na pílula: sai quando o total tem dois dígitos, senão "12/24" passa por cima da ampulheta. */
   private waveCaption!: Phaser.GameObjects.Text;
   private timerText!: Phaser.GameObjects.Text;
+  /** Ampulheta da pílula da onda: no compacto ela anda atrás do número, que muda de largura. */
+  private waveHourglass!: Phaser.GameObjects.Image;
   private messageText!: Phaser.GameObjects.Text;
   private messageBubble!: Phaser.GameObjects.Image;
   private cards: GuardianCard[] = [];
   private upgradeTitle!: Phaser.GameObjects.Text;
   private upgradeLevel!: Phaser.GameObjects.Text;
   private upgradeDescription!: Phaser.GameObjects.Text;
+  /** Fundo do painel do Guardião em foco: no celular ele some quando não há nada em foco. */
+  private panelBackground!: Phaser.GameObjects.Image;
   private statCells: StatCell[] = [];
   private loadout: GuardianId[] = [...DEFAULT_LOADOUT];
   /** Retrato da variante atual do Guardião em foco, na coluna esquerda do painel. */
@@ -213,12 +232,16 @@ export class UIScene extends Phaser.Scene {
   private sellButton!: HudControl;
   private sellValue!: Phaser.GameObjects.Text;
   private pauseButton!: HudControl;
-  private restartButton!: HudControl;
+  /** Ausente no celular: lá o reiniciar mora só na gaveta de pausa. */
+  private restartButton: HudControl | null = null;
   private muteButton!: HudControl;
-  private skipButton!: HudControl;
-  private skipBonus!: Phaser.GameObjects.Text;
+  /** Desktop: PRÓXIMA ONDA e velocidade são dois botões. Celular: um só, redondo (`playButton`). */
+  private skipButton: HudControl | null = null;
+  private skipBonus: Phaser.GameObjects.Text | null = null;
+  private playButton: HudControl | null = null;
+  private playBonus: Phaser.GameObjects.Text | null = null;
   /** Botões de velocidade (1× e 2×) e o estado que eles representam. */
-  private speedButton!: HudControl;
+  private speedButton: HudControl | null = null;
   /** Fundo da pílula da onda: ele encolhe e cresce conforme o botão de chamar aparece ou some. */
   private wavePod!: Phaser.GameObjects.Image;
   /** `null` = ainda não desenhada nenhuma vez. */
@@ -272,6 +295,14 @@ export class UIScene extends Phaser.Scene {
   create(): void {
     this.resetTransientState();
     UI_REGISTRY.clear();
+    if (COMPACT) {
+      // Palco largo: o HUD encosta nas bordas da tela (dentro da área segura), e a câmera mostra o
+      // palco inteiro com o mundo de 1280 no meio — as coordenadas do HUD vão de -sobra a 1280+sobra.
+      refitMobileHud(hudEdges(this));
+      this.cameras.main.setScroll(-stageExtent(this), 0);
+      // Girou, entrou em tela cheia, a barra do navegador sumiu: o HUD renasce nas bordas novas.
+      onStageResize(this, () => this.time.delayedCall(60, () => this.scene.restart({ debugFromQuery: this.debugFromQuery, loadout: this.loadout })));
+    }
     this.createTopHud();
     this.createOverlayStrip();
     this.createBottomHud();
@@ -338,8 +369,9 @@ export class UIScene extends Phaser.Scene {
   // ── Barra de cima ────────────────────────────────────────────────────────────
 
   private createTopHud(): void {
-    const { topCenterY, pods, brand, levelPod } = HUD_LAYOUT;
-    this.add.image(GAME_WIDTH / 2, HUD_TOP / 2, hudPanel(this, GAME_WIDTH, HUD_TOP, { ...SKIN.bar, edgeBottom: "#4fd8ff" }));
+    const { topCenterY, pods, brand } = HUD_LAYOUT;
+    // No celular não há barra: as pílulas flutuam sobre o mapa, que vai de ponta a ponta.
+    if (!COMPACT) this.add.image(GAME_WIDTH / 2, HUD_TOP / 2, hudPanel(this, GAME_WIDTH, HUD_TOP, { ...SKIN.bar, edgeBottom: "#4fd8ff" }));
 
     // Marca: a onda do logotipo é o mesmo pictograma das pílulas, só que maior. (No celular, não.)
     if (HUD_LAYOUT.showBrand) {
@@ -360,6 +392,48 @@ export class UIScene extends Phaser.Scene {
     // DUAS LINHAS, e não uma. "FASE 3/6 · TRÊS REDEMOINHOS" numa linha só não cabia ao lado do selo
     // da dificuldade: a fonte encolhia até o piso de 7px e AINDA passava por baixo do selo. Em duas
     // linhas — a posição em cima, o nome embaixo — cada uma fica no corpo em que dá para ler.
+    if (HUD_LAYOUT.showLevelPod) this.createLevelPod();
+
+    if (COMPACT) {
+      // Celular: pictograma e número, nada mais. O coração É a legenda da vida do Recife.
+      this.pod(pods.pearls.x, pods.pearls.width, "pearl", 30);
+      this.pearlText = this.podValue(pods.pearls.x + 50, "150", HUD_COLORS.pearl);
+      this.pod(pods.reef.x, pods.reef.width, "heart", 28, HUD_COLORS.danger);
+      this.healthText = this.podValue(pods.reef.x + 50, "20/20", HUD_COLORS.text);
+      this.wavePod = this.pod(pods.wave.x, pods.wave.width, "waves", 30);
+      this.waveCaption = this.podCaption(pods.wave.x, "").setVisible(false);
+      this.waveText = this.podValue(pods.wave.x + 50, "1/5", HUD_COLORS.text);
+      this.waveHourglass = this.add.image(pods.wave.x + 140, topCenterY, hudIcon(this, "hourglass", 22, HUD_COLORS.cyan));
+      this.timerText = this.podValue(pods.wave.x + 156, "10s", HUD_COLORS.cyanBright, HUD_LAYOUT.timerSize);
+      this.createTopButtons();
+      this.createMessageToast();
+      return;
+    }
+
+    // Pílula das pérolas.
+    this.pod(pods.pearls.x, pods.pearls.width, "pearl", 22);
+    this.pearlText = this.podValue(pods.pearls.x + 42, "150", HUD_COLORS.pearl);
+
+    // Pílula da vida do Recife: onda, "RECIFE", coração e contagem.
+    this.pod(pods.reef.x, pods.reef.width, "waves", 22);
+    this.podCaption(pods.reef.x + 38, "RECIFE");
+    this.add.image(pods.reef.x + 104, topCenterY, hudIcon(this, "heart", 18, HUD_COLORS.danger));
+    this.healthText = this.podValue(pods.reef.x + 116, "20/20", HUD_COLORS.text);
+
+    // Pílula da onda: em que onda estou e quanto falta para a próxima, no mesmo lugar.
+    this.wavePod = this.pod(pods.wave.x, pods.wave.width, "waves", 22);
+    this.waveCaption = this.podCaption(pods.wave.x + 38, "ONDA");
+    this.waveText = this.podValue(pods.wave.x + 80, "1/5", HUD_COLORS.text);
+    this.waveHourglass = this.add.image(pods.wave.x + 114, topCenterY, hudIcon(this, "hourglass", 16, HUD_COLORS.cyan));
+    this.timerText = this.podValue(pods.wave.x + 126, "EM 10s", HUD_COLORS.cyanBright, 12);
+
+    this.createTopButtons();
+    this.createMessageToast();
+  }
+
+  /** A plaquinha da fase (só no desktop). */
+  private createLevelPod(): void {
+    const { topCenterY, levelPod } = HUD_LAYOUT;
     this.pod(levelPod.x, levelPod.width, "map", 20);
     this.levelChipCaption = this.add
       .text(levelPod.x + 38, topCenterY - 9, "", {
@@ -394,26 +468,6 @@ export class UIScene extends Phaser.Scene {
         letterSpacing: 0.4,
       })
       .setOrigin(0.5);
-
-    // Pílula das pérolas.
-    this.pod(pods.pearls.x, pods.pearls.width, "pearl", 22);
-    this.pearlText = this.podValue(pods.pearls.x + 42, "150", HUD_COLORS.pearl);
-
-    // Pílula da vida do Recife: onda, "RECIFE", coração e contagem.
-    this.pod(pods.reef.x, pods.reef.width, "waves", 22);
-    this.podCaption(pods.reef.x + 38, "RECIFE");
-    this.add.image(pods.reef.x + 104, topCenterY, hudIcon(this, "heart", 18, HUD_COLORS.danger));
-    this.healthText = this.podValue(pods.reef.x + 116, "20/20", HUD_COLORS.text);
-
-    // Pílula da onda: em que onda estou e quanto falta para a próxima, no mesmo lugar.
-    this.wavePod = this.pod(pods.wave.x, pods.wave.width, "waves", 22);
-    this.waveCaption = this.podCaption(pods.wave.x + 38, "ONDA");
-    this.waveText = this.podValue(pods.wave.x + 80, "1/5", HUD_COLORS.text);
-    this.add.image(pods.wave.x + 114, topCenterY, hudIcon(this, "hourglass", 16, HUD_COLORS.cyan));
-    this.timerText = this.podValue(pods.wave.x + 126, "EM 10s", HUD_COLORS.cyanBright, 12);
-
-    this.createTopButtons();
-    this.createMessageToast();
   }
 
   /**
@@ -422,12 +476,12 @@ export class UIScene extends Phaser.Scene {
    */
   private createMessageToast(): void {
     this.messageBubble = this.add
-      .image(HUD_LAYOUT.messageX, HUD_LAYOUT.messageY, hudPanel(this, HUD_LAYOUT.messageWidth, 30, SKIN.pod))
+      .image(HUD_LAYOUT.messageX, HUD_LAYOUT.messageY, hudPanel(this, HUD_LAYOUT.messageWidth, pick(30, 44), SKIN.pod))
       .setVisible(false);
     this.messageText = this.add
       .text(HUD_LAYOUT.messageX, HUD_LAYOUT.messageY, "", {
         fontFamily: HUD_FONT.body,
-        fontSize: "12px",
+        fontSize: `${pick(12, 19)}px`,
         fontStyle: "bold",
         color: HUD_COLORS.text,
         align: "center",
@@ -438,10 +492,10 @@ export class UIScene extends Phaser.Scene {
   }
 
   /** Fundo de uma pílula de estado, com o pictograma encostado à esquerda. Devolve o fundo. */
-  private pod(x: number, width: number, icon: HudIconName, iconSize: number): Phaser.GameObjects.Image {
+  private pod(x: number, width: number, icon: HudIconName, iconSize: number, color: string = HUD_COLORS.cyan): Phaser.GameObjects.Image {
     const { topCenterY, podHeight } = HUD_LAYOUT;
     const background = this.add.image(x + width / 2, topCenterY, hudPanel(this, width, podHeight, SKIN.pod));
-    this.add.image(x + 20, topCenterY, hudIcon(this, icon, iconSize, HUD_COLORS.cyan));
+    this.add.image(x + pick(20, 26), topCenterY, hudIcon(this, icon, iconSize, color));
     return background;
   }
 
@@ -458,7 +512,7 @@ export class UIScene extends Phaser.Scene {
       .setOrigin(0, 0.5);
   }
 
-  private podValue(x: number, text: string, color: string, size = 17): Phaser.GameObjects.Text {
+  private podValue(x: number, text: string, color: string, size = HUD_LAYOUT.podValueSize): Phaser.GameObjects.Text {
     return this.add
       .text(x, HUD_LAYOUT.topCenterY, text, {
         fontFamily: HUD_FONT.strong,
@@ -470,6 +524,12 @@ export class UIScene extends Phaser.Scene {
 
   private createTopButtons(): void {
     const { topButtonY, speedButtonWidth, topButtonHeight, topButtonSize } = HUD_LAYOUT;
+
+    if (COMPACT) {
+      this.createPlayButton();
+      this.createCornerButtons();
+      return;
+    }
 
     // Chamar a próxima onda: era o botão do canto de baixo e subiu para o lado da contagem, que é
     // o número que faz o jogador querer apertá-lo.
@@ -508,41 +568,51 @@ export class UIScene extends Phaser.Scene {
 
     // REINICIAR: entre a velocidade e a pausa, como o jogador pediu. Nunca reinicia no primeiro
     // toque — quem decide é a mesma confirmação da tecla R.
-    this.restartButton = this.glassControl({
-      x: HUD_LAYOUT.restartButtonX,
-      y: topButtonY,
-      width: topButtonSize,
-      height: topButtonHeight,
-      icon: "refresh",
-      iconSize: 19,
-      iconCentered: true,
-      name: "restart",
-      onClick: () => EventBus.emit(Events.requestRestart),
-    });
+    this.restartButton = HUD_LAYOUT.showRestart
+      ? this.glassControl({
+          x: HUD_LAYOUT.restartButtonX,
+          y: topButtonY,
+          width: topButtonSize,
+          height: topButtonHeight,
+          icon: "refresh",
+          iconSize: 19,
+          iconCentered: true,
+          name: "restart",
+          onClick: () => EventBus.emit(Events.requestRestart),
+        })
+      : null;
 
+    this.createCornerButtons();
+  }
+
+  /** Pausa, (tela cheia) e som: o canto de cima à direita, nos dois HUDs. */
+  private createCornerButtons(): void {
+    const { topButtonY, topButtonHeight, topButtonSize } = HUD_LAYOUT;
     this.pauseButton = this.glassControl({
       x: HUD_LAYOUT.pauseButtonX,
       y: topButtonY,
       width: topButtonSize,
       height: topButtonHeight,
       icon: "pause",
-      iconSize: 20,
+      iconSize: TOP_ICON,
       iconCentered: true,
       name: "pause",
       onClick: () => EventBus.emit(Events.togglePause),
     });
 
-    this.glassControl({
-      x: HUD_LAYOUT.fullscreenButtonX,
-      y: topButtonY,
-      width: topButtonSize,
-      height: topButtonHeight,
-      icon: "expand",
-      iconSize: 20,
-      iconCentered: true,
-      name: "fullscreen",
-      onClick: () => this.scale.toggleFullscreen(),
-    });
+    if (HUD_LAYOUT.showFullscreen) {
+      this.glassControl({
+        x: HUD_LAYOUT.fullscreenButtonX,
+        y: topButtonY,
+        width: topButtonSize,
+        height: topButtonHeight,
+        icon: "expand",
+        iconSize: TOP_ICON,
+        iconCentered: true,
+        name: "fullscreen",
+        onClick: () => this.scale.toggleFullscreen(),
+      });
+    }
 
     this.muteButton = this.glassControl({
       x: HUD_LAYOUT.muteButtonX,
@@ -550,11 +620,42 @@ export class UIScene extends Phaser.Scene {
       width: topButtonSize,
       height: topButtonHeight,
       icon: "sound",
-      iconSize: 20,
+      iconSize: TOP_ICON,
       iconCentered: true,
       name: "mute",
       onClick: () => EventBus.emit(Events.toggleMute),
     });
+  }
+
+  /**
+   * JOGAR, o botão redondo grande do canto de baixo (só no celular). Um botão, dois momentos que
+   * nunca coexistem — como a barra de espaço: com onda para chamar, ele chama (e mostra o bônus);
+   * com a onda em campo, ele alterna 1× e 2×. Quem decide qual dos dois é a cena.
+   */
+  private createPlayButton(): void {
+    const { skipButtonX: x, skipButtonY: y, playButtonSize: size } = HUD_LAYOUT;
+    this.playButton = this.glassControl({
+      x,
+      y,
+      width: size,
+      height: size,
+      radius: size / 2,
+      text: "1×",
+      fontSize: 30,
+      strong: true,
+      icon: "forward",
+      iconSize: 40,
+      iconCentered: true,
+      tone: "primary",
+      name: "nextWave",
+      onClick: () => EventBus.emit(Events.callWaveOrSpeed),
+    });
+    // O tutorial aponta para "speed" também: é o mesmo botão.
+    UI_REGISTRY.register("speed", x, y, size, size);
+    this.playBonus = this.add
+      .text(x, y + 26, "", { fontFamily: HUD_FONT.strong, fontSize: "17px", color: HUD_COLORS.pearl })
+      .setOrigin(0.5);
+    this.playButton.add(this.playBonus);
   }
 
   // ── Faixa flutuante: fase, chefe e prévia da onda ────────────────────────────
@@ -573,7 +674,7 @@ export class UIScene extends Phaser.Scene {
     const { wavePreviewRight, wavePreviewY, wavePreviewWidth } = HUD_LAYOUT;
     const left = wavePreviewRight - wavePreviewWidth;
     this.previewPanel = this.add.image(wavePreviewRight + GLOW_PAD, wavePreviewY - GLOW_PAD, hudPanel(this, wavePreviewWidth, 110, SKIN.panel)).setOrigin(1, 0);
-    this.previewIcon = this.add.image(left + 20, wavePreviewY + 19, hudIcon(this, "waves", 18, HUD_COLORS.cyan));
+    this.previewIcon = this.add.image(left + 20, wavePreviewY + 19, hudIcon(this, "waves", pick(18, 26), HUD_COLORS.cyan));
     this.previewTitle = this.add
       .text(left + 36, wavePreviewY + 19, "PRÓXIMA SONDAGEM", {
         fontFamily: HUD_FONT.strong,
@@ -582,6 +683,22 @@ export class UIScene extends Phaser.Scene {
         letterSpacing: 0.6,
       })
       .setOrigin(0, 0.5);
+
+    if (COMPACT) {
+      // Celular: sem título nem nomes — o retrato do inimigo e a quantidade, numa fita só.
+      this.previewTitle.setText("");
+      this.previewRows = Array.from({ length: PREVIEW_ROWS }, () => {
+        const y = wavePreviewY + PREVIEW_STRIP.height / 2;
+        return {
+          icon: this.add.image(0, y, hudIcon(this, "waves", 16, HUD_COLORS.cyan)).setVisible(false),
+          dot: this.add.circle(0, y, 7, 0x5fd8f7, 1).setVisible(false),
+          name: this.add.text(0, y, "").setVisible(false),
+          count: this.add.text(0, y, "", { fontFamily: HUD_FONT.strong, fontSize: "19px", color: HUD_COLORS.text }).setOrigin(0, 0.5),
+        };
+      });
+      this.setPreviewVisible(false);
+      return;
+    }
 
     this.previewRows = Array.from({ length: PREVIEW_ROWS }, (_, index) => {
       const y = wavePreviewY + 42 + index * 24;
@@ -614,8 +731,8 @@ export class UIScene extends Phaser.Scene {
     this.bossBarBackground = this.add
       .image(
         bossBarX,
-        bossBarY + 12,
-        hudPanel(this, bossBarWidth, 16, {
+        bossBarY + pick(12, 14),
+        hudPanel(this, bossBarWidth, pick(16, 20), {
           ...SKIN.panel,
           radius: 8,
           border: "#ff6f7e",
@@ -625,14 +742,14 @@ export class UIScene extends Phaser.Scene {
       )
       .setVisible(false);
     this.bossBarFill = this.add
-      .image(bossBarX - bossBarWidth / 2 + 4, bossBarY + 12, hudBar(this, bossBarWidth - 8, 8, "#ff8f99", "#e0293d"))
+      .image(bossBarX - bossBarWidth / 2 + 4, bossBarY + pick(12, 14), hudBar(this, bossBarWidth - 8, pick(8, 12), "#ff8f99", "#e0293d"))
       .setOrigin(0, 0.5)
       .setVisible(false);
-    this.bossBarIcon = this.add.image(bossBarX, bossBarY - 6, hudIcon(this, "skull", 16, "#ffd9dc")).setVisible(false);
+    this.bossBarIcon = this.add.image(bossBarX, bossBarY - pick(6, 10), hudIcon(this, "skull", pick(16, 22), "#ffd9dc")).setVisible(false);
     this.bossBarLabel = this.add
-      .text(bossBarX + 8, bossBarY - 6, "", {
+      .text(bossBarX + 8, bossBarY - pick(6, 10), "", {
         fontFamily: HUD_FONT.strong,
-        fontSize: "12px",
+        fontSize: `${pick(12, 18)}px`,
         color: "#ffd9dc",
         align: "center",
       })
@@ -644,16 +761,19 @@ export class UIScene extends Phaser.Scene {
 
   private createBottomHud(): void {
     const top = GAME_HEIGHT - HUD_BOTTOM;
-    this.add.image(GAME_WIDTH / 2, top + HUD_BOTTOM / 2, hudPanel(this, GAME_WIDTH, HUD_BOTTOM, { ...SKIN.bar, edgeTop: "#4fd8ff" }));
-    this.add.image(26, top + 11, hudIcon(this, "trident", 15, HUD_COLORS.cyan));
-    this.add
-      .text(40, top + 11, "GUARDIÕES", {
-        fontFamily: HUD_FONT.strong,
-        fontSize: "11px",
-        color: HUD_COLORS.cyan,
-        letterSpacing: 1.4,
-      })
-      .setOrigin(0, 0.5);
+    if (!COMPACT) this.add.image(GAME_WIDTH / 2, top + HUD_BOTTOM / 2, hudPanel(this, GAME_WIDTH, HUD_BOTTOM, { ...SKIN.bar, edgeTop: "#4fd8ff" }));
+    // A legenda "GUARDIÕES" é do desktop: no celular as cartas falam por si e o espaço vira carta.
+    if (!COMPACT) {
+      this.add.image(26, top + 11, hudIcon(this, "trident", 15, HUD_COLORS.cyan));
+      this.add
+        .text(40, top + 11, "GUARDIÕES", {
+          fontFamily: HUD_FONT.strong,
+          fontSize: "11px",
+          color: HUD_COLORS.cyan,
+          letterSpacing: 1.4,
+        })
+        .setOrigin(0, 0.5);
+    }
 
     this.createCards();
     this.createContextPanel();
@@ -697,7 +817,8 @@ export class UIScene extends Phaser.Scene {
 
   private createCards(): void {
     const { cardWidth, cardHeight, cardY, cardStep, cardStartX } = HUD_LAYOUT;
-    const cardTop = cardY - 50;
+    // No compacto a carta ocupa a barra inteira, do fio de cima à borda.
+    const cardTop = COMPACT ? GAME_HEIGHT - HUD_BOTTOM + 8 : cardY - 50;
     const centerY = cardTop + cardHeight / 2;
     this.cards = this.loadout.map((id, index) => {
       const definition = GUARDIANS[id];
@@ -731,6 +852,21 @@ export class UIScene extends Phaser.Scene {
       });
       frame.on("pointerover", () => frame.setAlpha(0.86));
       frame.on("pointerout", () => frame.setAlpha(1));
+
+      if (COMPACT) {
+        // Celular: retrato grande em cima, custo embaixo. O nome aparece no painel ao tocar.
+        const icon =
+          this.artIcon(artTextureKey(id, GUARDIAN_ART[id].base, "idle"), x, cardTop + 38, 80, 58) ??
+          this.add.circle(x, cardTop + 38, 22, definition.color, 1).setStrokeStyle(3, definition.accent, 1);
+        icon.setData("guardian", id);
+        const coin = this.add.image(x - 22, cardTop + 82, hudIcon(this, "pearl", 20, HUD_COLORS.pearl));
+        const cost = this.add
+          .text(x - 8, cardTop + 82, `${definition.cost}`, { fontFamily: HUD_FONT.strong, fontSize: "22px", color: HUD_COLORS.pearl })
+          .setOrigin(0, 0.5);
+        const name = this.add.text(x, cardTop, "").setVisible(false);
+        const role = this.add.text(x, cardTop, "").setVisible(false);
+        return { id, frame, icon, name, cost, coin, role, skins };
+      }
 
       const name = this.add
         .text(x, cardTop + 13, definition.shortName, { fontFamily: HUD_FONT.strong, fontSize: "12px", color: HUD_COLORS.text })
@@ -770,36 +906,49 @@ export class UIScene extends Phaser.Scene {
 
   private createContextPanel(): void {
     const { panelX, panelWidth, panelY, panelHeight } = HUD_LAYOUT;
-    this.add.image(panelX, panelY, hudPanel(this, panelWidth, panelHeight, SKIN.panel));
+    this.panelBackground = this.add.image(panelX, panelY, hudPanel(this, panelWidth, panelHeight, SKIN.panel));
     const left = panelX - panelWidth / 2;
     const top = panelY - panelHeight / 2;
     const textLeft = left + 12 + PANEL_ICON_COLUMN;
 
     this.upgradeTitle = this.add
-      .text(textLeft, top + 10, "Selecione um Guardião posicionado", { fontFamily: HUD_FONT.strong, fontSize: "13px", color: HUD_COLORS.text })
+      .text(textLeft, top + pick(10, 15), "Selecione um Guardião posicionado", {
+        fontFamily: HUD_FONT.strong,
+        fontSize: `${pick(13, 20)}px`,
+        color: HUD_COLORS.text,
+      })
       .setOrigin(0, 0.5);
     this.upgradeLevel = this.add
-      .text(textLeft, top + 11, "", { fontFamily: HUD_FONT.strong, fontSize: "11px", color: HUD_COLORS.cyan })
+      .text(textLeft, top + pick(11, 16), "", { fontFamily: HUD_FONT.strong, fontSize: `${pick(11, 16)}px`, color: HUD_COLORS.cyan })
       .setOrigin(0, 0.5);
 
     // Quatro medidas do Guardião em foco. As três de sempre — dano, alcance e cadência — mais o
     // que já foi investido NAQUELA unidade, que é o número que decide entre evoluir e vender e que
     // antes só aparecia em texto corrido quando o ramo estava completo.
+    //
+    // No celular as legendas saem: o pictograma já diz qual é a medida, e o número vem grande.
+    const statSpan = panelWidth - PANEL_ICON_COLUMN - 40;
+    const at = (desktop: number, share: number): number => textLeft + pick(desktop, Math.round(statSpan * share));
     const cells: Array<[HudIconName, string, number]> = [
       ["blade", "Dano", textLeft],
-      ["target", "Alcance", textLeft + 106],
-      ["cadence", "Cadência", textLeft + 216],
-      ["pearl", "Investido", textLeft + 336],
+      ["target", "Alcance", at(106, 0.25)],
+      ["cadence", "Cadência", at(216, 0.5)],
+      ["pearl", "Investido", at(336, 0.75)],
     ];
+    const statY = top + pick(30, 38);
     this.statCells = cells.map(([icon, caption, x]) => ({
-      icon: this.add.image(x + 7, top + 30, hudIcon(this, icon, 14, HUD_COLORS.cyan)),
-      label: this.add.text(x + 18, top + 30, caption, { fontFamily: HUD_FONT.body, fontSize: "10px", color: HUD_COLORS.textDim }).setOrigin(0, 0.5),
-      value: this.add.text(x + 18, top + 30, "", { fontFamily: HUD_FONT.strong, fontSize: "12px", color: HUD_COLORS.text }).setOrigin(0, 0.5),
+      icon: this.add.image(x + pick(7, 11), statY, hudIcon(this, icon, pick(14, 22), HUD_COLORS.cyan)),
+      label: this.add
+        .text(x + pick(18, 20), statY, COMPACT ? "" : caption, { fontFamily: HUD_FONT.body, fontSize: "10px", color: HUD_COLORS.textDim })
+        .setOrigin(0, 0.5),
+      value: this.add
+        .text(x + 18, statY, "", { fontFamily: HUD_FONT.strong, fontSize: `${pick(12, 20)}px`, color: HUD_COLORS.text })
+        .setOrigin(0, 0.5),
     }));
 
-    this.upgradeDescription = this.add.text(textLeft, top + 38, "Toque em um Guardião no mapa para ver os ramos de upgrade e vender.", {
+    this.upgradeDescription = this.add.text(textLeft, top + pick(38, 62), "Toque em um Guardião no mapa para ver os ramos de upgrade e vender.", {
       fontFamily: HUD_FONT.body,
-      fontSize: "10px",
+      fontSize: `${pick(10, 16)}px`,
       color: HUD_COLORS.textSoft,
       wordWrap: { width: panelWidth - PANEL_ICON_COLUMN - 32 },
       lineSpacing: 0,
@@ -819,9 +968,9 @@ export class UIScene extends Phaser.Scene {
         width: optionButtonWidth,
         height: optionButtonHeight,
         text: "",
-        fontSize: 10,
+        fontSize: pick(10, 15),
         strong: true,
-        labelOffsetY: -8,
+        labelOffsetY: pick(-8, -10),
         name: `upgrade:${slot}`,
         onClick: () => {
           const option = this.optionButtons[index].option;
@@ -829,9 +978,9 @@ export class UIScene extends Phaser.Scene {
           EventBus.emit(Events.upgradeGuardian, option?.branchId ?? slot);
         },
       });
-      const coin = this.add.image(x - 14, optionButtonY + 9, hudIcon(this, "pearl", 13, HUD_COLORS.pearl));
+      const coin = this.add.image(x - pick(14, 18), optionButtonY + pick(9, 11), hudIcon(this, "pearl", pick(13, 17), HUD_COLORS.pearl));
       const cost = this.add
-        .text(x - 4, optionButtonY + 9, "", { fontFamily: HUD_FONT.strong, fontSize: "11px", color: HUD_COLORS.pearl })
+        .text(x - 4, optionButtonY + pick(9, 11), "", { fontFamily: HUD_FONT.strong, fontSize: `${pick(11, 17)}px`, color: HUD_COLORS.pearl })
         .setOrigin(0, 0.5);
       control.add(coin, cost).setVisible(false);
       return { slot, control, coin, cost, option: null };
@@ -843,16 +992,16 @@ export class UIScene extends Phaser.Scene {
       width: optionButtonWidth,
       height: optionButtonHeight,
       text: "VENDER",
-      fontSize: 11,
+      fontSize: pick(11, 15),
       strong: true,
-      labelOffsetY: -8,
+      labelOffsetY: pick(-8, -10),
       tone: "danger",
       name: "sell",
       onClick: () => EventBus.emit(Events.sellGuardian),
     });
-    const sellCoin = this.add.image(sellButtonX - 14, optionButtonY + 9, hudIcon(this, "pearl", 13, HUD_COLORS.pearl));
+    const sellCoin = this.add.image(sellButtonX - pick(14, 18), optionButtonY + pick(9, 11), hudIcon(this, "pearl", pick(13, 17), HUD_COLORS.pearl));
     this.sellValue = this.add
-      .text(sellButtonX - 4, optionButtonY + 9, "", { fontFamily: HUD_FONT.strong, fontSize: "11px", color: HUD_COLORS.pearl })
+      .text(sellButtonX - 4, optionButtonY + pick(9, 11), "", { fontFamily: HUD_FONT.strong, fontSize: `${pick(11, 17)}px`, color: HUD_COLORS.pearl })
       .setOrigin(0, 0.5);
     this.sellButton.add(sellCoin, this.sellValue).setVisible(false);
   }
@@ -864,13 +1013,14 @@ export class UIScene extends Phaser.Scene {
    * PULAR recebe toque; o resto do jogo continua respondendo normalmente (item 30).
    */
   private createTutorialHint(): void {
-    const y = GAME_HEIGHT - HUD_BOTTOM - 34;
+    const TUTORIAL_HINT = tutorialHint();
+    const y = GAME_HEIGHT - HUD_BOTTOM - pick(34, 40);
     this.tutorialFocus = this.add.graphics();
     this.tutorialBox = this.add
       .image(
         TUTORIAL_HINT.x,
         y,
-        hudPanel(this, TUTORIAL_HINT.width, 46, {
+        hudPanel(this, TUTORIAL_HINT.width, pick(46, 60), {
           ...SKIN.panel,
           border: "#ffd86a",
           borderTop: "#fff0b8",
@@ -882,19 +1032,20 @@ export class UIScene extends Phaser.Scene {
     this.tutorialText = this.add
       .text(TUTORIAL_HINT.x - TUTORIAL_HINT.width / 2 + 16, y, "", {
         fontFamily: HUD_FONT.body,
-        fontSize: "12px",
+        fontSize: `${pick(12, 17)}px`,
         color: HUD_COLORS.text,
-        wordWrap: { width: TUTORIAL_HINT.width - 120 },
+        wordWrap: { width: TUTORIAL_HINT.width - pick(120, 150) },
+        maxLines: pick(3, 2),
       })
       .setOrigin(0, 0.5)
       .setVisible(false);
     this.tutorialSkip = this.glassControl({
       x: TUTORIAL_HINT.skipX,
       y,
-      width: 72,
-      height: 28,
+      width: pick(72, 104),
+      height: pick(28, 42),
       text: "PULAR",
-      fontSize: 11,
+      fontSize: pick(11, 16),
       strong: true,
       name: "tutorial:skip",
       onClick: () => EventBus.emit(Events.skipTutorial),
@@ -917,6 +1068,7 @@ export class UIScene extends Phaser.Scene {
    * seja atropelado por uma aula-relâmpago (a fila também se cala sozinha, do lado da `GameScene`).
    */
   private renderTutorial(snapshot: HudSnapshot): void {
+    const TUTORIAL_HINT = tutorialHint();
     const step = snapshot.tutorial;
     const moment = step ? null : snapshot.moment;
     const visible = Boolean(step ?? moment) && !snapshot.gameOver;
@@ -958,30 +1110,48 @@ export class UIScene extends Phaser.Scene {
     this.healthText.setText(`${snapshot.reefHealth}/${snapshot.maxReefHealth}`);
     this.healthText.setColor(snapshot.reefHealth <= 6 ? HUD_COLORS.danger : HUD_COLORS.text);
     this.waveText.setText(`${snapshot.wave}/${snapshot.totalWaves}`);
-    const compact = snapshot.totalWaves >= 10;
-    this.waveCaption.setVisible(!compact);
-    this.waveText.setX(HUD_LAYOUT.pods.wave.x + (compact ? 38 : 80));
-    this.timerText.setText(
-      snapshot.waveState === "countdown" ? `EM ${snapshot.countdownSeconds}s` : snapshot.waveState === "victory" ? "FIM" : "EM CURSO",
-    );
+    if (COMPACT) {
+      // A ampulheta e a contagem andam atrás do número da onda, que vai de "1/7" a "24/30".
+      this.waveHourglass.setX(this.waveText.x + this.waveText.width + 18);
+      this.timerText.setX(this.waveHourglass.x + 14);
+      this.timerText.setText(
+        snapshot.waveState === "countdown" ? `${snapshot.countdownSeconds}s` : snapshot.waveState === "victory" ? "FIM" : "EM CURSO",
+      );
+    } else {
+      const compact = snapshot.totalWaves >= 10;
+      this.waveCaption.setVisible(!compact);
+      this.waveText.setX(HUD_LAYOUT.pods.wave.x + (compact ? 38 : 80));
+      this.waveHourglass.setX(HUD_LAYOUT.pods.wave.x + 114);
+      this.timerText.setText(
+        snapshot.waveState === "countdown" ? `EM ${snapshot.countdownSeconds}s` : snapshot.waveState === "victory" ? "FIM" : "EM CURSO",
+      );
+    }
     this.messageText.setText(snapshot.message);
     // O balão só existe quando há o que dizer: vazio, ele some junto com o texto.
     this.messageBubble.setVisible(snapshot.message.length > 0);
-    this.pauseButton.icon?.setTexture(hudIcon(this, snapshot.paused ? "play" : "pause", 20, HUD_COLORS.text));
+    // No celular o corpo é grande e o aviso às vezes quebra em duas linhas: o balão cresce junto.
+    if (COMPACT && snapshot.message.length > 0) {
+      const tall = this.messageText.height > 32;
+      this.messageBubble.setTexture(hudPanel(this, HUD_LAYOUT.messageWidth, tall ? 66 : 44, SKIN.pod));
+    }
+    this.pauseButton.icon?.setTexture(hudIcon(this, snapshot.paused ? "play" : "pause", TOP_ICON, HUD_COLORS.text));
     this.pauseButton.skin(hudPanel(this, topButtonSize, topButtonHeight, snapshot.paused ? SKIN.buttonOn : SKIN.button));
-    this.muteButton.icon?.setTexture(hudIcon(this, snapshot.muted ? "muted" : "sound", 20, snapshot.muted ? HUD_COLORS.textDim : HUD_COLORS.text));
+    this.muteButton.icon?.setTexture(hudIcon(this, snapshot.muted ? "muted" : "sound", TOP_ICON, snapshot.muted ? HUD_COLORS.textDim : HUD_COLORS.text));
     this.muteButton.skin(hudPanel(this, topButtonSize, topButtonHeight, snapshot.muted ? SKIN.buttonOff : SKIN.button));
 
     // Reiniciar não faz sentido com a partida já decidida: a tela de resultado tem o botão dela.
-    this.restartButton.setVisible(snapshot.gameOver === null);
+    this.restartButton?.setVisible(snapshot.gameOver === null);
     const canCall = snapshot.canSkipCountdown && !snapshot.gameOver;
-    this.renderWavePod(canCall);
-    this.skipButton.setVisible(canCall);
-    const bonus = snapshot.earlyCallBonus > 0;
-    this.skipBonus.setText(bonus ? `+ ${snapshot.earlyCallBonus} ◉` : "").setVisible(canCall && bonus);
-    this.skipButton.label.setY(HUD_LAYOUT.skipButtonY + (bonus ? -5 : 0));
-
-    this.renderSpeed(snapshot);
+    if (this.skipButton && this.skipBonus) {
+      this.renderWavePod(canCall);
+      this.skipButton.setVisible(canCall);
+      const bonus = snapshot.earlyCallBonus > 0;
+      this.skipBonus.setText(bonus ? `+ ${snapshot.earlyCallBonus} ◉` : "").setVisible(canCall && bonus);
+      this.skipButton.label.setY(HUD_LAYOUT.skipButtonY + (bonus ? -5 : 0));
+      this.renderSpeed(snapshot);
+    } else {
+      this.renderPlayButton(snapshot, canCall);
+    }
     this.renderWavePreview(snapshot);
     this.renderBossBar(snapshot);
     this.renderTutorial(snapshot);
@@ -1011,6 +1181,7 @@ export class UIScene extends Phaser.Scene {
    * A cor é a mesma de `data/difficulty.ts`, então o selo aqui e a trilha do mapa se reconhecem.
    */
   private renderLevelLabels(snapshot: HudSnapshot): void {
+    if (!HUD_LAYOUT.showLevelPod) return;
     const name = snapshot.levelName.toUpperCase();
     const caption = snapshot.levelIndex < 0 ? "ENCONTRO" : `FASE ${snapshot.levelIndex + 1}/${snapshot.levelCount}`;
     if (this.levelChipText.text !== name) {
@@ -1054,7 +1225,7 @@ export class UIScene extends Phaser.Scene {
     this.wavePod.setTexture(hudPanel(this, width, podHeight, SKIN.pod));
     // A imagem é centrada: mudar a largura sem mover o centro deslocaria a pílula inteira.
     this.wavePod.setX(pods.wave.x + width / 2);
-    this.timerText.setFontSize(wide ? 15 : 12);
+    if (!COMPACT) this.timerText.setFontSize(wide ? 15 : 12);
   }
 
   /**
@@ -1064,6 +1235,7 @@ export class UIScene extends Phaser.Scene {
    * relance: a barra de cima responde "como está a partida agora", não "o que o botão faz".
    */
   private renderSpeed(snapshot: HudSnapshot): void {
+    if (!this.speedButton) return;
     const over = snapshot.gameOver !== null;
     const { speedButtonWidth, topButtonHeight } = HUD_LAYOUT;
     this.shownSpeed = snapshot.speed >= 2 ? 2 : 1;
@@ -1074,6 +1246,25 @@ export class UIScene extends Phaser.Scene {
     this.speedButton.label.setColor(fast ? HUD_COLORS.cyanBright : HUD_COLORS.textSoft);
   }
 
+  /** O botão redondo do celular: ▶ (e o bônus) com onda para chamar; 1×/2× com a onda em campo. */
+  private renderPlayButton(snapshot: HudSnapshot, canCall: boolean): void {
+    const button = this.playButton;
+    if (!button || !this.playBonus) return;
+    const size = HUD_LAYOUT.playButtonSize;
+    const over = snapshot.gameOver !== null;
+    button.setVisible(!over);
+    if (over) return;
+    this.shownSpeed = snapshot.speed >= 2 ? 2 : 1;
+    const bonus = canCall && snapshot.earlyCallBonus > 0;
+    button.icon?.setVisible(canCall).setY(HUD_LAYOUT.skipButtonY + (bonus ? -10 : 0));
+    button.label.setVisible(!canCall).setText(`${this.shownSpeed}×`);
+    this.playBonus.setText(bonus ? `+${snapshot.earlyCallBonus} ◉` : "").setVisible(bonus);
+    const fast = !snapshot.paused && this.shownSpeed === 2;
+    const style = canCall ? SKIN.primary : fast ? SKIN.buttonOn : SKIN.button;
+    button.skin(hudPanel(this, size, size, { ...style, radius: size / 2 }));
+    button.label.setColor(fast ? HUD_COLORS.cyanBright : HUD_COLORS.text);
+  }
+
   private renderWavePreview(snapshot: HudSnapshot): void {
     const preview = snapshot.nextWave;
     if (!preview || snapshot.gameOver) {
@@ -1081,10 +1272,21 @@ export class UIScene extends Phaser.Scene {
       return;
     }
     const chips = preview.chips.slice(0, PREVIEW_ROWS);
-    const { wavePreviewWidth } = HUD_LAYOUT;
+    const { wavePreviewRight, wavePreviewY } = HUD_LAYOUT;
+    const wavePreviewWidth = COMPACT ? PREVIEW_STRIP.lead + chips.length * PREVIEW_STRIP.cell : HUD_LAYOUT.wavePreviewWidth;
     const boss = preview.isBossWave;
+    if (COMPACT) {
+      const left = wavePreviewRight - wavePreviewWidth;
+      this.previewIcon.setPosition(left + 24, wavePreviewY + PREVIEW_STRIP.height / 2);
+      this.previewRows.forEach((row, index) => {
+        const x = left + PREVIEW_STRIP.lead + index * PREVIEW_STRIP.cell + 18;
+        row.icon.setX(x);
+        row.dot.setX(x);
+        row.count.setX(x + 22);
+      });
+    }
     this.previewPanel.setTexture(
-      hudPanel(this, wavePreviewWidth, 32 + chips.length * 24, {
+      hudPanel(this, wavePreviewWidth, COMPACT ? PREVIEW_STRIP.height : 32 + chips.length * 24, {
         ...SKIN.panel,
         border: boss ? "#ff6f7e" : SKIN.panel.border,
         borderTop: boss ? "#ffb0b8" : SKIN.panel.borderTop,
@@ -1103,7 +1305,7 @@ export class UIScene extends Phaser.Scene {
         row.count.setVisible(false);
         return;
       }
-      row.name.setVisible(true).setText(chip.name);
+      row.name.setVisible(!COMPACT).setText(chip.name);
       row.name.setColor(chip.isBoss ? "#ffd9dc" : chip.isElite ? HUD_COLORS.warn : HUD_COLORS.textSoft);
       row.count.setVisible(true).setText(`×${chip.count}`);
       row.count.setColor(chip.isBoss ? "#ffd9dc" : HUD_COLORS.text);
@@ -1112,7 +1314,7 @@ export class UIScene extends Phaser.Scene {
       const art = resolveEnemy(ENEMIES[chip.enemyId]).art;
       const key = art.kind === "sprite" ? enemyFrameKey(art.folder, 1) : null;
       if (key && this.textures.exists(key)) {
-        this.fitSprite(row.icon, key, row.dot.x, row.dot.y, 28, 20);
+        this.fitSprite(row.icon, key, row.dot.x, row.dot.y, pick(28, 38), pick(20, 30));
         row.icon.setVisible(true);
         row.dot.setVisible(false);
       } else {
@@ -1137,7 +1339,7 @@ export class UIScene extends Phaser.Scene {
     this.bossBarIcon.setX(this.bossBarLabel.x - this.bossBarLabel.width / 2 - 12);
     const ratio = Math.max(0, Math.min(1, boss.healthRatio));
     const width = HUD_LAYOUT.bossBarWidth - 8;
-    this.bossBarFill.setCrop(0, 0, width * ratio, 8);
+    this.bossBarFill.setCrop(0, 0, width * ratio, pick(8, 12));
     this.bossBarFill.setVisible(visible && ratio > 0);
     this.renderBossWeakPoints(visible ? boss.weakPoints : null);
   }
@@ -1176,6 +1378,7 @@ export class UIScene extends Phaser.Scene {
       return;
     }
 
+    this.setPanelVisible(true);
     this.upgradeTitle.setText(selected.name);
     this.upgradeTitle.setColor(selected.branchColor !== null ? `#${selected.branchColor.toString(16).padStart(6, "0")}` : HUD_COLORS.text);
     this.upgradeLevel
@@ -1217,7 +1420,7 @@ export class UIScene extends Phaser.Scene {
         const tint = `#${option.branchColor.toString(16).padStart(6, "0")}`;
         button.control.label.setText(`${option.branchName.toUpperCase()} ${"I".repeat(option.level)}`);
         button.control.label.setColor(HUD_COLORS.text);
-        this.fitLabel(button.control.label, optionButtonWidth - 14, 10);
+        this.fitLabel(button.control.label, optionButtonWidth - 14, pick(10, 15));
         button.control.skin(
           hudPanel(this, optionButtonWidth, optionButtonHeight, {
             ...(affordable ? SKIN.button : SKIN.buttonOff),
@@ -1232,14 +1435,14 @@ export class UIScene extends Phaser.Scene {
       } else if (status.state === "locked") {
         button.control.label.setText(`${status.name.toUpperCase()}\nbloqueado`);
         button.control.label.setColor(HUD_COLORS.textDim);
-        this.fitLabel(button.control.label, optionButtonWidth - 14, 10);
+        this.fitLabel(button.control.label, optionButtonWidth - 14, pick(10, 14));
         button.control.skin(hudPanel(this, optionButtonWidth, optionButtonHeight, SKIN.buttonOff));
         button.coin.setVisible(false);
         button.cost.setVisible(false);
       } else {
         button.control.label.setText(`${status.name.toUpperCase()}\ncompleto`);
         button.control.label.setColor(HUD_COLORS.success);
-        this.fitLabel(button.control.label, optionButtonWidth - 14, 10);
+        this.fitLabel(button.control.label, optionButtonWidth - 14, pick(10, 14));
         button.control.skin(
           hudPanel(this, optionButtonWidth, optionButtonHeight, {
             ...SKIN.button,
@@ -1253,11 +1456,13 @@ export class UIScene extends Phaser.Scene {
         button.cost.setVisible(false);
       }
       // Rótulo de duas linhas (bloqueado/completo) fica no centro; o de uma linha sobe para dar lugar ao custo.
-      button.control.label.setY(optionButtonY + (option ? -8 : 0));
+      button.control.label.setY(optionButtonY + (option ? pick(-8, -10) : 0));
     });
 
     this.sellButton.setVisible(true);
     this.sellValue.setText(`${selected.sellValue}`);
+    // No celular a linha de texto fica embaixo, onde agora estão os botões: some para não passar por trás.
+    this.upgradeDescription.setVisible(!COMPACT);
   }
 
   /** As três medidas do painel, cada valor encostado no fim do seu rótulo. */
@@ -1269,7 +1474,7 @@ export class UIScene extends Phaser.Scene {
   private renderStats(damage: number, range: number, cooldownMs: number, melee: boolean, invested: number | null = null): void {
     const values = [
       damage > 0 ? `${Math.round(damage)}` : "—",
-      melee ? "corpo a corpo" : `${Math.round(range)}`,
+      melee ? pick("corpo a corpo", "corpo") : `${Math.round(range)}`,
       `${(cooldownMs / 1000).toFixed(1)}s`,
       invested === null ? "—" : `${invested}`,
     ];
@@ -1278,6 +1483,16 @@ export class UIScene extends Phaser.Scene {
       cell.label.setVisible(true);
       cell.value.setVisible(true).setText(values[index]).setX(cell.label.x + cell.label.width + 6);
     });
+  }
+
+  private setPanelVisible(visible: boolean): void {
+    this.panelBackground.setVisible(visible);
+    this.upgradeTitle.setVisible(visible);
+    if (!visible) {
+      this.upgradeLevel.setVisible(false);
+      this.upgradeDescription.setVisible(false);
+      this.panelIcon?.setVisible(false);
+    }
   }
 
   private hideStats(): void {
@@ -1294,12 +1509,17 @@ export class UIScene extends Phaser.Scene {
    */
   private renderBriefing(snapshot: HudSnapshot): void {
     const guardianId = snapshot.selectedGuardianId;
+    this.upgradeDescription.setVisible(true);
+    // Celular: sem nada em foco o painel inteiro sai — o mapa aparece, e a dica de uso é do tutorial.
+    this.setPanelVisible(!COMPACT || guardianId !== null);
     if (!guardianId) {
-      this.upgradeTitle.setText("Selecione um Guardião posicionado");
+      this.upgradeTitle.setText(pick("Selecione um Guardião posicionado", "Nenhum Guardião em foco"));
       this.upgradeTitle.setColor(HUD_COLORS.text);
       this.upgradeLevel.setVisible(false);
       this.hideStats();
-      this.upgradeDescription.setText("Toque em um Guardião no mapa para ver os ramos de upgrade e vender.");
+      this.upgradeDescription.setText(
+        pick("Toque em um Guardião no mapa para ver os ramos de upgrade e vender.", "Toque num Guardião no mapa para melhorar ou vender."),
+      );
       return;
     }
     const definition = GUARDIANS[guardianId];
@@ -1313,8 +1533,10 @@ export class UIScene extends Phaser.Scene {
       .setVisible(true);
     this.renderStats(definition.damage, definition.range, definition.cooldownMs, definition.placementMode === "route");
     this.upgradeDescription.setText(
-      `${definition.role} · posicione em ${PLACEMENT_HINTS[definition.placementMode]}.\n` +
-        definition.branches.map((branch) => `${branch.name.toUpperCase()}: ${branch.tagline}`).join("  "),
+      COMPACT
+        ? `${definition.role} · posicione em ${PLACEMENT_HINTS[definition.placementMode]}.`
+        : `${definition.role} · posicione em ${PLACEMENT_HINTS[definition.placementMode]}.\n` +
+            definition.branches.map((branch) => `${branch.name.toUpperCase()}: ${branch.tagline}`).join("  "),
     );
   }
 
@@ -1332,9 +1554,10 @@ export class UIScene extends Phaser.Scene {
       return;
     }
     const centerX = HUD_LAYOUT.panelX - HUD_LAYOUT.panelWidth / 2 + 12 + PANEL_ICON_COLUMN / 2;
-    const centerY = HUD_LAYOUT.panelY - 4;
+    // No celular o retrato fica na metade de cima: a de baixo é dos botões de 46 px.
+    const centerY = HUD_LAYOUT.panelY - pick(4, 26);
     if (!this.panelIcon) this.panelIcon = this.add.image(0, 0, key).setOrigin(0.5);
-    this.fitSprite(this.panelIcon, key, centerX, centerY, PANEL_ICON_COLUMN - 6, HUD_LAYOUT.panelHeight - 44);
+    this.fitSprite(this.panelIcon, key, centerX, centerY, PANEL_ICON_COLUMN - 6, HUD_LAYOUT.panelHeight - pick(44, 60));
     this.panelIcon.setAlpha(0.97).setVisible(true);
   }
 
@@ -1392,6 +1615,8 @@ export class UIScene extends Phaser.Scene {
     /** Largura máxima do rótulo: passa disso e o corpo da fonte encolhe até caber. */
     maxLabelWidth?: number;
     tone?: "default" | "primary" | "danger";
+    /** Canto do painel; `altura / 2` faz um botão redondo. */
+    radius?: number;
     labelOffsetX?: number;
     labelOffsetY?: number;
     name?: string;
@@ -1399,7 +1624,8 @@ export class UIScene extends Phaser.Scene {
   }): HudControl {
     const { x, y, width, height, onClick } = options;
     if (options.name) UI_REGISTRY.register(options.name, x, y, width, height);
-    const style = options.tone === "primary" ? SKIN.primary : options.tone === "danger" ? SKIN.danger : SKIN.button;
+    const tone = options.tone === "primary" ? SKIN.primary : options.tone === "danger" ? SKIN.danger : SKIN.button;
+    const style = options.radius === undefined ? tone : { ...tone, radius: options.radius };
     const image = this.add.image(x, y, hudPanel(this, width, height, style));
     // No celular a área de toque passa do desenho (`hitSlop`): dedo erra por alguns pixels.
     const slop = HUD_LAYOUT.hitSlop;

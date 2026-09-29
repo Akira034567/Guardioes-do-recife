@@ -88,7 +88,8 @@ export function hubScreen(actions: HubActions, nav: ShellNav): HubScreenHandle {
   // Os lugares ficam espalhados sobre o Recife; os Guardiões, que se mexem, viram atalhos de teclado.
   const landmarkSpots = h("div", { class: "gr-hub__places" });
   const guardianSpots = h("div", { class: "gr-hub__spot-group" });
-  spots.append(landmarkSpots, guardianSpots);
+  // O rótulo mora na camada dos lugares: é posicionado em % do cenário, como eles.
+  spots.append(landmarkSpots, guardianSpots, label);
   /*
    * O menu é retrátil, e fechado por padrão. O fundo pintado traz os seis lugares desenhados, dois
    * deles na faixa da esquerda: uma coluna sempre aberta taparia o Álbum e as Ameaças. Assim o
@@ -127,7 +128,7 @@ export function hubScreen(actions: HubActions, nav: ShellNav): HubScreenHandle {
     else toggle.focus();
   }
 
-  const root = h("div", { class: "gr-hub", testId: "hub-panel" }, scrim, side, toggle, counters, spots, label, card);
+  const root = h("div", { class: "gr-hub", testId: "hub-panel" }, scrim, side, toggle, counters, spots, card);
   // ESC fecha o menu, como em qualquer painel que cobre a tela.
   root.addEventListener("keydown", (event) => {
     if (event.key === "Escape" && !side.hidden) setMenu(false);

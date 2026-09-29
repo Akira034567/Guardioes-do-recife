@@ -28,18 +28,19 @@ export function mixColor(base: number, overlay: number, amount: number): number 
  * rota, pedras nas plataformas e tinta das correntes. Quando a fase tiver
  * `backgroundKey` carregado, a imagem substitui este desenho.
  */
-export function drawLevelBackdrop(scene: Phaser.Scene, level: LevelDefinition): Phaser.GameObjects.Graphics {
+export function drawLevelBackdrop(scene: Phaser.Scene, level: LevelDefinition, extent = 0): Phaser.GameObjects.Graphics {
   const graphics = scene.add.graphics().setDepth(DEPTH.background);
   const { theme } = level;
   const top = HUD_TOP;
   const height = GAME_HEIGHT - HUD_BOTTOM - HUD_TOP;
   const random = seededRandom(level.id);
 
+  // `extent`: no palco largo do celular a água e as faixas passam das bordas do mundo.
   graphics.fillStyle(theme.water, 1);
-  graphics.fillRect(0, 0, GAME_WIDTH, GAME_HEIGHT);
+  graphics.fillRect(-extent, 0, GAME_WIDTH + extent * 2, GAME_HEIGHT);
   for (let band = 0; band < 6; band += 1) {
     graphics.fillStyle(0xffffff, 0.025 + band * 0.008);
-    graphics.fillRect(0, top + (height / 6) * band, GAME_WIDTH, height / 6);
+    graphics.fillRect(-extent, top + (height / 6) * band, GAME_WIDTH + extent * 2, height / 6);
   }
 
   // Algas e pedras de fundo.

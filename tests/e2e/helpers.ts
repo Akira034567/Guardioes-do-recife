@@ -54,8 +54,16 @@ export async function openGame(page: Page, query = "level=recife-1") {
   await expect(canvas).toHaveAttribute("data-screen", /game|menu|hub/, { timeout: 15_000 });
   const box = await canvas.boundingBox();
   if (!box) throw new Error("Canvas bounds unavailable");
-  const toScreen = (x: number, y: number) => ({ x: box.x + (x * box.width) / 1280, y: box.y + (y * box.height) / 720 });
-  const clickGame = (x: number, y: number) => page.mouse.click(box.x + (x * box.width) / 1280, box.y + (y * box.height) / 720);
+  // No palco largo do celular (`?hud=mobile`) o canvas é mais largo que o mundo de 1280 e o mundo
+  // fica no meio: a escala vem da altura, e a sobra de cada lado desloca o x.
+  const stageWidth = Number(await canvas.getAttribute("width")) || 1280;
+  const scale = box.height / 720;
+  const extent = (stageWidth - 1280) / 2;
+  const toScreen = (x: number, y: number) => ({ x: box.x + (x + extent) * scale, y: box.y + y * scale });
+  const clickGame = (x: number, y: number) => {
+    const point = toScreen(x, y);
+    return page.mouse.click(point.x, point.y);
+  };
   /** Leva o cursor até um ponto do jogo sem apertar nada. */
   const moveGame = async (x: number, y: number) => {
     const point = toScreen(x, y);

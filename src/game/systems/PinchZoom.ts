@@ -1,5 +1,5 @@
 import Phaser from "phaser";
-import { GAME_HEIGHT, GAME_WIDTH } from "../constants";
+import { centerCameraOnWorld } from "./stage";
 
 const MIN_ZOOM = 1;
 const MAX_ZOOM = 1.8;
@@ -25,7 +25,8 @@ export class PinchZoom {
   active = false;
 
   constructor(private readonly scene: Phaser.Scene) {
-    scene.cameras.main.setBounds(0, 0, GAME_WIDTH, GAME_HEIGHT);
+    // Limites = o palco inteiro (no celular ele é mais largo que o mundo), com o mundo no meio.
+    centerCameraOnWorld(scene);
     scene.input.on("pointerdown", this.onDown, this);
     scene.input.on("pointermove", this.onMove, this);
     scene.input.on("pointerup", this.onUp, this);
@@ -76,12 +77,16 @@ export class PinchZoom {
     // Só encerra quando os DOIS dedos saíram: o último dedo a subir não pode virar um toque no mapa.
     this.scene.time.delayedCall(0, () => (this.active = false));
     const camera = this.scene.cameras.main;
-    if (camera.zoom < SNAP_BACK) camera.setZoom(1).setScroll(0, 0);
+    if (camera.zoom < SNAP_BACK) {
+      camera.setZoom(1);
+      centerCameraOnWorld(this.scene, camera);
+    }
   }
 
   /** Volta ao mapa inteiro (reinício de fase, fim de partida). */
   reset(): void {
     this.active = false;
-    this.scene.cameras.main.setZoom(1).setScroll(0, 0);
+    this.scene.cameras.main.setZoom(1);
+    centerCameraOnWorld(this.scene);
   }
 }
