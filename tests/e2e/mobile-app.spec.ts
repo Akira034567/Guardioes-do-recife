@@ -50,3 +50,20 @@ test("no HUD do celular, posicionar pede dois toques no mesmo lugar", async ({ p
   await expect(canvas).toHaveAttribute("data-pearls", "100");
   expect(pageErrors).toEqual([]);
 });
+
+test("janela mais alta que a tela (iPhone girado): o canvas cabe inteiro na tela", async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name !== "mobile-landscape", "o ajuste do palco é só de aparelho de toque");
+  await openGame(page, "level=recife-1");
+  // O WebKit às vezes informa a janela mais alta que o aparelho deitado; a tela física tem 390 de altura.
+  const screenHeight = await page.evaluate(() => Math.min(screen.width, screen.height));
+  const { width } = page.viewportSize() ?? { width: 750 };
+  await page.setViewportSize({ width, height: screenHeight + 50 });
+  await expect
+    .poll(async () =>
+      page.evaluate(() => {
+        const rect = document.querySelector("canvas")!.getBoundingClientRect();
+        return rect.top >= 0 && rect.bottom <= Math.min(screen.width, screen.height) + 1;
+      }),
+    )
+    .toBe(true);
+});

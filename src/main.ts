@@ -65,6 +65,19 @@ const game = new Phaser.Game({
 // No celular, o primeiro toque pede tela cheia: é a única forma de a barra do navegador sair da frente.
 const stage = document.getElementById("game");
 const disarmImmersive = stage ? armImmersiveFullscreen(stage) : () => {};
+
+/*
+ * O CANVAS SEMPRE NO TAMANHO ATUAL DO PALCO.
+ *
+ * O `refresh()` do Phaser mede o `#game`, dimensiona o canvas e, antes de centralizar, MEDE DE NOVO
+ * e guarda essa segunda medida. Se o palco mudou de tamanho entre as duas (é o que o iPhone faz ao
+ * abrir e ao girar), o canvas fica com o tamanho velho, centralizado pelo novo — margem negativa,
+ * barra de cima e de baixo cortadas — e a checagem periódica não vê diferença nenhuma para corrigir.
+ * Então quem avisa é o próprio palco: mudou de tamanho, o Phaser refaz a conta.
+ */
+if (stage && typeof ResizeObserver === "function") {
+  new ResizeObserver(() => game.scale.refresh()).observe(stage);
+}
 armMobileShell();
 installImageFallback();
 registerServiceWorker();

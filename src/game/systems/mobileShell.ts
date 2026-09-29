@@ -59,6 +59,69 @@ export function setMatchActive(active: boolean): void {
   }
 }
 
+/** Recuos da área segura (`env(safe-area-inset-*)`), lidos de uma sonda invisível. */
+function safeInsets(): { top: number; right: number; bottom: number; left: number } {
+  let probe = document.getElementById("gr-safe-probe");
+  if (!probe) {
+    probe = document.createElement("div");
+    probe.id = "gr-safe-probe";
+    probe.setAttribute("aria-hidden", "true");
+    probe.style.cssText =
+      "position:fixed;left:0;top:0;width:0;height:0;visibility:hidden;pointer-events:none;" +
+      "padding:env(safe-area-inset-top,0px) env(safe-area-inset-right,0px) env(safe-area-inset-bottom,0px) env(safe-area-inset-left,0px)";
+    document.body.appendChild(probe);
+  }
+  const style = getComputedStyle(probe);
+  const px = (value: string): number => Number.parseFloat(value) || 0;
+  return { top: px(style.paddingTop), right: px(style.paddingRight), bottom: px(style.paddingBottom), left: px(style.paddingLeft) };
+}
+
+/**
+ * O PALCO NO TAMANHO DA TELA DE VERDADE.
+ *
+ * O CSS (`html.is-touch #game` em `style.css`) põe o jogo entre as bordas da área segura. No iPhone
+ * isso não basta: aberto pelo ícone (e às vezes no Safari, depois de girar), o WebKit calcula a
+ * janela MAIS ALTA que a tela — sobra a altura da barra de status do retrato. O Phaser mede esse
+ * `#game` alto demais, o modo FIT passa a caber pela largura e o canvas sai maior que a tela: a
+ * barra de cima (pérolas, pausa, velocidade) e a de baixo (cartas, melhorar) ficam cortadas.
+ *
+ * A tela física não mente: `screen.width/height` é o aparelho, em qualquer orientação. Então o
+ * palco ganha tamanho explícito, o MENOR entre o que a janela diz e o que cabe na tela, menos a
+ * área segura. O Phaser confere o pai a cada 500 ms e se ajusta sozinho.
+ */
+function fitStageToScreen(stage: HTMLElement): void {
+  const viewport = window.visualViewport;
+  const landscape = !isPortrait();
+  const longSide = Math.max(screen.width, screen.height) || Infinity;
+  const shortSide = Math.min(screen.width, screen.height) || Infinity;
+  const width = Math.min(window.innerWidth, viewport?.width ?? Infinity, landscape ? longSide : shortSide);
+  const height = Math.min(window.innerHeight, viewport?.height ?? Infinity, landscape ? shortSide : longSide);
+  const inset = safeInsets();
+  stage.style.top = `${Math.round((viewport?.offsetTop ?? 0) + inset.top)}px`;
+  stage.style.left = `${Math.round((viewport?.offsetLeft ?? 0) + inset.left)}px`;
+  stage.style.width = `${Math.max(0, Math.floor(width - inset.left - inset.right))}px`;
+  stage.style.height = `${Math.max(0, Math.floor(height - inset.top - inset.bottom))}px`;
+}
+
+function armStageFit(): void {
+  const stage = document.getElementById("game");
+  if (!stage) return;
+  let timers: number[] = [];
+  const refit = (): void => {
+    fitStageToScreen(stage);
+    // O iOS entrega o tamanho novo aos poucos depois de girar: confere de novo logo em seguida.
+    timers.forEach((timer) => window.clearTimeout(timer));
+    timers = [150, 500, 1000].map((delay) => window.setTimeout(() => fitStageToScreen(stage), delay));
+  };
+  refit();
+  window.addEventListener("resize", refit);
+  window.addEventListener("orientationchange", refit);
+  window.visualViewport?.addEventListener("resize", refit);
+  window.visualViewport?.addEventListener("scroll", refit);
+  document.addEventListener("fullscreenchange", refit);
+  window.addEventListener("pageshow", refit);
+}
+
 /** Arma tudo. Chamado uma vez em `main.ts`; no desktop só a pausa ao trocar de aba fica ativa. */
 export function armMobileShell(): void {
   document.addEventListener("visibilitychange", () => {
@@ -75,6 +138,7 @@ export function armMobileShell(): void {
 
   if (!isTouch()) return;
 
+  armStageFit();
   if (isStandalone()) void lockLandscape();
 
   const onOrientation = (): void => {
