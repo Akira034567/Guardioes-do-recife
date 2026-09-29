@@ -33,12 +33,21 @@ jobs:
           fi
           # A consulta passa pelo PostgREST e chega no Postgres, que é o que conta como atividade.
           # A RLS garante que ela não devolve linha nenhuma — o objetivo é o acesso, não o dado.
+          #
+          # O `|| code="000"` não é zelo exagerado: o passo roda com `bash -e`, então um curl que
+          # falha (o DNS do runner piscando, por exemplo) derrubava o job ANTES do `case` que
+          # existe justamente para tratar isso — foi o que aconteceu em 28/09/2026, com o projeto
+          # acordado o tempo todo. Um ping que não alcançou o servidor é notícia, não é falha de
+          # build: ele avisa e sai em paz, senão o GitHub manda "workflow failed" por um soluço
+          # de rede.
           code=$(curl -s -o /dev/null -w "%{http_code}" \
+            --retry 3 --retry-all-errors --retry-delay 5 --max-time 30 \
             -H "apikey: $KEY" -H "Authorization: Bearer $KEY" \
-            "$URL/rest/v1/profiles?select=id&limit=1")
+            "$URL/rest/v1/profiles?select=id&limit=1") || code="000"
           echo "O Supabase respondeu $code."
           # 200 = acordado. 401/403 = acordado e recusando, que também serve.
           case "$code" in
-            200|401|403) exit 0 ;;
-            *) echo "::warning::Resposta inesperada ($code) — o projeto pode estar pausado."; exit 0 ;;
+            200|401|403) echo "Projeto acordado." ;;
+            000) echo "::warning::Não consegui falar com o servidor (rede ou DNS). O projeto pode estar acordado mesmo assim." ;;
+            *) echo "::warning::Resposta inesperada ($code) — o projeto pode estar pausado." ;;
           esac
