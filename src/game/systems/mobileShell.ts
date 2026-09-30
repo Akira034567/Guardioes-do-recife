@@ -63,15 +63,15 @@ export function setMatchActive(active: boolean): void {
 /**
  * O PALCO NO TAMANHO DA TELA DE VERDADE.
  *
- * O CSS (`html.is-touch #game` em `style.css`) põe o jogo entre as bordas da área segura. No iPhone
- * isso não basta: aberto pelo ícone (e às vezes no Safari, depois de girar), o WebKit calcula a
+ * O CSS (`html.is-touch #game` em `style.css`) estica o jogo pela tela inteira. No iPhone isso não
+ * basta: aberto pelo ícone (e às vezes no Safari, depois de girar), o WebKit calcula a
  * janela MAIS ALTA que a tela — sobra a altura da barra de status do retrato. O Phaser mede esse
  * `#game` alto demais, o modo FIT passa a caber pela largura e o canvas sai maior que a tela: a
  * barra de cima (pérolas, pausa, velocidade) e a de baixo (cartas, melhorar) ficam cortadas.
  *
  * A tela física não mente: `screen.width/height` é o aparelho, em qualquer orientação. Então o
- * palco ganha tamanho explícito, o MENOR entre o que a janela diz e o que cabe na tela, menos a
- * área segura. O Phaser confere o pai a cada 500 ms e se ajusta sozinho.
+ * palco ganha tamanho explícito, o MENOR entre o que a janela diz e o que cabe na tela. O Phaser
+ * confere o pai a cada 500 ms e se ajusta sozinho.
  */
 function fitStageToScreen(stage: HTMLElement): void {
   const viewport = window.visualViewport;
@@ -81,13 +81,13 @@ function fitStageToScreen(stage: HTMLElement): void {
   const width = Math.min(window.innerWidth, viewport?.width ?? Infinity, landscape ? longSide : shortSide);
   const height = Math.min(window.innerHeight, viewport?.height ?? Infinity, landscape ? shortSide : longSide);
   const inset = safeInsetsCss();
-  // De lado a lado, SEM descontar o notch: o fundo do jogo passa por baixo dele, e quem se afasta
-  // do recorte é o HUD (`hudEdges`) e as telas HTML (`padding` em `ui.css`). Em cima e embaixo o
-  // palco para na área segura — a barrinha de início é gesto do sistema, e nada se toca ali.
+  // Tela inteira, SEM descontar notch nem barrinha de início: o fundo do jogo passa por baixo dos
+  // dois, e quem se afasta do recorte é o HUD (`hudEdges`) e as telas HTML (`padding` em `ui.css`).
+  // Só o topo respeita a área segura (em pé há a barra de status; deitado ela é zero).
   stage.style.top = `${Math.round((viewport?.offsetTop ?? 0) + inset.top)}px`;
   stage.style.left = `${Math.round(viewport?.offsetLeft ?? 0)}px`;
   stage.style.width = `${Math.max(0, Math.floor(width))}px`;
-  stage.style.height = `${Math.max(0, Math.floor(height - inset.top - inset.bottom))}px`;
+  stage.style.height = `${Math.max(0, Math.floor(height - inset.top))}px`;
 }
 
 function armStageFit(): void {

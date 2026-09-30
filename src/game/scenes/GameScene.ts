@@ -70,7 +70,6 @@ import type {
 } from "../types";
 import { trackSceneLoad } from "../systems/splash";
 import { HUD_LAYOUT } from "../hudLayout";
-import { PinchZoom } from "../systems/PinchZoom";
 import { centerCameraOnWorld, MAX_STAGE_EXTENT, mirrorAround, onStageResize, WIDE_STAGE } from "../systems/stage";
 import { regionOfLevel } from "../data/regions";
 import { GateView, LightFogLayer, WhirlpoolView } from "../objects/MapDeviceViews";
@@ -165,7 +164,6 @@ export class GameScene extends Phaser.Scene {
   private dragPlacing = false;
   /** Celular: o primeiro toque de posicionamento, esperando o segundo que confirma. */
   private pendingPlacement: { guardianId: GuardianId; x: number; y: number } | null = null;
-  private pinch: PinchZoom | null = null;
   /** Comportas, redemoinhos e o véu de névoa (Canais Profundos). */
   private readonly gateViews = new Map<string, GateView>();
   private readonly whirlpoolViews = new Map<string, WhirlpoolView>();
@@ -320,10 +318,7 @@ export class GameScene extends Phaser.Scene {
     if (WIDE_STAGE) {
       // Celular: palco mais largo que o mundo. O mundo fica no meio e a câmera acompanha o palco.
       centerCameraOnWorld(this);
-      onStageResize(this, () => {
-        this.pinch?.reset();
-        centerCameraOnWorld(this);
-      });
+      onStageResize(this, () => centerCameraOnWorld(this));
     }
     this.createCurrentMotes();
     this.createPlatforms();
@@ -333,16 +328,6 @@ export class GameScene extends Phaser.Scene {
     this.createInteractables();
     this.createMapDevices();
     this.debugOverlay = new DebugOverlay(this, this.match.route);
-    // Celular: dois dedos aproximam e arrastam o mapa. Registrada ANTES dos toques do jogo, para o
-    // segundo dedo já encontrar a pinça ativa e não virar um posicionamento.
-    if (HUD_LAYOUT.confirmPlacement) {
-      const pinch = new PinchZoom(this);
-      this.pinch = pinch;
-      this.disposables.add("pinça", () => {
-        pinch.destroy();
-        this.pinch = null;
-      });
-    }
     this.registerEvents();
     this.game.canvas.addEventListener("pointerdown", this.unlockAudio, { passive: true });
     this.game.canvas.dataset.screen = "game";
@@ -934,7 +919,9 @@ export class GameScene extends Phaser.Scene {
     // Um clique que começa no mapa nunca é arraste de carta: fecha a janela antes de qualquer coisa,
     // senão o `pointerup` deste mesmo clique tentaria posicionar um SEGUNDO Guardião no lugar.
     this.dragPlacing = false;
-    if (this.pinch?.active) return;
+    // Sem zoom no celular (o mapa inteiro sempre à vista): um segundo dedo na tela é esbarrão, e
+    // não pode virar um posicionamento.
+    if (this.input.pointer2?.isDown) return;
     if (this.match.status !== "running" || pointer.y <= HUD_TOP || pointer.y >= GAME_HEIGHT - HUD_BOTTOM) return;
     if (pointer.rightButtonDown()) {
       this.cancelPlacement();

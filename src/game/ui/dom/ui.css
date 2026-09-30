@@ -5524,6 +5524,8 @@ html.is-touch .gr-album__layout > .gr-world__side:not(.gr-world__side--bare) {
   margin-right: calc(-16px * var(--gr-scale) - env(safe-area-inset-right, 0px));
   padding-left: calc(12px * var(--gr-scale) + env(safe-area-inset-left, 0px));
   padding-right: calc(12px * var(--gr-scale) + env(safe-area-inset-right, 0px));
+  /* O fundo da barra desce até a borda; as abas ficam acima da barrinha de início do iPhone. */
+  padding-bottom: calc(5px * var(--gr-scale) + env(safe-area-inset-bottom, 0px));
 }
 
 /*
@@ -5588,4 +5590,242 @@ html.is-touch :is(.gr-world__layout, .gr-album__layout) > .gr-world__side:not(.g
 html.is-touch :is(.gr-world__layout, .gr-album__layout) > .gr-world__side:not(.gr-world__side--bare) .gr-world__back .gr-icon {
   width: calc(24px * var(--gr-scale));
   height: calc(24px * var(--gr-scale));
+}
+
+/* ==========================================================================
+   MAPA DO CELULAR — UMA TELA SÓ, SEM ROLAR.
+   Antes o mapa era uma página comprida: o mapa da região, a ficha da fase com
+   foto, parágrafo, missão e ameaças, e os desafios embaixo — e o ENTRAR NA
+   FASE ficava abaixo da dobra. Agora, deitado, tudo cabe de uma vez:
+
+     [ conchas · estrelas · histórias ]            [ Normal · Difícil · Abissal ]
+     [                                   ] [ FASE 1 · NORMAL                   ]
+     [         mapa da região            ] [ Recife Costeiro                   ]
+     [         (o assunto da tela)       ] [ ≋ 7  ♥ 20  ◉ 180  ★ 0/3           ]
+     [                                   ] [ missão (3 linhas)                 ]
+     [                                   ] [ ▶ ENTRAR NA FASE                  ]
+     [                                   ] [ ◎ Desafio do dia  ▦ da semana     ]
+
+   Saem só leituras longas: a foto, o parágrafo de briefing e a fileira de
+   ameaças (que a preparação mostra de novo, na hora de montar o esquadrão).
+   ========================================================================== */
+html.is-touch .gr-world__layout > .gr-world__main {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) calc(300px * var(--gr-scale));
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  grid-template-areas:
+    "top tracks"
+    "map side"
+    "map challenges";
+  gap: calc(8px * var(--gr-scale)) calc(10px * var(--gr-scale));
+  overflow: hidden;
+  padding-bottom: calc(8px * var(--gr-scale));
+}
+
+html.is-touch .gr-world__main > .gr-world__top {
+  grid-area: top;
+  flex-wrap: nowrap;
+  justify-content: flex-start;
+  gap: calc(6px * var(--gr-scale));
+  min-width: 0;
+}
+
+html.is-touch .gr-world__main > .gr-world__tracks {
+  grid-area: tracks;
+  flex-wrap: nowrap;
+  justify-content: flex-end;
+}
+
+html.is-touch .gr-world__main > .gr-world__map {
+  grid-area: map;
+  min-height: 0;
+}
+
+html.is-touch .gr-world__main > .gr-world__detail {
+  grid-area: side;
+}
+
+html.is-touch .gr-world__main > .gr-world__challenges {
+  grid-area: challenges;
+}
+
+/* Linha de cima: contadores pequenos, e a História vira um atalho com a contagem de capítulos. */
+html.is-touch .gr-world__main .gr-world__counter {
+  padding: calc(4px * var(--gr-scale)) calc(10px * var(--gr-scale));
+}
+
+html.is-touch .gr-world__main .gr-world__counter-value {
+  font-size: calc(13px * var(--gr-scale));
+}
+
+html.is-touch .gr-world__main [data-testid="map-encounters"],
+html.is-touch .gr-world__main .gr-world__stories-line,
+html.is-touch .gr-world__main .gr-world__tracks-label {
+  display: none;
+}
+
+html.is-touch .gr-world__main .gr-world__stories {
+  padding: calc(4px * var(--gr-scale)) calc(10px * var(--gr-scale));
+  gap: calc(6px * var(--gr-scale));
+}
+
+html.is-touch .gr-world__main .gr-world__stories .gr-icon--lg {
+  width: calc(18px * var(--gr-scale));
+  height: calc(18px * var(--gr-scale));
+}
+
+/* O mapa: sem a placa da região que vem (ela é seta na aba) e com a aba da região mais discreta. */
+html.is-touch .gr-world__main .gr-world__sign--next {
+  display: none;
+}
+
+/* A ficha da fase: um cartão em coluna, com o ENTRAR encostado embaixo. */
+html.is-touch .gr-world__main > .gr-world__detail {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: calc(6px * var(--gr-scale));
+  min-height: 0;
+  overflow: hidden;
+  padding: calc(10px * var(--gr-scale)) calc(12px * var(--gr-scale));
+}
+
+html.is-touch .gr-world__main .gr-world__shot,
+html.is-touch .gr-world__main .gr-world__detail-line,
+html.is-touch .gr-world__main .gr-world__threats-box,
+html.is-touch .gr-world__main .gr-world__detail-copy > .gr-subtitle {
+  display: none;
+}
+
+html.is-touch .gr-world__main .gr-world__detail-copy {
+  gap: calc(4px * var(--gr-scale));
+  min-height: 0;
+}
+
+html.is-touch .gr-world__main .gr-world__detail-name {
+  font-size: calc(19px * var(--gr-scale));
+}
+
+/* Os números viram fichas de ícone + valor, quatro numa linha (a legenda fica no `title`). */
+html.is-touch .gr-world__main .gr-world__detail-facts {
+  order: 2;
+}
+
+html.is-touch .gr-world__main .gr-world__stats {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: calc(4px * var(--gr-scale));
+}
+
+html.is-touch .gr-world__main .gr-world__fact {
+  padding: calc(4px * var(--gr-scale)) calc(6px * var(--gr-scale));
+  gap: calc(4px * var(--gr-scale));
+  justify-content: center;
+  min-width: 0;
+}
+
+html.is-touch .gr-world__main .gr-world__fact .gr-stat__label {
+  display: none;
+}
+
+html.is-touch .gr-world__main .gr-world__fact .gr-icon--lg,
+html.is-touch .gr-world__main .gr-world__fact-art {
+  width: calc(16px * var(--gr-scale));
+  height: calc(16px * var(--gr-scale));
+}
+
+html.is-touch .gr-world__main .gr-world__fact-value {
+  font-size: calc(13px * var(--gr-scale));
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* O chefe ocupa a linha inteira, com o nome (ou ???). */
+html.is-touch .gr-world__main .gr-world__fact--boss {
+  grid-column: 1 / -1;
+  justify-content: flex-start;
+}
+
+/* A missão, curta: três linhas de corpo pequeno. */
+html.is-touch .gr-world__main .gr-world__objectives {
+  order: 3;
+  min-height: 0;
+  overflow: hidden;
+}
+
+html.is-touch .gr-world__main .gr-world__objectives .gr-objective {
+  padding: calc(3px * var(--gr-scale)) calc(8px * var(--gr-scale));
+  font-size: calc(11px * var(--gr-scale));
+}
+
+html.is-touch .gr-world__main .gr-world__enter {
+  order: 4;
+  position: static;
+  margin: auto 0 0;
+  justify-content: center;
+  width: 100%;
+  font-size: calc(15px * var(--gr-scale));
+  padding: calc(11px * var(--gr-scale)) calc(14px * var(--gr-scale));
+}
+
+/* Desafios: dois botões compactos lado a lado, só nome, relógio e prêmio. */
+html.is-touch .gr-world__main > .gr-world__challenges {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: calc(6px * var(--gr-scale));
+}
+
+html.is-touch .gr-world__main .gr-world__challenge {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: calc(2px * var(--gr-scale)) calc(6px * var(--gr-scale));
+  padding: calc(6px * var(--gr-scale)) calc(8px * var(--gr-scale));
+  min-height: 0;
+}
+
+html.is-touch .gr-world__main .gr-world__challenge-head {
+  display: contents;
+}
+
+html.is-touch .gr-world__main .gr-world__challenge-head .gr-icon--lg {
+  grid-row: 1 / span 2;
+  width: calc(20px * var(--gr-scale));
+  height: calc(20px * var(--gr-scale));
+}
+
+html.is-touch .gr-world__main .gr-world__challenge-name {
+  font-size: calc(10px * var(--gr-scale));
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+html.is-touch .gr-world__main .gr-world__challenge-clock {
+  font-size: calc(10px * var(--gr-scale));
+}
+
+html.is-touch .gr-world__main .gr-world__challenge-level,
+html.is-touch .gr-world__main .gr-world__challenge .gr-hint,
+html.is-touch .gr-world__main .gr-world__challenge-prize {
+  display: none;
+}
+
+/* O nome da região já está na aba: a placa pintada repetindo o mesmo nome sai. */
+html.is-touch .gr-world__main .gr-world__sign--here {
+  display: none;
+}
+
+html.is-touch .gr-world__main .gr-world__region--on {
+  padding: calc(4px * var(--gr-scale)) calc(6px * var(--gr-scale));
+  min-height: 0;
+}
+
+html.is-touch .gr-world__main .gr-world__region-name {
+  font-size: calc(13px * var(--gr-scale));
+}
+
+html.is-touch .gr-world__main .gr-world__challenge-name {
+  letter-spacing: 0;
 }
