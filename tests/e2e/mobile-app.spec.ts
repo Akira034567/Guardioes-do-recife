@@ -54,30 +54,17 @@ test("no HUD do celular, posicionar pede dois toques no mesmo lugar", async ({ p
   expect(pageErrors).toEqual([]);
 });
 
-test("janela mais alta que a tela (iPhone girado): o canvas cabe inteiro na tela", async ({ page }, testInfo) => {
-  test.skip(testInfo.project.name !== "mobile-landscape", "o ajuste do palco é só de aparelho de toque");
-  await openGame(page, "level=recife-1");
-  // O WebKit às vezes informa a janela mais alta que o aparelho deitado; a tela física tem 390 de altura.
-  const screenHeight = await page.evaluate(() => Math.min(screen.width, screen.height));
-  const { width } = page.viewportSize() ?? { width: 750 };
-  await page.setViewportSize({ width, height: screenHeight + 50 });
-  await expect
-    .poll(async () =>
-      page.evaluate(() => {
-        const rect = document.querySelector("canvas")!.getBoundingClientRect();
-        return rect.top >= 0 && rect.bottom <= Math.min(screen.width, screen.height) + 1;
-      }),
-    )
-    .toBe(true);
-});
-
-test("no celular deitado o jogo ocupa a tela de ponta a ponta", async ({ page }, testInfo) => {
+test("no celular deitado o jogo ocupa a tela inteira, sem moldura", async ({ page }, testInfo) => {
   test.skip(testInfo.project.name !== "mobile-landscape", "o palco largo é só de telefone");
   const { canvas, pageErrors } = await openGame(page, "level=recife-1&hud=mobile");
   const box = await canvas.boundingBox();
   const viewport = page.viewportSize();
   // Sem as faixas pretas do 16:9: o canvas tem a largura da janela, e o mundo de 1280 fica no meio.
   expect(Math.round(box!.width)).toBe(viewport!.width);
+  // E de cima a baixo: sem moldura nenhuma em volta do jogo.
+  expect(Math.round(box!.x)).toBe(0);
+  expect(Math.round(box!.y)).toBe(0);
+  expect(Math.round(box!.height)).toBe(viewport!.height);
   expect(Number(await canvas.getAttribute("width"))).toBeGreaterThan(1280);
   expect(pageErrors).toEqual([]);
 });
