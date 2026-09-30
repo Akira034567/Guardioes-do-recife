@@ -40,8 +40,7 @@ export function stageExtent(scene: Phaser.Scene): number {
 export const MAX_STAGE_EXTENT = (STAGE_MAX_WIDTH - GAME_WIDTH) / 2;
 
 /**
- * Centraliza o mundo na câmera. Os limites acompanham o palco inteiro, então a pinça do celular
- * pode aproximar e arrastar também sobre o fundo estendido, sem nunca mostrar o vazio.
+ * Centraliza o mundo na câmera: a sobra do palco (o fundo estendido) fica metade de cada lado.
  */
 export function centerCameraOnWorld(scene: Phaser.Scene, camera: Phaser.Cameras.Scene2D.Camera = scene.cameras.main): void {
   const extent = stageExtent(scene);
