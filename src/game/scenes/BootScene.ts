@@ -31,6 +31,8 @@ export class BootScene extends Phaser.Scene {
       else this.scene.start("HubScene");
       // A entrada sai por cima da primeira tela já montada — nunca revela um quadro vazio.
       hideSplash();
+      // Em segundo plano, a arte das fases: entrar numa fase não mostra "carregando".
+      this.scene.launch("WarmupScene");
     });
   }
 }

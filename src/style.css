@@ -57,7 +57,8 @@ html.is-touch,
 html.is-touch body {
   position: fixed;
   inset: 0;
-  height: 100dvh;
+  width: 100%;
+  height: 100%;
   overscroll-behavior: none;
   -webkit-user-select: none;
   user-select: none;
@@ -82,7 +83,8 @@ html.is-touch #ui-layer {
  */
 html.is-touch #game {
   position: fixed;
-  top: env(safe-area-inset-top, 0px);
+  /* TELA INTEIRA: o palco cobre a janela de ponta a ponta, sem conta nenhuma em JavaScript. */
+  top: 0;
   /* De lado a lado: o fundo passa por baixo do notch; HUD e telas é que se afastam dele. */
   right: 0;
   /* Até a borda de baixo também: a barrinha de início do iPhone fica por cima do jogo. */
@@ -161,43 +163,6 @@ html.is-touch #game {
     animation: none;
     transform: rotate(-90deg);
   }
-}
-
-/* Mini-barra de água: carregamento preguiçoso de fase/recife, depois da entrada já ter saído. */
-.gr-load-toast {
-  position: fixed;
-  left: 50%;
-  bottom: calc(18px + env(safe-area-inset-bottom, 0px));
-  z-index: 900;
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 8px 14px;
-  transform: translateX(-50%);
-  border-radius: 999px;
-  border: 1.5px solid rgba(159, 220, 255, 0.7);
-  background: rgba(3, 22, 44, 0.86);
-  color: #bff4ff;
-  font: 700 12px Arial, sans-serif;
-  letter-spacing: 0.18em;
-  pointer-events: none;
-}
-
-.gr-load-toast__bar {
-  width: 140px;
-  height: 10px;
-  padding: 2px;
-  border-radius: 999px;
-  background: rgba(0, 0, 0, 0.45);
-}
-
-.gr-load-toast__fill {
-  height: 100%;
-  width: calc(var(--p, 0.05) * 100%);
-  min-width: 10%;
-  border-radius: 999px;
-  background: linear-gradient(180deg, #8ff3ff, #0f86d4);
-  transition: width 200ms ease-out;
 }
 
 /* Convite para instalar (uma vez, só no celular pelo navegador). */

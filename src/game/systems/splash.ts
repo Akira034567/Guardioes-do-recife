@@ -65,39 +65,22 @@ export function hideSplash(): void {
   window.setTimeout(leaveWhenIdle, Math.max(120, wait));
 }
 
-const TOAST_DELAY_MS = 250;
-
 /**
  * Carregamento preguiçoso de uma cena (fundo da fase, arte do esquadrão, decoração do recife).
  * Chame no FIM do `preload()`, depois de enfileirar os arquivos.
  *
- * - Se a entrada ainda está na tela, ela espera este carregamento terminar antes de sair.
- * - Senão, e se demorar mais que um piscar, aparece a mini-barra de água sobre o jogo.
+ * Se a entrada ainda está na tela, ela espera este carregamento terminar antes de sair. Depois da
+ * entrada, carregamento nenhum aparece na tela: a arte das fases já vem em segundo plano
+ * (`WarmupScene`), e o que faltar chega durante a transição de cena.
  */
 export function trackSceneLoad(scene: Phaser.Scene): void {
   const loader = scene.load;
   if (loader.list.size === 0) return;
   const splash = splashElement();
-  if (splash && !splash.classList.contains("is-leaving")) {
-    pendingLoads += 1;
-    loader.once(Phaser.Loader.Events.COMPLETE, () => {
-      pendingLoads -= 1;
-      leaveWhenIdle();
-    });
-    return;
-  }
-  let toast: HTMLElement | null = null;
-  const timer = window.setTimeout(() => {
-    toast = document.createElement("div");
-    toast.className = "gr-load-toast";
-    toast.innerHTML = '<div class="gr-load-toast__bar"><div class="gr-load-toast__fill"></div></div><span>Carregando…</span>';
-    document.body.appendChild(toast);
-  }, TOAST_DELAY_MS);
-  const onProgress = (value: number): void => toast?.style.setProperty("--p", value.toFixed(3));
-  loader.on(Phaser.Loader.Events.PROGRESS, onProgress);
+  if (!splash || splash.classList.contains("is-leaving")) return;
+  pendingLoads += 1;
   loader.once(Phaser.Loader.Events.COMPLETE, () => {
-    window.clearTimeout(timer);
-    loader.off(Phaser.Loader.Events.PROGRESS, onProgress);
-    toast?.remove();
+    pendingLoads -= 1;
+    leaveWhenIdle();
   });
 }

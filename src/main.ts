@@ -6,6 +6,7 @@ import { GameScene } from "./game/scenes/GameScene";
 import { HubScene } from "./game/scenes/HubScene";
 import { LevelSelectScene } from "./game/scenes/LevelSelectScene";
 import { UIScene } from "./game/scenes/UIScene";
+import { WarmupScene } from "./game/scenes/WarmupScene";
 import { DIAGNOSTICS_ON, dumpLifecycle } from "./game/systems/devLog";
 import { armImmersiveFullscreen } from "./game/systems/immersive";
 import { setCloudLinkEvent } from "./game/systems/cloud";
@@ -34,7 +35,7 @@ const game = new Phaser.Game({
   width: GAME_WIDTH,
   height: GAME_HEIGHT,
   backgroundColor: "#063a55",
-  scene: [BootScene, HubScene, LevelSelectScene, GameScene, UIScene],
+  scene: [BootScene, HubScene, LevelSelectScene, GameScene, UIScene, WarmupScene],
   scale: {
     // Celular deitado: EXPAND — a altura fica em 720 e a largura cresce até a proporção da tela, e o
     // jogo ocupa a tela inteira em vez de um retângulo 16:9 no meio (ver `systems/stage.ts`).
